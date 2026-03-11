@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] — 2026-03-11
+
 ### Added
 
 - Screen shake effect now triggers on `alarmed` events (was declared but never activated).

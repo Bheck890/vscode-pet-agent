@@ -2,7 +2,7 @@
   "name": "vscode-peon-pet",
   "displayName": "Peon Pet",
   "description": "Animated orc that reacts to your AI coding agent events via peon-ping.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "smcqueen",
   "license": "MIT",
   "pricing": "Free",

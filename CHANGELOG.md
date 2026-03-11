@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [0.2.0] — 2026-03-11
+## [0.2.0] — 2026-03-11 · [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=smcqueen.vscode-peon-pet)
 
 ### Added
 

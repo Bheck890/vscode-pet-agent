@@ -1,9 +1,9 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { Character, CharacterAssets, getCharacterAssets, sizeFromSetting } from './characters';
+import { PetConfig } from './pet-config';
 import { StateWatcher, PeonEvent, SessionUpdate } from './state-watcher';
+import { ClaudeWatcher, ClaudeUpdate } from './claude-watcher';
 
 /** Position of the draggable pet within the webview, persisted across reloads. */
 export interface WebviewState {
@@ -27,24 +27,17 @@ export function getNonce(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Returns the {@link vscode.WebviewOptions} used by both the sidebar view and
- * the editor panel. Grants access to the extension's `media/` directory and the
- * user's `~/.openpeon/` directory (for custom character packs).
- */
+/** The webview only needs the extension's own `media/` directory. */
 export function getWebviewOptions(mediaPath: string): vscode.WebviewOptions {
   return {
     enableScripts: true,
-    localResourceRoots: [
-      vscode.Uri.file(mediaPath),
-      vscode.Uri.file(path.join(os.homedir(), '.openpeon')),
-    ],
+    localResourceRoots: [vscode.Uri.file(mediaPath)],
   };
 }
 
 /**
  * Builds the final HTML for a webview by reading `media/webview.html` and
- * injecting the CSP header, stylesheet URI, nonce, and script URI.
+ * injecting the CSP header, stylesheet URI, nonce, and script URIs.
  */
 export function buildHtml(webview: vscode.Webview, mediaPath: string, nonce: string): string {
   let template: string;
@@ -76,8 +69,8 @@ export function buildHtml(webview: vscode.Webview, mediaPath: string, nonce: str
 </html>`;
   }
 
-  const cssUri = webview.asWebviewUri(vscode.Uri.file(path.join(mediaPath, 'webview.css')));
-  const scriptUri = webview.asWebviewUri(vscode.Uri.file(path.join(mediaPath, 'webview.js')));
+  const uri = (file: string) =>
+    webview.asWebviewUri(vscode.Uri.file(path.join(mediaPath, file))).toString();
   const csp = [
     `default-src 'none'`,
     `img-src ${webview.cspSource} data:`,
@@ -90,81 +83,49 @@ export function buildHtml(webview: vscode.Webview, mediaPath: string, nonce: str
       '<!--CSP_PLACEHOLDER-->',
       `<meta http-equiv="Content-Security-Policy" content="${csp}" />`,
     )
-    .replace('<!--CSS_URI-->', cssUri.toString())
-    .replace('<!--NONCE-->', nonce)
-    .replace('<!--SCRIPT_URI-->', scriptUri.toString());
+    .replace('<!--CSS_URI-->', uri('webview.css'))
+    .replace(/<!--NONCE-->/g, nonce)
+    .replace('<!--PETS_URI-->', uri('pets.js'))
+    .replace('<!--SCRIPT_URI-->', uri('webview.js'));
 }
 
 /**
- * Converts local character asset paths to webview-safe URIs so the sandboxed
- * iframe can load them.
+ * Forwards peon-ping and Claude transcript events into a live webview.
+ * Returns a {@link vscode.Disposable} that removes only this webview's
+ * listeners, so disposing one view never silences another.
  */
-export function buildAssetUris(
+export function attachWatchers(
   webview: vscode.Webview,
-  assets: CharacterAssets,
-): { spriteAtlas: string; borders: string | null; bg: string | null } {
-  return {
-    spriteAtlas: webview.asWebviewUri(vscode.Uri.file(assets.spriteAtlas)).toString(),
-    borders: assets.borders
-      ? webview.asWebviewUri(vscode.Uri.file(assets.borders)).toString()
-      : null,
-    bg: assets.bg ? webview.asWebviewUri(vscode.Uri.file(assets.bg)).toString() : null,
-  };
-}
-
-/**
- * Wires up {@link StateWatcher} listeners to forward events into a live webview.
- * Returns a {@link vscode.Disposable} that removes only this webview's listeners,
- * so disposing one view never silences another.
- */
-export function attachWatcher(webview: vscode.Webview, watcher: StateWatcher): vscode.Disposable {
+  peon: StateWatcher,
+  claude: ClaudeWatcher,
+): vscode.Disposable {
   const onEvent = (e: PeonEvent) => webview.postMessage({ command: 'peon-event', ...e });
   const onSession = (e: SessionUpdate) => webview.postMessage({ command: 'session-update', ...e });
+  const onClaude = (e: ClaudeUpdate) => webview.postMessage({ command: 'claude-update', ...e });
 
-  const d1 = watcher.onPeonEvent(onEvent);
-  const d2 = watcher.onSessionUpdate(onSession);
+  const disposables = [
+    peon.onPeonEvent(onEvent),
+    peon.onSessionUpdate(onSession),
+    claude.onUpdate(onClaude),
+  ];
 
-  return new vscode.Disposable(() => {
-    d1.dispose();
-    d2.dispose();
-  });
+  return new vscode.Disposable(() => disposables.forEach((d) => d.dispose()));
 }
 
-/** Reads the current size setting and converts it to pixels. */
-function getSizePx(): number {
-  return sizeFromSetting(
-    vscode.workspace.getConfiguration('peon-pet').get<string>('size', 'medium') ?? 'medium',
-  );
-}
-
-/**
- * Sends the `init` message to the webview once it signals it is ready.
- * Includes character asset URIs, display size, and any previously saved
- * drag position.
- */
+/** Sends the `init` message once the webview signals it is ready. */
 export function sendInit(
   webview: vscode.Webview,
-  character: Character,
+  config: PetConfig,
   savedState: WebviewState | undefined,
+  claude: ClaudeUpdate | null,
 ): void {
-  const assets = getCharacterAssets(character);
-  webview.postMessage({
-    command: 'init',
-    assets: buildAssetUris(webview, assets),
-    size: getSizePx(),
-    state: savedState ?? null,
-  });
+  webview.postMessage({ command: 'init', config, state: savedState ?? null });
+  if (claude) {
+    webview.postMessage({ command: 'claude-update', ...claude });
+  }
 }
 
-/**
- * Sends the `reinit` message to the webview when the character or size setting
- * changes at runtime. The webview reloads its assets without a full page reload.
- */
-export function sendReinit(webview: vscode.Webview, character: Character): void {
-  const assets = getCharacterAssets(character);
-  webview.postMessage({
-    command: 'reinit',
-    assets: buildAssetUris(webview, assets),
-    size: getSizePx(),
-  });
+/** Sends the `reinit` message when a pet setting changes at runtime. */
+export function sendReinit(webview: vscode.Webview, config: PetConfig): void {
+  webview.postMessage({ command: 'reinit', config });
 }

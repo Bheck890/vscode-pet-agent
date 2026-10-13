@@ -1,102 +1,103 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { scanCharacters, getCharacterById, Character } from './characters';
+import { COLOR_PRESETS, DEFAULT_NAMES, SPECIES, readPetConfig, PetConfig } from './pet-config';
 import { StateWatcher } from './state-watcher';
+import { ClaudeWatcher } from './claude-watcher';
 import { PeonViewProvider } from './PeonViewProvider';
+
+const SPECIES_ICONS: Record<string, string> = { cat: '🐱', dog: '🐶', bird: '🐦', fox: '🦊' };
+
+function getConfig(): PetConfig {
+  const cfg = vscode.workspace.getConfiguration('peon-pet');
+  return readPetConfig((key) => cfg.get(key));
+}
+
+/** Walks the user through species -> colour -> name. Escape at any step keeps earlier picks. */
+async function customizePet(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration('peon-pet');
+  const current = getConfig();
+  const save = (key: string, value: unknown) =>
+    cfg.update(key, value, vscode.ConfigurationTarget.Global);
+
+  const species = await vscode.window.showQuickPick(
+    SPECIES.map((s) => ({
+      label: `${SPECIES_ICONS[s]} ${s[0].toUpperCase()}${s.slice(1)}`,
+      id: s,
+      picked: s === current.species,
+    })),
+    { title: 'Customize Pet (1/3): species', placeHolder: `Currently: ${current.species}` },
+  );
+  if (!species) {
+    return;
+  }
+  await save('species', species.id);
+
+  const color = await vscode.window.showQuickPick(
+    [
+      { label: '$(sparkle) Species default', color: '' },
+      ...COLOR_PRESETS.map((p) => ({ label: p.label, description: p.color, color: p.color })),
+      { label: '$(edit) Custom...', color: '?' },
+    ],
+    { title: 'Customize Pet (2/3): colour', placeHolder: current.color || 'Species default' },
+  );
+  if (!color) {
+    return;
+  }
+  if (color.color === '?') {
+    const custom = await vscode.window.showInputBox({
+      title: 'Custom colour',
+      prompt: 'Any CSS colour: #ff8800, hotpink, rebeccapurple...',
+      value: current.color,
+    });
+    if (custom === undefined) {
+      return;
+    }
+    await save('color', custom.trim());
+  } else {
+    await save('color', color.color);
+  }
+
+  const wasDefaultName = current.name === DEFAULT_NAMES[current.species];
+  const name = await vscode.window.showInputBox({
+    title: 'Customize Pet (3/3): name',
+    value: wasDefaultName ? DEFAULT_NAMES[species.id] : current.name,
+  });
+  if (name !== undefined) {
+    await save('name', name.trim() === DEFAULT_NAMES[species.id] ? '' : name.trim());
+  }
+}
 
 /**
  * Extension entry point. Called once by VS Code / Cursor when the extension
  * first activates (see `activationEvents` in `package.json`).
- *
- * Registers:
- * - The Explorer sidebar {@link PeonViewProvider}
- * - The `peon-pet.changeCharacter` command
- * - A configuration-change listener that propagates setting updates to live webviews
  */
 export function activate(context: vscode.ExtensionContext): void {
   const mediaPath = path.join(context.extensionPath, 'media');
 
-  // ── Character state ────────────────────────────────────────────────────────
-  let characters = scanCharacters(mediaPath);
-  let activeChar: Character = getCharacterById(
-    characters,
-    vscode.workspace.getConfiguration('peon-pet').get<string>('character', 'orc'),
+  const peon = new StateWatcher();
+  peon.start();
+  context.subscriptions.push(peon);
+
+  const claude = new ClaudeWatcher(() =>
+    (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
   );
+  claude.start();
+  context.subscriptions.push(claude);
 
-  function getActiveCharacter(): Character {
-    return activeChar;
-  }
-
-  // ── State watcher ──────────────────────────────────────────────────────────
-  const watcher = new StateWatcher();
-  watcher.start();
-  context.subscriptions.push(watcher);
-
-  // ── Sidebar view ───────────────────────────────────────────────────────────
-  const viewProvider = new PeonViewProvider(mediaPath, watcher, getActiveCharacter);
+  const viewProvider = new PeonViewProvider(mediaPath, peon, claude, getConfig);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(PeonViewProvider.viewId, viewProvider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
-  );
-
-  // ── Commands ───────────────────────────────────────────────────────────────
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('peon-pet.changeCharacter', async () => {
-      // Re-scan so newly dropped packs are immediately available
-      characters = scanCharacters(mediaPath);
-
-      const items: vscode.QuickPickItem[] = characters.map((c) => ({
-        label: c.manifest.name,
-        description: c.isBuiltIn ? '(built-in)' : c.id,
-        detail: c.manifest.description,
-        picked: c.id === activeChar.id,
-      }));
-
-      const picked = await vscode.window.showQuickPick(items, {
-        title: 'Peon Pet — Change Character',
-        placeHolder: 'Select a character pack',
-        matchOnDetail: true,
-      });
-
-      if (!picked) {
-        return;
-      }
-
-      const chosen = characters.find((c) => c.manifest.name === picked.label);
-      if (!chosen || chosen.id === activeChar.id) {
-        return;
-      }
-
-      // Persist the change; onDidChangeConfiguration handles the in-memory update and reinit
-      await vscode.workspace
-        .getConfiguration('peon-pet')
-        .update('character', chosen.id, vscode.ConfigurationTarget.Global);
-
-      vscode.window.showInformationMessage(`Peon Pet: switched to ${chosen.manifest.name}`);
-    }),
-  );
-
-  // ── Configuration change listener ──────────────────────────────────────────
-  context.subscriptions.push(
+    vscode.commands.registerCommand('peon-pet.customize', customizePet),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('peon-pet.character')) {
-        activeChar = getCharacterById(
-          characters,
-          vscode.workspace.getConfiguration('peon-pet').get<string>('character', 'orc'),
-        );
-        viewProvider.reinit();
-      }
-      if (e.affectsConfiguration('peon-pet.size')) {
+      if (e.affectsConfiguration('peon-pet')) {
         viewProvider.reinit();
       }
     }),
   );
 }
 
-/** Called when the extension is deactivated. The {@link StateWatcher} is stopped
- *  automatically via `context.subscriptions`. */
 export function deactivate(): void {
-  // intentionally empty — cleanup handled by context.subscriptions
+  // Watchers are disposed via context.subscriptions.
 }

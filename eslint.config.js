@@ -34,12 +34,9 @@ module.exports = [
       globals: {
         window: 'readonly',
         document: 'readonly',
-        Image: 'readonly',
+        getComputedStyle: 'readonly',
         acquireVsCodeApi: 'readonly',
         requestAnimationFrame: 'readonly',
-        setTimeout: 'readonly',
-        clearTimeout: 'readonly',
-        Math: 'readonly',
       },
     },
     rules: {

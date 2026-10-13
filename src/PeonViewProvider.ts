@@ -1,18 +1,19 @@
 import * as vscode from 'vscode';
-import { Character } from './characters';
+import { PetConfig } from './pet-config';
 import { StateWatcher } from './state-watcher';
+import { ClaudeWatcher } from './claude-watcher';
 import {
   WebviewState,
   getNonce,
   getWebviewOptions,
   buildHtml,
-  attachWatcher,
+  attachWatchers,
   sendInit,
   sendReinit,
 } from './webview-helpers';
 
 /**
- * {@link vscode.WebviewViewProvider} that renders the Peon Pet in the Explorer
+ * {@link vscode.WebviewViewProvider} that renders the pet in the Explorer
  * sidebar. VS Code creates exactly one instance and calls
  * {@link resolveWebviewView} each time the panel becomes visible.
  */
@@ -38,8 +39,9 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly mediaPath: string,
-    private readonly watcher: StateWatcher,
-    private readonly getActiveCharacter: () => Character,
+    private readonly peon: StateWatcher,
+    private readonly claude: ClaudeWatcher,
+    private readonly getConfig: () => PetConfig,
   ) {}
 
   resolveWebviewView(
@@ -62,7 +64,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       }
       const message = msg as Record<string, unknown>;
       if (message['command'] === 'ready') {
-        sendInit(webviewView.webview, this.getActiveCharacter(), this.savedState);
+        sendInit(webviewView.webview, this.getConfig(), this.savedState, this.claude.latest());
       } else if (
         message['command'] === 'save-state' &&
         PeonViewProvider.isWebviewState(message['state'])
@@ -73,7 +75,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
 
     // Replace any stale watcher binding with a fresh one
     this.watcherDisposable?.dispose();
-    this.watcherDisposable = attachWatcher(webviewView.webview, this.watcher);
+    this.watcherDisposable = attachWatchers(webviewView.webview, this.peon, this.claude);
 
     webviewView.onDidDispose(() => {
       this.watcherDisposable?.dispose();
@@ -82,10 +84,10 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** Call when the user changes character or size settings to push new assets. */
+  /** Call when a pet setting changes to redraw with the new look. */
   reinit(): void {
     if (this.view) {
-      sendReinit(this.view.webview, this.getActiveCharacter());
+      sendReinit(this.view.webview, this.getConfig());
     }
   }
 }

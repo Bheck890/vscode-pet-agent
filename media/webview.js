@@ -1,105 +1,183 @@
 // @ts-check
-// Peon Pet webview — canvas 2D sprite renderer
-// Runs inside a VS Code webview (sandboxed iframe), no imports.
+// Pet webview: canvas renderer, state machine and sub-agent minis.
+// Runs inside a VS Code webview (sandboxed iframe). Art comes from pets.js.
 (function () {
   'use strict';
 
-  // ── Config ────────────────────────────────────────────────────────────────
-  const ATLAS_COLS = 6;
-  const ATLAS_ROWS = 6;
+  const Art = window.PetArt;
 
-  const ANIM_CONFIG = {
-    sleeping: { row: 0, frames: 6, fps: 3, loop: true, loops: 1 },
-    waking: { row: 1, frames: 6, fps: 2, loop: false, loops: 1 },
-    typing: { row: 2, frames: 6, fps: 8, loop: false, loops: 3 },
-    alarmed: { row: 3, frames: 6, fps: 8, loop: false, loops: 3 },
-    celebrate: { row: 4, frames: 6, fps: 8, loop: false, loops: 3 },
-    annoyed: { row: 5, frames: 6, fps: 8, loop: false, loops: 3 },
+  // -- State definitions ------------------------------------------------------
+  // oneShot states play for `oneShot` ms, then hand back to the base state.
+  const STATES = {
+    sleeping: {
+      label: 'napping',
+      emojis: [],
+      color: '#5b6ee1',
+      eyes: 'sleepy',
+      mouth: 'flat',
+      prop: 'nightcap',
+      motion: 'breathe',
+      wag: 0,
+    },
+    idle: {
+      label: 'chilling',
+      emojis: [],
+      color: null,
+      eyes: 'open',
+      mouth: 'neutral',
+      motion: 'idle',
+      wag: 1.2,
+    },
+    waking: {
+      label: 'waking up',
+      emojis: ['☀️', '⏰', '☕'],
+      color: '#ffd45e',
+      eyes: 'sleepy',
+      mouth: 'yawn',
+      motion: 'stretch',
+      wag: 2,
+      oneShot: 1600,
+    },
+    thinking: {
+      label: 'thinking',
+      emojis: ['💭', '🤔', '💡', '✨'],
+      color: '#b48cff',
+      eyes: 'open',
+      mouth: 'neutral',
+      motion: 'tilt',
+      bubble: 'thought',
+      wag: 1.5,
+    },
+    reading: {
+      label: 'reading',
+      emojis: ['🔍', '📖', '📄', '👀'],
+      color: '#4fd1c5',
+      eyes: 'lookDown',
+      mouth: 'neutral',
+      prop: 'magnifier',
+      motion: 'scan',
+      wag: 1,
+    },
+    writing: {
+      label: 'writing code',
+      emojis: ['✏️', '📝', '⌨️', '💾'],
+      color: '#5aa9ff',
+      eyes: 'focus',
+      mouth: 'tongue',
+      prop: 'laptop',
+      motion: 'type',
+      wag: 3,
+    },
+    running: {
+      label: 'running commands',
+      emojis: ['⚙️', '🔧', '⚡', '💻'],
+      color: '#ff9f43',
+      eyes: 'focus',
+      mouth: 'flat',
+      motion: 'run',
+      wag: 6,
+    },
+    browsing: {
+      label: 'browsing the web',
+      emojis: ['🌐', '🔗', '📡', '🛰️'],
+      color: '#38d9f5',
+      eyes: 'open',
+      mouth: 'neutral',
+      prop: 'binoculars',
+      motion: 'scan',
+      wag: 2,
+    },
+    delegating: {
+      label: 'bossing helpers around',
+      emojis: ['📋', '📣', '👥', '🧩'],
+      color: '#6be675',
+      eyes: 'open',
+      mouth: 'smile',
+      prop: 'clipboard',
+      motion: 'bounce',
+      wag: 5,
+    },
+    waiting: {
+      label: 'waiting for you',
+      emojis: ['❓', '❗', '🙋', '⏳'],
+      color: '#ffd23f',
+      eyes: 'wide',
+      mouth: 'open',
+      motion: 'hop',
+      bubble: 'shout',
+      wag: 7,
+    },
+    error: {
+      label: 'grumpy',
+      emojis: ['💢', '💥', '⚠️', '🐛'],
+      color: '#ff4d4d',
+      eyes: 'angry',
+      mouth: 'frown',
+      prop: 'cloud',
+      motion: 'shake',
+      wag: 0,
+      oneShot: 2600,
+    },
+    done: {
+      label: 'all done!',
+      emojis: ['🎉', '⭐', '🏆', '✅'],
+      color: '#ffd700',
+      eyes: 'happy',
+      mouth: 'open',
+      prop: 'partyHat',
+      motion: 'jump',
+      wag: 8,
+      oneShot: 3200,
+    },
   };
 
-  const FLASH_COLORS = {
-    waking: [0.4, 0.8, 1.0, 0.3],
-    alarmed: [1.0, 0.1, 0.1, 0.5],
-    celebrate: [1.0, 0.8, 0.0, 0.5],
-    annoyed: [0.8, 0.4, 0.0, 0.3],
+  /** peon-ping animation names -> pet states. */
+  const PEON_TO_STATE = {
+    waking: 'waking',
+    typing: 'thinking',
+    alarmed: 'waiting',
+    celebrate: 'done',
+    annoyed: 'error',
   };
 
-  const IDLE_TIMEOUT_MS = 30000;
+  const IDLE_TO_SLEEP_MS = 30000;
   const MAX_DOTS = 10;
-  const DOT_R = 5;
+  const DOT_R = 4;
   const DOT_GAP = 4;
-  const PARTICLE_COUNT = 28;
-  const PARTICLE_DUR = 1.2;
+  const CONFETTI = ['#ff4f7b', '#ffd23f', '#4fd1ff', '#6be675', '#b48cff', '#ff9f43'];
 
-  // ── DOM ───────────────────────────────────────────────────────────────────
+  // -- DOM --------------------------------------------------------------------
   const vscodeApi = acquireVsCodeApi();
-  /** @type {HTMLDivElement} */
-  const container = /** @type {HTMLDivElement} */ (document.getElementById('pet-container'));
-  /** @type {HTMLCanvasElement} */
   const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('c'));
-  /** @type {HTMLDivElement} */
   const tooltip = /** @type {HTMLDivElement} */ (document.getElementById('tooltip'));
-  /** @type {CanvasRenderingContext2D} */
   const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
 
-  ctx.imageSmoothingEnabled = false;
-
-  // ── State ─────────────────────────────────────────────────────────────────
-  /** @type {number} */
-  let petSize = 200;
-  /** @type {string} */
-  let currentAnim = 'sleeping';
-  let currentFrame = 0;
-  let frameTimer = 0;
-  let remainingLoops = 0;
-  let pendingIdle = false;
-  let anySessionActive = false;
+  // -- World state ------------------------------------------------------------
+  /** @type {null | {species: string, color: string, name: string, stateColors: boolean, size: number}} */
+  let config = null;
+  let viewW = 300;
+  let viewH = 300;
+  /** @type {{petX: number, petY: number} | null} */
+  let savedPos = null;
+  /** @type {any} */
+  let main = null;
+  /** @type {Map<string, any>} */
+  const minis = new Map();
+  /** @type {any[]} */
+  let particles = [];
   /** @type {Array<{id: string, hot: boolean, warm: boolean, cwd: string|null}>} */
-  let currentSessions = [];
-  /** @type {ReturnType<typeof setTimeout>|null} */
-  let idleTimer = null;
+  let peonSessions = [];
+  /** @type {Array<{id: string, hot: boolean, warm: boolean, cwd: string|null}>} */
+  let claudeSessions = [];
+  /** @type {any} */
+  let pendingClaude = null;
+  let project = '';
+  let fgColor = '#cccccc';
+  let lastFrame = 0;
 
-  // Flash overlay
-  let flashR = 0,
-    flashG = 0,
-    flashB = 0,
-    flashIntensity = 0,
-    flashDecay = 2.0;
-
-  // Screen shake
-  let shakeIntensity = 0;
-  const SHAKE_DECAY = 8.0;
-
-  // Particles
-  const particlePos = new Float32Array(PARTICLE_COUNT * 2);
-  /** @type {Array<{vx: number, vy: number, gravity: number}>} */
-  const particleVel = [];
-  /** @type {Array<[number, number, number]>} */
-  const particleCol = [];
-  let particleLife = 0;
-
-  // Assets
-  /** @type {HTMLImageElement|null} */
-  let atlasImg = null;
-  /** @type {HTMLImageElement|null} */
-  let bordersImg = null;
-  /** @type {HTMLImageElement|null} */
-  let bgImg = null;
-  let assetsReady = false;
-  let assetLoadVersion = 0;
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  function loadImage(uri) {
-    return new Promise((resolve) => {
-      if (!uri) {
-        resolve(null);
-        return;
-      }
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
-      img.src = uri;
-    });
+  // -- Helpers ----------------------------------------------------------------
+  function now() {
+    return Date.now();
   }
 
   function escapeHtml(value) {
@@ -115,408 +193,1003 @@
     if (!cwd) {
       return null;
     }
-    const segments = String(cwd).split('/').filter(Boolean);
+    const segments = String(cwd).split(/[\\/]/).filter(Boolean);
     return segments.length > 0 ? segments[segments.length - 1] : null;
   }
 
-  function resize(size) {
-    petSize = size;
-    canvas.width = size;
-    canvas.height = size;
-    ctx.imageSmoothingEnabled = false;
-    container.style.width = size + 'px';
-    container.style.height = size + 'px';
+  function clipText(text, maxW) {
+    if (ctx.measureText(text).width <= maxW) {
+      return text;
+    }
+    let s = text;
+    while (s.length > 1 && ctx.measureText(s + '...').width > maxW) {
+      s = s.slice(0, -1);
+    }
+    return s + '...';
   }
 
-  // ── Animation state machine ───────────────────────────────────────────────
-  function resetIdleTimer() {
-    if (idleTimer) {
-      clearTimeout(idleTimer);
+  /** Normalises any CSS colour to #rrggbb using the canvas parser; '' or invalid -> null. */
+  function cssToHex(input) {
+    if (!input) {
+      return null;
     }
-    idleTimer = setTimeout(() => {
-      if (!anySessionActive) {
-        playAnim('sleeping');
+    const probe = '#010203';
+    ctx.fillStyle = probe;
+    ctx.fillStyle = input;
+    const out = String(ctx.fillStyle);
+    if (out === probe && input.toLowerCase() !== probe) {
+      return null;
+    }
+    if (Art.hexToRgb(out)) {
+      return out;
+    }
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(out);
+    if (!m) {
+      return null;
+    }
+    return '#' + [m[1], m[2], m[3]].map((v) => (+v).toString(16).padStart(2, '0')).join('');
+  }
+
+  function baseColor() {
+    if (!config) {
+      return '#888888';
+    }
+    return cssToHex(config.color) || Art.SPECIES[config.species].defaultColor;
+  }
+
+  function easeOutBack(t) {
+    const c = 1.70158;
+    return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+  }
+
+  // -- Sprite cache -----------------------------------------------------------
+  const spriteCache = new Map();
+
+  function toCanvas(px) {
+    const h = px.length;
+    const w = px[0].length;
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const cx = c.getContext('2d');
+    const img = cx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const rgb = px[y][x] ? Art.hexToRgb(px[y][x]) : null;
+        if (rgb) {
+          const i = (y * w + x) * 4;
+          img.data[i] = rgb[0];
+          img.data[i + 1] = rgb[1];
+          img.data[i + 2] = rgb[2];
+          img.data[i + 3] = 255;
+        }
       }
-    }, IDLE_TIMEOUT_MS);
+    }
+    cx.putImageData(img, 0, 0);
+    return c;
   }
 
-  function playAnim(name) {
-    if (!ANIM_CONFIG[name]) {
+  function cached(key, build) {
+    let c = spriteCache.get(key);
+    if (!c) {
+      if (spriteCache.size > 400) {
+        spriteCache.clear();
+      }
+      c = toCanvas(build());
+      spriteCache.set(key, c);
+    }
+    return c;
+  }
+
+  function petSprite(species, color, tint, eyes, mouth, frame) {
+    return cached(['pet', species, color, tint, eyes, mouth, frame].join('|'), () =>
+      Art.compose(species, Art.palette(species, color, tint, tint ? 0.22 : 0), {
+        eyes,
+        mouth,
+        frame,
+      }),
+    );
+  }
+
+  function propSprite(name) {
+    return cached('prop|' + name, () => Art.composeProp(name));
+  }
+
+  // -- Pets -------------------------------------------------------------------
+  function makePet(opts) {
+    const t = now();
+    return Object.assign(
+      {
+        id: 'main',
+        name: '',
+        task: '',
+        agentType: '',
+        detail: '',
+        scale: 6,
+        x: 0,
+        y: 0,
+        tx: 0,
+        ty: 0,
+        hue: 0,
+        base: 'sleeping',
+        oneShot: null,
+        oneShotUntil: 0,
+        oneShotNext: 'idle',
+        stateSince: t,
+        lastActivity: t,
+        seq: -1,
+        spawnAt: 0,
+        leavingAt: 0,
+        blinkEvery: 2800 + Math.random() * 2500,
+        fxAt: 0,
+      },
+      opts,
+    );
+  }
+
+  function displayState(p) {
+    return p.oneShot || p.base;
+  }
+
+  function startOneShot(p, state, next) {
+    const t = now();
+    p.oneShot = state;
+    p.oneShotUntil = t + STATES[state].oneShot;
+    p.oneShotNext = next;
+    p.stateSince = t;
+    onEnter(p, state);
+  }
+
+  /** Feeds a new agent state into a pet, handling one-shots and waking from sleep. */
+  function applyState(p, state, detail) {
+    if (!STATES[state]) {
       return;
     }
-    pendingIdle = false;
-    currentAnim = name;
-    currentFrame = 0;
-    frameTimer = 0;
-    remainingLoops = ANIM_CONFIG[name].loops - 1;
+    const t = now();
+    p.detail = detail || '';
+    p.lastActivity = t;
+    const def = STATES[state];
 
-    const flash = FLASH_COLORS[name];
-    if (flash) {
-      flashR = flash[0];
-      flashG = flash[1];
-      flashB = flash[2];
-      flashIntensity = flash[3];
-      flashDecay = name === 'alarmed' ? 2.5 : 2.0;
-    }
-
-    if (name === 'celebrate') {
-      burstParticles();
-    }
-    if (name === 'alarmed') {
-      shakeIntensity = 6;
-    }
-    if (name !== 'sleeping') {
-      resetIdleTimer();
-    }
-  }
-
-  // ── Particle burst ────────────────────────────────────────────────────────
-  const GOLD = [
-    [255, 217, 0],
-    [255, 255, 102],
-    [230, 153, 25],
-  ];
-
-  function burstParticles() {
-    particleLife = PARTICLE_DUR;
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      particlePos[i * 2] = (Math.random() - 0.5) * petSize * 0.3 + petSize / 2;
-      particlePos[i * 2 + 1] = petSize * 0.6 + (Math.random() - 0.5) * petSize * 0.15;
-      const angle = Math.random() * Math.PI - Math.PI / 2;
-      const speed = (petSize / 200) * (40 + Math.random() * 80);
-      particleVel[i] = {
-        vx: Math.cos(angle) * speed,
-        vy: -(Math.abs(Math.sin(angle)) * speed + 20),
-        gravity: (petSize / 200) * (60 + Math.random() * 40),
-      };
-      particleCol[i] = GOLD[Math.floor(Math.random() * GOLD.length)];
-    }
-  }
-
-  // ── Session dots ──────────────────────────────────────────────────────────
-  function drawDots(time) {
-    const count = Math.min(currentSessions.length, MAX_DOTS);
-    if (count === 0) {
+    if (def.oneShot) {
+      const next = state === 'error' ? (p.base === 'sleeping' ? 'idle' : p.base) : 'idle';
+      startOneShot(p, state, next);
       return;
     }
-    const totalW = count * DOT_R * 2 + Math.max(0, count - 1) * DOT_GAP;
-    const startX = (petSize - totalW) / 2 + DOT_R;
-    const dotY = DOT_R + 4;
 
-    for (let i = 0; i < count; i++) {
-      const s = currentSessions[i];
-      const cx = startX + i * (DOT_R * 2 + DOT_GAP);
-      const cy = dotY;
-      const pulse = s.hot ? (Math.sin(time * 0.003 + i) + 1) / 2 : 0;
+    const wasAsleep = displayState(p) === 'sleeping';
+    if (p.oneShot) {
+      p.oneShotNext = state;
+      p.base = state;
+      return;
+    }
+    if (wasAsleep && state !== 'sleeping' && state !== 'idle') {
+      p.base = state;
+      startOneShot(p, 'waking', state);
+      p.oneShotUntil = t + 900;
+      return;
+    }
+    if (p.base !== state) {
+      p.base = state;
+      p.stateSince = t;
+      onEnter(p, state);
+    }
+  }
 
-      // Outer glow
-      if (s.hot) {
-        const glowR = DOT_R + 3 + pulse * 2;
-        const grad = ctx.createRadialGradient(cx, cy, DOT_R * 0.5, cx, cy, glowR);
-        grad.addColorStop(0, `rgba(68,255,68,${0.3 * pulse})`);
-        grad.addColorStop(1, 'rgba(68,255,68,0)');
+  function tickState(p, t) {
+    if (p.oneShot && t >= p.oneShotUntil) {
+      p.oneShot = null;
+      p.base = p.oneShotNext;
+      p.stateSince = t;
+      onEnter(p, p.base);
+    }
+    if (!p.oneShot && p.base === 'idle' && t - p.lastActivity > IDLE_TO_SLEEP_MS) {
+      p.base = 'sleeping';
+      p.stateSince = t;
+    }
+  }
+
+  function petPx(p) {
+    return p.scale * Art.SIZE;
+  }
+
+  function center(p) {
+    const s = petPx(p);
+    return { x: p.x + s / 2, y: p.y + s / 2 };
+  }
+
+  // -- Particles --------------------------------------------------------------
+  function emit(part) {
+    particles.push(
+      Object.assign({ vx: 0, vy: 0, g: 0, life: 1, age: 0, size: 6, color: '#fff', spin: 0 }, part),
+    );
+  }
+
+  function onEnter(p, state) {
+    const c = center(p);
+    const s = petPx(p);
+    if (state === 'done') {
+      for (let i = 0; i < (p === main ? 46 : 16); i++) {
+        emit({
+          x: c.x + (Math.random() - 0.5) * s * 0.4,
+          y: p.y + s * 0.2,
+          vx: (Math.random() - 0.5) * s * 2.2,
+          vy: -Math.random() * s * 2.4 - s * 0.6,
+          g: s * 4,
+          life: 1.6 + Math.random() * 0.6,
+          size: Math.max(2, p.scale * 0.9),
+          color: CONFETTI[i % CONFETTI.length],
+          spin: (Math.random() - 0.5) * 12,
+        });
+      }
+    } else if (state === 'error') {
+      emit({
+        x: c.x + s * 0.32,
+        y: p.y + s * 0.1,
+        text: '💢',
+        size: s * 0.2,
+        life: 1.2,
+        vy: -s * 0.15,
+      });
+    }
+  }
+
+  function ambientFx(p, state, t) {
+    const s = petPx(p);
+    const c = center(p);
+    const every = { sleeping: 1300, running: 380, waiting: 900 }[state];
+    if (!every || t - p.fxAt < every) {
+      return;
+    }
+    p.fxAt = t;
+    if (state === 'sleeping') {
+      emit({
+        x: c.x + s * 0.25,
+        y: p.y + s * 0.3,
+        vx: s * 0.12,
+        vy: -s * 0.22,
+        text: Math.random() < 0.5 ? 'z' : 'Z',
+        font: true,
+        size: s * 0.1,
+        grow: 1.2,
+        life: 2.2,
+        color: fgColor,
+      });
+    } else if (state === 'running') {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      emit({
+        x: c.x + side * s * 0.38,
+        y: p.y + s * 0.92,
+        vx: side * s * 0.3,
+        vy: -s * 0.05,
+        text: '💨',
+        size: s * 0.11,
+        life: 0.6,
+      });
+      emit({
+        x: c.x + side * s * 0.2,
+        y: p.y + s * 0.18,
+        vx: side * s * 0.5,
+        vy: -s * 0.6,
+        g: s * 2.5,
+        size: Math.max(2, p.scale * 0.8),
+        color: '#7fd3ff',
+        life: 0.7,
+      });
+    } else if (state === 'waiting' && p !== main) {
+      emit({ x: c.x, y: p.y, vy: -s * 0.4, text: '❗', size: s * 0.22, life: 0.9 });
+    }
+  }
+
+  function stepParticles(dt) {
+    particles = particles.filter((q) => {
+      q.age += dt;
+      q.vy += q.g * dt;
+      q.x += q.vx * dt;
+      q.y += q.vy * dt;
+      return q.age < q.life;
+    });
+  }
+
+  function drawParticles() {
+    for (const q of particles) {
+      const fade = 1 - q.age / q.life;
+      ctx.globalAlpha = Math.max(0, Math.min(1, fade * 1.5));
+      if (q.text) {
+        const size = q.size * (1 + (q.grow || 0) * (q.age / q.life));
+        ctx.font = q.font ? `bold ${size}px monospace` : `${size}px sans-serif`;
+        ctx.fillStyle = q.color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(q.text, q.x, q.y);
+      } else {
+        ctx.save();
+        ctx.translate(q.x, q.y);
+        ctx.rotate(q.spin * q.age);
+        ctx.fillStyle = q.color;
+        ctx.fillRect(-q.size / 2, -q.size / 4, q.size, q.size / 2);
+        ctx.restore();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // -- Drawing ----------------------------------------------------------------
+  function motionFor(name, tt, p) {
+    const m = { dx: 0, dy: 0, sx: 1, sy: 1, rot: 0 };
+    switch (name) {
+      case 'breathe':
+        m.sy = 1 + 0.035 * Math.sin(tt * 1.8);
+        m.sx = 1 - 0.015 * Math.sin(tt * 1.8);
+        break;
+      case 'idle':
+        m.dy = Math.sin(tt * 1.6) * 0.4;
+        break;
+      case 'stretch':
+        m.sy = 1 + 0.1 * Math.sin(Math.min(tt / 1.2, 1) * Math.PI);
+        m.sx = 1 - 0.05 * Math.sin(Math.min(tt / 1.2, 1) * Math.PI);
+        break;
+      case 'tilt':
+        m.rot = Math.sin(tt * 1.3) * 0.07;
+        m.dy = Math.sin(tt * 2.6) * 0.4;
+        break;
+      case 'scan':
+        m.dx = Math.sin(tt * 1.4) * 1.2;
+        m.rot = Math.sin(tt * 1.4) * 0.03;
+        break;
+      case 'type':
+        m.dy = Math.floor(tt * 9) % 2 ? -0.6 : 0;
+        break;
+      case 'run':
+        m.dy = -Math.abs(Math.sin(tt * 11)) * 2;
+        m.rot = Math.sin(tt * 11) * 0.04;
+        break;
+      case 'bounce':
+        m.dy = -Math.abs(Math.sin(tt * 4.5)) * 2;
+        break;
+      case 'hop': {
+        const h = Math.abs(Math.sin(tt * 6));
+        m.dy = -h * 4;
+        m.sy = 1 + (h < 0.15 ? -0.08 : 0.04);
+        break;
+      }
+      case 'shake': {
+        const k = Math.max(0, 1 - tt / 1.4);
+        m.dx = (Math.random() - 0.5) * 3 * k;
+        m.rot = (Math.random() - 0.5) * 0.06 * k;
+        break;
+      }
+      case 'jump': {
+        const h = Math.abs(Math.sin(tt * 5.5));
+        m.dy = -h * 7;
+        m.sy = h < 0.12 ? 0.86 : 1.06;
+        m.sx = h < 0.12 ? 1.1 : 0.96;
+        m.rot = Math.sin(tt * 2.75) * 0.08;
+        break;
+      }
+    }
+    if (p !== main) {
+      m.dy += -Math.abs(Math.sin(tt * 3 + p.hue)) * 0.6;
+    }
+    return m;
+  }
+
+  function eyesFor(p, def, state, tt, t) {
+    if (state === 'waking') {
+      return tt < 0.7 ? 'sleepy' : 'open';
+    }
+    if (state === 'reading' && Math.floor(tt / 1.6) % 3 === 2) {
+      return 'open';
+    }
+    const blinkable = def.eyes === 'open' || def.eyes === 'lookDown' || def.eyes === 'focus';
+    if (blinkable && (t + p.hue * 1000) % p.blinkEvery < 130) {
+      return 'closed';
+    }
+    return def.eyes;
+  }
+
+  function drawAura(p, def, t) {
+    if (!config || !config.stateColors || !def.color) {
+      return;
+    }
+    const c = center(p);
+    const s = petPx(p);
+    const r = s * 0.62;
+    const pulse = 0.22 + 0.1 * Math.sin(t / 380);
+    const rgb = Art.hexToRgb(def.color);
+    const g = ctx.createRadialGradient(c.x, c.y + s * 0.08, s * 0.1, c.x, c.y + s * 0.08, r);
+    g.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${pulse})`);
+    g.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y + s * 0.08, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /** Emojis orbit the main pet; the half behind it is drawn before the sprite. */
+  function drawOrbit(p, def, tt, front) {
+    const n = def.emojis.length;
+    if (n === 0) {
+      return;
+    }
+    const c = center(p);
+    const s = petPx(p);
+    ctx.font = `${Math.round(s * 0.13)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) {
+      const a = tt * 0.9 + (i * Math.PI * 2) / n;
+      const isFront = Math.sin(a) > 0;
+      if (isFront !== front) {
+        continue;
+      }
+      const depth = 0.75 + 0.25 * Math.sin(a);
+      ctx.globalAlpha = 0.55 + 0.45 * depth;
+      ctx.save();
+      ctx.translate(c.x + Math.cos(a) * s * 0.62, c.y - s * 0.05 + Math.sin(a) * s * 0.22);
+      ctx.scale(depth, depth);
+      ctx.fillText(def.emojis[i], 0, Math.sin(tt * 3 + i) * s * 0.02);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBubble(p, def, tt) {
+    const s = petPx(p);
+    const bx = p.x + s * 0.88;
+    const by = p.y + s * 0.02;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#22222a';
+    ctx.lineWidth = Math.max(1.5, p.scale * 0.4);
+    if (def.bubble === 'thought') {
+      const dots = [
+        [p.x + s * 0.7, p.y + s * 0.22, s * 0.03],
+        [p.x + s * 0.78, p.y + s * 0.12, s * 0.045],
+      ];
+      for (const [x, y, r] of dots) {
         ctx.beginPath();
-        ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.ellipse(bx, by, s * 0.17, s * 0.11, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#22222a';
+      const shown = Math.floor(tt * 2.5) % 4;
+      for (let i = 0; i < shown; i++) {
+        ctx.beginPath();
+        ctx.arc(bx - s * 0.07 + i * s * 0.07, by, s * 0.022, 0, Math.PI * 2);
         ctx.fill();
       }
-
-      // Core dot
+    } else if (def.bubble === 'shout') {
+      const w = s * 0.24;
+      const h = s * 0.2;
+      const wob = Math.sin(tt * 8) * s * 0.01;
+      ctx.fillStyle = '#ffd23f';
       ctx.beginPath();
-      ctx.arc(cx, cy, DOT_R, 0, Math.PI * 2);
-      ctx.fillStyle = s.hot ? '#44ff44' : s.warm ? '#1a4d1a' : '#333';
+      ctx.moveTo(bx - w / 2, by - h / 2 + wob);
+      ctx.lineTo(bx + w / 2, by - h / 2 - wob);
+      ctx.lineTo(bx + w / 2, by + h / 2 + wob);
+      ctx.lineTo(bx - w * 0.05, by + h / 2);
+      ctx.lineTo(bx - w * 0.35, by + h * 0.85);
+      ctx.lineTo(bx - w * 0.25, by + h / 2);
+      ctx.lineTo(bx - w / 2, by + h / 2 - wob);
+      ctx.closePath();
       ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#22222a';
+      ctx.font = `bold ${Math.round(h * 0.8)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(Math.floor(tt * 1.4) % 2 ? '?' : '!', bx, by + h * 0.04);
     }
   }
 
-  // ── Tooltip hit-test ──────────────────────────────────────────────────────
-  function hitTestDots(px, py) {
-    const count = Math.min(currentSessions.length, MAX_DOTS);
-    if (count === 0) {
-      return -1;
+  /** Paws tapping on the laptop keyboard while writing. */
+  function drawTypingPaws(p, pal, tt) {
+    const s = p.scale;
+    const sp = Art.SPECIES[config ? config.species : 'cat'];
+    const y = sp.pawY - 8 + 7;
+    const up = Math.floor(tt * 9) % 2;
+    for (const [x, lift] of [
+      [11, up],
+      [18, 1 - up],
+    ]) {
+      ctx.fillStyle = pal.o;
+      ctx.fillRect((x - 16) * s, (y - lift - 32) * s, 4 * s, 3 * s);
+      ctx.fillStyle = pal.l;
+      ctx.fillRect((x - 15) * s, (y - lift - 31) * s, 2 * s, 1 * s);
     }
-    const totalW = count * DOT_R * 2 + Math.max(0, count - 1) * DOT_GAP;
-    const startX = (petSize - totalW) / 2 + DOT_R;
-    const dotY = DOT_R + 4;
-    for (let i = 0; i < count; i++) {
-      const cx = startX + i * (DOT_R * 2 + DOT_GAP);
-      const dx = px - cx;
-      const dy = py - dotY;
-      if (dx * dx + dy * dy < DOT_R * 2 * (DOT_R * 2)) {
-        return i;
-      }
-    }
-    return -1;
   }
 
-  // ── Render loop ───────────────────────────────────────────────────────────
-  let lastTime = 0;
+  function propPlacement(name, sp, tt) {
+    switch (name) {
+      case 'partyHat':
+        return { x: 12, y: sp.headTop - 7 };
+      case 'nightcap':
+        return { x: 12, y: sp.headTop - 6 };
+      case 'laptop':
+        return { x: 8, y: sp.pawY - 8 };
+      case 'magnifier':
+        return { x: 21, y: 15 + Math.round(Math.sin(tt * 2.5)) };
+      case 'binoculars':
+        return { x: 10, y: sp.eyeY - 1 };
+      case 'clipboard':
+        return { x: 1, y: 17 + Math.round(Math.sin(tt * 3)) };
+      case 'cloud':
+        return { x: 9, y: sp.headTop - 13 + Math.round(Math.sin(tt * 2)) };
+      default:
+        return { x: 0, y: 0 };
+    }
+  }
 
-  function render(time) {
-    requestAnimationFrame(render);
-    if (!assetsReady) {
+  function drawPet(p, t) {
+    if (!config) {
+      return;
+    }
+    const state = displayState(p);
+    const def = STATES[state];
+    const tt = (t - p.stateSince) / 1000;
+    const s = p.scale;
+    const size = petPx(p);
+    const species = config.species;
+    const sp = Art.SPECIES[species];
+    const color = p === main ? baseColor() : Art.rotateHue(baseColor(), p.hue);
+    const tint = config.stateColors && def.color ? def.color : '';
+    const frame = def.wag > 0 ? Math.floor(tt * def.wag) % 2 : 0;
+    const m = motionFor(def.motion, tt, p);
+
+    let k = 1;
+    if (p.spawnAt) {
+      k = easeOutBack(Math.min(1, (t - p.spawnAt) / 450));
+    }
+    if (p.leavingAt) {
+      k = Math.max(0, 1 - (t - p.leavingAt) / 450);
+    }
+    if (k <= 0.001) {
       return;
     }
 
-    const delta = Math.min((time - lastTime) / 1000, 0.1);
-    lastTime = time;
-
-    ctx.clearRect(0, 0, petSize, petSize);
-
-    // Background
-    if (bgImg) {
-      ctx.globalAlpha = 0.55;
-      ctx.drawImage(bgImg, 0, 0, petSize, petSize);
-      ctx.globalAlpha = 1.0;
+    drawAura(p, def, t);
+    if (p === main) {
+      drawOrbit(p, def, tt, false);
     }
 
-    // Screen shake offset
-    let ox = 0,
-      oy = 0;
-    if (shakeIntensity > 0) {
-      shakeIntensity = Math.max(0, shakeIntensity - SHAKE_DECAY * delta);
-      ox = (Math.random() - 0.5) * shakeIntensity;
-      oy = (Math.random() - 0.5) * shakeIntensity;
+    // Ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(
+      p.x + size / 2,
+      p.y + size - s,
+      size * 0.32 * k,
+      size * 0.05 * k,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(Math.round(p.x + size / 2 + m.dx * s), Math.round(p.y + size + m.dy * s));
+    ctx.rotate(m.rot);
+    ctx.scale(m.sx * k, m.sy * k);
+    const sprite = petSprite(species, color, tint, eyesFor(p, def, state, tt, t), def.mouth, frame);
+    ctx.drawImage(sprite, -size / 2, -size, size, size);
+
+    if (state === 'sleeping') {
+      // Snot bubble
+      const r = (0.6 + 0.6 * (0.5 + 0.5 * Math.sin(tt * 1.8))) * s;
+      ctx.fillStyle = 'rgba(190,230,255,0.75)';
+      ctx.beginPath();
+      ctx.arc(2 * s, (sp.mouthY - 1 - 32) * s, r, 0, Math.PI * 2);
+      ctx.fill();
     }
-
-    // Sprite from atlas
-    if (atlasImg) {
-      const cfg = ANIM_CONFIG[currentAnim];
-      const fw = atlasImg.naturalWidth / ATLAS_COLS;
-      const fh = atlasImg.naturalHeight / ATLAS_ROWS;
-      const sx = currentFrame * fw;
-      const sy = cfg.row * fh;
-      ctx.drawImage(atlasImg, sx, sy, fw, fh, ox, oy, petSize, petSize);
-    }
-
-    // Border overlay
-    if (bordersImg) {
-      ctx.drawImage(bordersImg, 0, 0, petSize, petSize);
-    }
-
-    // Session dots
-    drawDots(time);
-
-    // Flash overlay
-    if (flashIntensity > 0) {
-      flashIntensity = Math.max(0, flashIntensity - delta * flashDecay);
-      ctx.fillStyle = `rgba(${Math.round(flashR * 255)},${Math.round(flashG * 255)},${Math.round(flashB * 255)},${flashIntensity.toFixed(3)})`;
-      ctx.fillRect(0, 0, petSize, petSize);
-    }
-
-    // Particles
-    if (particleLife > 0) {
-      particleLife -= delta;
-      const opacity = Math.max(0, particleLife / PARTICLE_DUR);
-      ctx.globalAlpha = opacity;
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const v = particleVel[i];
-        if (!v) {
-          continue;
-        }
-        particlePos[i * 2] += v.vx * delta;
-        particlePos[i * 2 + 1] += v.vy * delta;
-        v.vy += v.gravity * delta;
-        const c = particleCol[i];
-        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
-        ctx.fillRect(particlePos[i * 2] - 2, particlePos[i * 2 + 1] - 2, 5, 5);
-      }
-      ctx.globalAlpha = 1.0;
-    }
-
-    // Advance animation frame
-    const cfg = ANIM_CONFIG[currentAnim];
-    frameTimer += delta;
-    if (frameTimer >= 1 / cfg.fps) {
-      frameTimer = 0;
-      currentFrame++;
-      if (currentFrame >= cfg.frames) {
-        if (cfg.loop) {
-          currentFrame = 0;
-        } else if (remainingLoops > 0) {
-          remainingLoops--;
-          currentFrame = 0;
-        } else {
-          currentFrame = cfg.frames - 1;
-          if (!pendingIdle) {
-            pendingIdle = true;
-            setTimeout(() => {
-              pendingIdle = false;
-              playAnim(anySessionActive ? 'typing' : 'sleeping');
-            }, 300);
-          }
-        }
+    if (def.prop) {
+      const at = propPlacement(def.prop, sp, tt);
+      if (def.prop !== 'cloud' || Math.floor(tt * 6) % 4 !== 0) {
+        const img = propSprite(def.prop);
+        ctx.drawImage(img, (at.x - 16) * s, (at.y - 32) * s, img.width * s, img.height * s);
       }
     }
+    if (state === 'writing') {
+      drawTypingPaws(p, Art.palette(species, color, tint, tint ? 0.22 : 0), tt);
+    }
+    ctx.restore();
+
+    if (p === main) {
+      drawOrbit(p, def, tt, true);
+      drawBubble(p, def, tt);
+    } else if (def.emojis.length > 0) {
+      const e = def.emojis[Math.floor(tt / 1.2) % def.emojis.length];
+      ctx.font = `${Math.round(size * 0.3)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(e, p.x + size * 0.95, p.y + size * 0.12 + Math.sin(tt * 4) * 2);
+    }
+    ambientFx(p, state, t);
+    drawLabels(p, def, k);
+  }
+
+  function drawLabels(p, def, k) {
+    const size = petPx(p);
+    const cx = p.x + size / 2;
+    const y = p.y + size + 4;
+    const isMain = p === main;
+    const maxW = Math.max(size + 30, isMain ? 220 : 110);
+    ctx.globalAlpha = k;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = fgColor;
+    ctx.font = `bold ${isMain ? 13 : 10}px sans-serif`;
+    ctx.fillText(clipText(p.name, maxW), cx, y);
+    ctx.globalAlpha = 0.7 * k;
+    ctx.font = `${isMain ? 11 : 9}px sans-serif`;
+    const second = isMain
+      ? def.label + (p.detail && def.color ? ' - ' + p.detail : '')
+      : p.task || def.label;
+    ctx.fillText(clipText(second, maxW), cx, y + (isMain ? 16 : 12));
+    ctx.globalAlpha = 1;
+  }
+
+  // -- Session dots -----------------------------------------------------------
+  function allSessions() {
+    const seen = new Set();
+    return claudeSessions.concat(peonSessions).filter((s) => {
+      if (seen.has(s.id)) {
+        return false;
+      }
+      seen.add(s.id);
+      return true;
+    });
+  }
+
+  function dotCenter(i) {
+    return { x: 10 + DOT_R + i * (DOT_R * 2 + DOT_GAP), y: 10 + DOT_R };
+  }
+
+  function drawDots(t) {
+    const sessions = allSessions().slice(0, MAX_DOTS);
+    sessions.forEach((s, i) => {
+      const c = dotCenter(i);
+      if (s.hot) {
+        const pulse = (Math.sin(t * 0.004 + i) + 1) / 2;
+        ctx.fillStyle = `rgba(68,255,68,${0.25 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, DOT_R + 2 + pulse * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, DOT_R, 0, Math.PI * 2);
+      ctx.fillStyle = s.hot ? '#44ff44' : s.warm ? '#1a7d1a' : '#555';
+      ctx.fill();
+    });
+  }
+
+  // -- Layout -----------------------------------------------------------------
+  function mainScale() {
+    return Math.max(2, Math.floor((config ? config.size : 200) / Art.SIZE));
+  }
+
+  function clampMain() {
+    if (!main) {
+      return;
+    }
+    const s = petPx(main);
+    main.x = Math.max(0, Math.min(main.x, viewW - s));
+    main.y = Math.max(24, Math.min(main.y, viewH - s - 34));
+  }
+
+  function defaultMainPos() {
+    const s = petPx(main);
+    main.x = (viewW - s) / 2;
+    main.y = Math.max(28, viewH * 0.38 - s / 2);
+  }
+
+  /** Minis line up in a grid below the main pet, or above it if there is no room. */
+  function layoutMinis() {
+    if (!main) {
+      return;
+    }
+    const list = [...minis.values()].filter((m) => !m.leavingAt);
+    const n = list.length;
+    if (n === 0) {
+      return;
+    }
+    const mpx = petPx(list[0]);
+    const cellW = Math.max(mpx + 30, 100);
+    const cellH = mpx + 34;
+    const cols = Math.max(1, Math.floor(viewW / cellW));
+    const rows = Math.ceil(n / cols);
+    let top = main.y + petPx(main) + 40;
+    if (top + rows * cellH > viewH) {
+      top = Math.max(24, main.y - rows * cellH - 8);
+    }
+    list.forEach((m, i) => {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const inRow = Math.min(cols, n - row * cols);
+      const startX = (viewW - inRow * cellW) / 2;
+      m.tx = startX + col * cellW + (cellW - mpx) / 2;
+      m.ty = top + row * cellH;
+    });
+  }
+
+  function resizeCanvas() {
+    viewW = document.body.clientWidth || 300;
+    viewH = document.body.clientHeight || 300;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(viewW * dpr);
+    canvas.height = Math.round(viewH * dpr);
+    canvas.style.width = viewW + 'px';
+    canvas.style.height = viewH + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    clampMain();
+    layoutMinis();
+  }
+
+  // -- Applying updates -------------------------------------------------------
+  function applyConfig(next) {
+    config = next;
+    spriteCache.clear();
+    if (typeof getComputedStyle === 'function') {
+      fgColor = getComputedStyle(document.body).color || fgColor;
+    }
+    if (!main) {
+      main = makePet({ scale: mainScale(), name: config.name });
+      if (savedPos) {
+        main.x = savedPos.petX;
+        main.y = savedPos.petY;
+      } else {
+        defaultMainPos();
+      }
+    } else {
+      main.scale = mainScale();
+      main.name = config.name;
+    }
+    const miniScale = Math.max(2, Math.floor(main.scale * 0.45));
+    minis.forEach((m) => {
+      m.scale = miniScale;
+    });
+    resizeCanvas();
+    if (pendingClaude) {
+      applyClaude(pendingClaude);
+      pendingClaude = null;
+    }
+  }
+
+  function applyClaude(msg) {
+    claudeSessions = msg.sessions || [];
+    if (!main) {
+      pendingClaude = msg;
+      return;
+    }
+    if (msg.main) {
+      project = msg.main.project || '';
+      if (msg.main.seq !== main.seq) {
+        main.seq = msg.main.seq;
+        applyState(main, msg.main.state, msg.main.detail);
+      } else {
+        main.detail = msg.main.detail || main.detail;
+      }
+    }
+
+    const t = now();
+    const live = new Set();
+    const miniScale = Math.max(2, Math.floor(main.scale * 0.45));
+    (msg.subagents || []).forEach((sa) => {
+      live.add(sa.id);
+      let m = minis.get(sa.id);
+      if (!m) {
+        const c = center(main);
+        const half = (miniScale * Art.SIZE) / 2;
+        m = makePet({
+          id: sa.id,
+          name: sa.name,
+          task: sa.task,
+          agentType: sa.agentType,
+          scale: miniScale,
+          x: c.x - half,
+          y: c.y - half,
+          base: 'idle',
+          hue: 40 + minis.size * 67,
+          spawnAt: t,
+        });
+        minis.set(sa.id, m);
+        for (let i = 0; i < 10; i++) {
+          emit({
+            x: c.x,
+            y: c.y,
+            vx: (Math.random() - 0.5) * 160,
+            vy: (Math.random() - 0.5) * 160,
+            text: '✨',
+            size: 12,
+            life: 0.7,
+          });
+        }
+      }
+      if (sa.seq !== m.seq) {
+        m.seq = sa.seq;
+        applyState(m, sa.state, sa.detail);
+      }
+    });
+    minis.forEach((m, id) => {
+      if (!live.has(id) && !m.leavingAt) {
+        m.leavingAt = t;
+        const c = center(m);
+        emit({ x: c.x, y: c.y, text: '💨', size: petPx(m) * 0.5, life: 0.8, vy: -20 });
+      }
+    });
+    layoutMinis();
+  }
+
+  // -- Render loop ------------------------------------------------------------
+  function render() {
+    requestAnimationFrame(render);
+    const t = now();
+    const dt = Math.min((t - (lastFrame || t)) / 1000, 0.1);
+    lastFrame = t;
+    ctx.clearRect(0, 0, viewW, viewH);
+    if (!main) {
+      return;
+    }
+
+    tickState(main, t);
+    minis.forEach((m, id) => {
+      tickState(m, t);
+      m.x += (m.tx - m.x) * Math.min(1, dt * 5);
+      m.y += (m.ty - m.y) * Math.min(1, dt * 5);
+      if (m.leavingAt && t - m.leavingAt > 500) {
+        minis.delete(id);
+        layoutMinis();
+      }
+    });
+
+    drawDots(t);
+    const drawOrder = [...minis.values(), main].sort((a, b) => a.y - b.y);
+    drawOrder.forEach((p) => drawPet(p, t));
+    stepParticles(dt);
+    drawParticles();
   }
 
   requestAnimationFrame(render);
 
-  // ── Message handling ──────────────────────────────────────────────────────
-  window.addEventListener('message', async (e) => {
+  // -- Messages ---------------------------------------------------------------
+  window.addEventListener('message', (e) => {
     const msg = e.data;
+    if (!msg || typeof msg !== 'object') {
+      return;
+    }
     switch (msg.command) {
-      case 'init': {
-        const loadVersion = ++assetLoadVersion;
-        assetsReady = false;
-        resize(msg.size || 200);
-        const [nextAtlas, nextBorders, nextBg] = await Promise.all([
-          loadImage(msg.assets.spriteAtlas),
-          loadImage(msg.assets.borders),
-          loadImage(msg.assets.bg),
-        ]);
-        if (loadVersion !== assetLoadVersion) {
-          break;
-        }
-        atlasImg = nextAtlas;
-        bordersImg = nextBorders;
-        bgImg = nextBg;
-        assetsReady = true;
-        playAnim('sleeping');
-
-        // Restore saved position
+      case 'init':
         if (msg.state && typeof msg.state.petX === 'number') {
-          applyPosition(msg.state.petX, msg.state.petY);
-        } else {
-          defaultPosition();
+          savedPos = msg.state;
         }
+        applyConfig(msg.config);
         break;
-      }
-
+      case 'reinit':
+        applyConfig(msg.config);
+        break;
       case 'peon-event': {
-        const anim = msg.anim;
-        if (anim === 'waking' && currentAnim !== 'sleeping') {
-          break;
-        }
-        playAnim(anim);
-        break;
-      }
-
-      case 'session-update': {
-        currentSessions = msg.sessions || [];
-        const wasActive = anySessionActive;
-        anySessionActive = currentSessions.some((s) => s.hot);
-        if (anySessionActive && !wasActive && currentAnim === 'sleeping') {
-          playAnim('typing');
+        const state = PEON_TO_STATE[msg.anim];
+        if (main && state) {
+          applyState(main, state, '');
         }
         break;
       }
-
-      case 'reinit': {
-        // Character/size change
-        const loadVersion = ++assetLoadVersion;
-        assetsReady = false;
-        resize(msg.size || petSize);
-        const [nextAtlas, nextBorders, nextBg] = await Promise.all([
-          loadImage(msg.assets.spriteAtlas),
-          loadImage(msg.assets.borders),
-          loadImage(msg.assets.bg),
-        ]);
-        if (loadVersion !== assetLoadVersion) {
-          break;
-        }
-        atlasImg = nextAtlas;
-        bordersImg = nextBorders;
-        bgImg = nextBg;
-        assetsReady = true;
-        playAnim('sleeping');
+      case 'session-update':
+        peonSessions = msg.sessions || [];
         break;
-      }
+      case 'claude-update':
+        applyClaude(msg);
+        break;
     }
   });
 
-  // ── Tooltip ───────────────────────────────────────────────────────────────
+  window.addEventListener('resize', resizeCanvas);
+
+  // -- Tooltip ----------------------------------------------------------------
+  function hit(p, x, y) {
+    const s = petPx(p);
+    return x >= p.x && x <= p.x + s && y >= p.y && y <= p.y + s;
+  }
+
+  function tooltipHtml(x, y) {
+    for (const m of minis.values()) {
+      if (!m.leavingAt && hit(m, x, y)) {
+        const def = STATES[displayState(m)];
+        return (
+          `<b>${escapeHtml(m.name)}</b> <span class="dim">(${escapeHtml(m.agentType)})</span><br>` +
+          `${escapeHtml(m.task || 'helping out')}<br>` +
+          `<span class="dim">${escapeHtml(def.label)}${m.detail ? ': ' + escapeHtml(m.detail) : ''}</span>`
+        );
+      }
+    }
+    if (main && hit(main, x, y)) {
+      const def = STATES[displayState(main)];
+      const helpers = [...minis.values()].filter((m) => !m.leavingAt).length;
+      return (
+        `<b>${escapeHtml(main.name)}</b> is ${escapeHtml(def.label)}` +
+        (main.detail ? `<br>${escapeHtml(main.detail)}` : '') +
+        (project ? `<br><span class="dim">in ${escapeHtml(project)}</span>` : '') +
+        (helpers
+          ? `<br><span class="dim">${helpers} helper${helpers > 1 ? 's' : ''} working</span>`
+          : '')
+      );
+    }
+    const sessions = allSessions().slice(0, MAX_DOTS);
+    for (let i = 0; i < sessions.length; i++) {
+      const c = dotCenter(i);
+      if ((x - c.x) ** 2 + (y - c.y) ** 2 < (DOT_R * 2) ** 2) {
+        const s = sessions[i];
+        const label = leafDirName(s.cwd) || '...' + s.id.slice(-8);
+        const status = s.hot ? 'active' : s.warm ? 'idle' : 'cold';
+        return `${escapeHtml(label)} &bull; ${status}`;
+      }
+    }
+    return null;
+  }
+
   canvas.addEventListener('mousemove', (e) => {
-    const px = e.offsetX,
-      py = e.offsetY;
-    const idx = hitTestDots(px, py);
-    let html;
-    if (idx >= 0) {
-      const s = currentSessions[idx];
-      const status = s.hot
-        ? '<span style="color:#44ff44">active</span>'
-        : s.warm
-          ? '<span style="color:#1aaa1a">idle</span>'
-          : '<span style="color:#555">cold</span>';
-      const label = leafDirName(s.cwd) ?? '…' + s.id.slice(-8);
-      const safeLabel = escapeHtml(label);
-      html = `${safeLabel} &bull; ${status}`;
-    } else if (currentSessions.length === 0) {
-      html = 'Peon Pet';
-    } else {
-      const names = currentSessions.map((s) => leafDirName(s.cwd)).filter(Boolean);
-      html = names.length
-        ? names.map((name) => escapeHtml(name)).join('<br>')
-        : `${currentSessions.filter((s) => s.hot).length}/${currentSessions.length} sessions`;
+    if (dragging) {
+      return;
+    }
+    canvas.style.cursor = main && hit(main, e.offsetX, e.offsetY) ? 'grab' : '';
+    const html = tooltipHtml(e.offsetX, e.offsetY);
+    if (!html) {
+      tooltip.style.display = 'none';
+      return;
     }
     tooltip.innerHTML = html;
     tooltip.style.display = 'block';
-    // Clamp tooltip inside the webview
-    const bodyW = document.body.clientWidth;
-    const bodyH = document.body.clientHeight;
-    const rect = container.getBoundingClientRect();
-    const absX = rect.left + px;
-    const absY = rect.top + py;
     const tw = tooltip.offsetWidth;
     const th = tooltip.offsetHeight;
-    tooltip.style.left = Math.min(absX + 8, bodyW - tw - 4) + 'px';
-    tooltip.style.top = Math.min(absY + 8, bodyH - th - 4) + 'px';
+    tooltip.style.left = Math.max(4, Math.min(e.offsetX + 10, viewW - tw - 4)) + 'px';
+    tooltip.style.top = Math.max(4, Math.min(e.offsetY + 12, viewH - th - 4)) + 'px';
   });
 
   canvas.addEventListener('mouseleave', () => {
     tooltip.style.display = 'none';
   });
 
-  // ── Drag to reposition ────────────────────────────────────────────────────
+  // -- Drag to reposition -----------------------------------------------------
   let dragging = false;
-  let dragOffX = 0,
-    dragOffY = 0;
+  let dragOffX = 0;
+  let dragOffY = 0;
 
   canvas.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) {
+    if (e.button !== 0 || !main || !hit(main, e.offsetX, e.offsetY)) {
       return;
     }
     dragging = true;
-    dragOffX = e.clientX - container.getBoundingClientRect().left;
-    dragOffY = e.clientY - container.getBoundingClientRect().top;
+    dragOffX = e.offsetX - main.x;
+    dragOffY = e.offsetY - main.y;
+    canvas.style.cursor = 'grabbing';
+    tooltip.style.display = 'none';
     e.preventDefault();
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (!dragging) {
+    if (!dragging || !main) {
       return;
     }
-    applyPosition(e.clientX - dragOffX, e.clientY - dragOffY);
+    main.x = e.clientX - dragOffX;
+    main.y = e.clientY - dragOffY;
+    clampMain();
+    layoutMinis();
   });
 
   document.addEventListener('mouseup', () => {
-    if (!dragging) {
+    if (!dragging || !main) {
       return;
     }
     dragging = false;
-    const left = parseInt(container.style.left, 10) || 0;
-    const top = parseInt(container.style.top, 10) || 0;
-    saveState(left, top);
+    canvas.style.cursor = '';
+    const pos = { petX: Math.round(main.x), petY: Math.round(main.y) };
+    vscodeApi.setState(pos);
+    vscodeApi.postMessage({ command: 'save-state', state: pos });
   });
 
-  function applyPosition(x, y) {
-    const maxX = Math.max(0, document.body.clientWidth - petSize);
-    const maxY = Math.max(0, document.body.clientHeight - petSize);
-    container.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
-    container.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
-  }
-
-  function defaultPosition() {
-    const x = 10;
-    const y = Math.max(0, document.body.clientHeight - petSize - 10);
-    applyPosition(x, y);
-  }
-
-  function saveState(x, y) {
-    vscodeApi.setState({ petX: x, petY: y });
-    vscodeApi.postMessage({ command: 'save-state', state: { petX: x, petY: y } });
-  }
-
-  // Notify extension that webview is ready
   vscodeApi.postMessage({ command: 'ready' });
 })();

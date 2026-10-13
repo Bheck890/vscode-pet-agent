@@ -1,7 +1,7 @@
 {
   "name": "vscode-peon-pet",
   "displayName": "Peon Pet",
-  "description": "Animated orc that reacts to your AI coding agent events via peon-ping.",
+  "description": "A pixel pet (cat, dog, bird or fox) that acts out what your AI coding agent is doing. Sub-agents spawn mini pets.",
   "version": "0.2.0",
   "publisher": "smcqueen",
   "license": "MIT",
@@ -23,18 +23,20 @@
     "Other"
   ],
   "keywords": [
-    "peon",
-    "warcraft",
     "pet",
     "ai",
     "agent",
+    "claude",
+    "claude-code",
     "peon-ping",
     "pixel-art",
+    "cat",
+    "dog",
+    "fox",
     "fun"
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:peon-pet.changeCharacter",
     "onView:peonPetView"
   ],
   "main": "./dist/extension.js",
@@ -44,23 +46,44 @@
         {
           "type": "webview",
           "id": "peonPetView",
-          "name": "Peon Pet"
+          "name": "Agent Pet"
         }
       ]
     },
     "commands": [
       {
-        "command": "peon-pet.changeCharacter",
-        "title": "Peon Pet: Change Character"
+        "command": "peon-pet.customize",
+        "title": "Peon Pet: Customize Pet"
       }
     ],
     "configuration": {
       "title": "Peon Pet",
       "properties": {
-        "peon-pet.character": {
+        "peon-pet.species": {
           "type": "string",
-          "default": "orc",
-          "description": "Active character pack name. 'orc' is the built-in default. Custom packs go in ~/.openpeon/characters/<name>/."
+          "enum": [
+            "cat",
+            "dog",
+            "bird",
+            "fox"
+          ],
+          "default": "cat",
+          "description": "Which animal your pet is."
+        },
+        "peon-pet.color": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Fur/feather colour. Any CSS colour (`#ff8800`, `hotpink`, `rebeccapurple`...). Leave empty for the species default. Your AI agent can change this for you by editing your VS Code settings."
+        },
+        "peon-pet.name": {
+          "type": "string",
+          "default": "",
+          "description": "Your pet's name. Leave empty for the species default."
+        },
+        "peon-pet.stateColors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Tint the pet and glow a coloured aura that changes with what the agent is doing."
         },
         "peon-pet.size": {
           "type": "string",

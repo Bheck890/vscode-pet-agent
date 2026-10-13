@@ -35,7 +35,8 @@ jest.mock(
 );
 
 import * as fs from 'fs';
-import { buildAssetUris, buildHtml, getNonce } from '../webview-helpers';
+import * as path from 'path';
+import { buildHtml, getNonce } from '../webview-helpers';
 
 describe('webview-helpers', () => {
   afterEach(() => {
@@ -54,6 +55,7 @@ describe('webview-helpers', () => {
       `<!doctype html>
 <head><!--CSP_PLACEHOLDER--></head>
 <link rel="stylesheet" href="<!--CSS_URI-->">
+<script nonce="<!--NONCE-->" src="<!--PETS_URI-->"></script>
 <script nonce="<!--NONCE-->" src="<!--SCRIPT_URI-->"></script>` as unknown as ReturnType<
         typeof fs.readFileSync
       >,
@@ -69,9 +71,11 @@ describe('webview-helpers', () => {
     );
 
     expect(html).toContain('Content-Security-Policy');
-    expect(html).toContain('webview:/ext/media/webview.css');
-    expect(html).toContain('webview:/ext/media/webview.js');
-    expect(html).toContain('nonce="abc123"');
+    expect(html).toContain(`webview:${path.join('/ext/media', 'webview.css')}`);
+    expect(html).toContain(`webview:${path.join('/ext/media', 'pets.js')}`);
+    expect(html).toContain(`webview:${path.join('/ext/media', 'webview.js')}`);
+    expect(html.match(/nonce="abc123"/g)).toHaveLength(2);
+    expect(html).not.toContain('<!--');
   });
 
   it('returns fallback html and surfaces a readable error if template read fails', () => {
@@ -93,24 +97,5 @@ describe('webview-helpers', () => {
     );
     expect(html).toContain('Peon Pet failed to load its webview template');
     expect(html).toContain('missing template');
-  });
-
-  it('maps character asset file paths into webview URIs', () => {
-    const result = buildAssetUris(
-      {
-        asWebviewUri: (uri: { fsPath: string }) => ({ toString: () => `webview:${uri.fsPath}` }),
-      } as unknown as import('vscode').Webview,
-      {
-        spriteAtlas: '/chars/orc/sprite-atlas.png',
-        borders: '/chars/orc/borders.png',
-        bg: null,
-      },
-    );
-
-    expect(result).toEqual({
-      spriteAtlas: 'webview:/chars/orc/sprite-atlas.png',
-      borders: 'webview:/chars/orc/borders.png',
-      bg: null,
-    });
   });
 });

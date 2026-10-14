@@ -87,7 +87,14 @@ function runWebviewScript() {
   const hover = (offsetX: number, offsetY: number) =>
     canvasListeners['mousemove'].forEach((l) => l({ offsetX, offsetY }));
 
-  return { send, hover, tooltip, vscodeApi };
+  const click = (offsetX: number, offsetY: number) => {
+    canvasListeners['mousedown'].forEach((l) =>
+      l({ button: 0, offsetX, offsetY, preventDefault: () => undefined }),
+    );
+    documentListeners['mouseup'].forEach((l) => l({}));
+  };
+
+  return { send, hover, click, tooltip, vscodeApi };
 }
 
 const CONFIG = { species: 'fox', color: '', name: 'Rusty', stateColors: true, size: 200 };
@@ -173,14 +180,27 @@ describe('webview behavior', () => {
           id: '550e8400-e29b-41d4-a716-446655440000',
           hot: true,
           warm: true,
-          cwd: 'C:\\tmp\\<b>x</b>',
+          cwd: 'C:\\tmp\\<img onerror=x>',
         },
       ],
     });
 
     hover(14, 14);
 
-    expect(tooltip.innerHTML).not.toContain('<b>x');
-    expect(tooltip.innerHTML).toContain('&lt;b&gt;x&lt;/b&gt;');
+    expect(tooltip.innerHTML).not.toContain('<img');
+    expect(tooltip.innerHTML).toContain('&lt;img onerror=x&gt;');
+  });
+
+  it('wakes a sleeping pet when clicked, without saving a new position', () => {
+    const { send, hover, click, tooltip, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    hover(50, 80);
+    expect(tooltip.innerHTML).toContain('napping');
+
+    click(50, 80);
+    hover(50, 80);
+
+    expect(tooltip.innerHTML).toContain('waking up');
+    expect(vscodeApi.setState).not.toHaveBeenCalled();
   });
 });

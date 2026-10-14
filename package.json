@@ -67,13 +67,67 @@
             "bird",
             "fox"
           ],
-          "default": "cat",
+          "default": "fox",
           "description": "Which animal your pet is."
         },
         "peon-pet.color": {
           "type": "string",
           "default": "",
           "markdownDescription": "Fur/feather colour. Any CSS colour (`#ff8800`, `hotpink`, `rebeccapurple`...). Leave empty for the species default. Your AI agent can change this for you by editing your VS Code settings."
+        },
+        "peon-pet.accentColor": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Belly, muzzle and chest colour. Any CSS colour (`#ff8800`, `hotpink`...). Leave empty for the default."
+        },
+        "peon-pet.eyeColor": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Eye (iris) colour. Any CSS colour (`#ff8800`, `hotpink`...). Leave empty for the default."
+        },
+        "peon-pet.pattern": {
+          "type": "string",
+          "default": "none",
+          "enum": [
+            "none",
+            "spots",
+            "stripes",
+            "socks",
+            "mask",
+            "patch"
+          ],
+          "enumDescriptions": [
+            "Plain",
+            "Leopard-ish spots",
+            "Tabby stripes",
+            "White socks",
+            "Bandit mask",
+            "Patch over one eye"
+          ],
+          "description": "Fur pattern."
+        },
+        "peon-pet.accessory": {
+          "type": "string",
+          "default": "none",
+          "enum": [
+            "none",
+            "bow",
+            "flower",
+            "crown",
+            "beanie",
+            "headphones",
+            "glasses",
+            "sunglasses",
+            "bandana",
+            "scarf",
+            "collar"
+          ],
+          "description": "Something for your pet to wear. Hats step aside for state props like the party hat."
+        },
+        "peon-pet.accessoryColor": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Accessory colour. Any CSS colour (`#ff8800`, `hotpink`...). Leave empty for the default."
         },
         "peon-pet.name": {
           "type": "string",
@@ -84,6 +138,11 @@
           "type": "boolean",
           "default": true,
           "description": "Tint the pet and glow a coloured aura that changes with what the agent is doing."
+        },
+        "peon-pet.wander": {
+          "type": "boolean",
+          "default": true,
+          "description": "Let the pet wander around the panel and fidget when idle."
         },
         "peon-pet.size": {
           "type": "string",
@@ -106,14 +165,15 @@
   "scripts": {
     "compile": "webpack --mode development",
     "watch": "webpack --mode development --watch",
-    "package": "webpack --mode production && npx @vscode/vsce package --no-dependencies",
+    "package": "webpack --mode production && npx @vscode/vsce package --no-dependencies -o vscode-peon-pet.vsix",
     "lint": "eslint src media",
     "lint:fix": "eslint src media --fix",
     "format": "prettier --write \"src/**/*.ts\" \"media/**/*.{js,css,html}\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"media/**/*.{js,css,html}\"",
     "test": "jest",
     "pretest": "npm run lint && npm run compile",
-    "prepare": "husky"
+    "prepare": "husky",
+    "install:vscode": "npm run package && code --install-extension vscode-peon-pet.vsix --force"
   },
   "lint-staged": {
     "src/**/*.ts": [

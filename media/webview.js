@@ -174,6 +174,13 @@
   let project = '';
   let fgColor = '#cccccc';
   let lastFrame = 0;
+  /** @type {{x: number, y: number, at: number} | null} */
+  let mouse = null;
+  let dragging = false;
+  /** @type {any} */
+  let press = null;
+  /** @type {{pet: any, at: number}} */
+  let lastClick = { pet: null, at: 0 };
 
   // -- Helpers ----------------------------------------------------------------
   function now() {
@@ -281,12 +288,29 @@
     return c;
   }
 
-  function petSprite(species, color, tint, eyes, mouth, frame) {
-    return cached(['pet', species, color, tint, eyes, mouth, frame].join('|'), () =>
-      Art.compose(species, Art.palette(species, color, tint, tint ? 0.22 : 0), {
-        eyes,
-        mouth,
-        frame,
+  function petPalette(color, tint) {
+    return Art.palette(config.species, color, tint, tint ? 0.22 : 0, {
+      accent: cssToHex(config.accentColor) || '',
+      eye: cssToHex(config.eyeColor) || '',
+    });
+  }
+
+  /** Pattern and accessory come from config; the cache is cleared whenever config changes. */
+  function petSprite(o) {
+    const key = ['pet', o.color, o.tint, o.eyes, o.mouth, o.frame, o.look, o.twitch, o.hide].join(
+      '|',
+    );
+    return cached(key, () =>
+      Art.compose(config.species, petPalette(o.color, o.tint), {
+        eyes: o.eyes,
+        mouth: o.mouth,
+        frame: o.frame,
+        look: o.look,
+        twitch: o.twitch,
+        pattern: config.pattern,
+        accessory: config.accessory,
+        accessoryColor: cssToHex(config.accessoryColor) || '',
+        hide: o.hide,
       }),
     );
   }
@@ -322,6 +346,15 @@
         leavingAt: 0,
         blinkEvery: 2800 + Math.random() * 2500,
         fxAt: 0,
+        wx: 0,
+        wxTarget: 0,
+        walking: 0,
+        wanderNext: t + 5000,
+        fidget: null,
+        fidgetNext: t + 3000,
+        reaction: null,
+        twitchAt: 0,
+        twitchNext: t + 2000 + Math.random() * 4000,
       },
       opts,
     );
@@ -394,7 +427,105 @@
 
   function center(p) {
     const s = petPx(p);
-    return { x: p.x + s / 2, y: p.y + s / 2 };
+    return { x: p.x + p.wx + s / 2, y: p.y + s / 2 };
+  }
+
+  // -- Idle life: fidgets, wandering, ear twitches ------------------------------
+  const FIDGETS = [
+    ['lookL', 1400],
+    ['lookR', 1400],
+    ['twitch', 700],
+    ['yawn', 1700],
+    ['hop', 900],
+    ['chase', 1600],
+    ['groom', 1500],
+    ['wag', 1500],
+  ];
+
+  function tickLife(p, t, dt) {
+    if (t > p.twitchNext) {
+      p.twitchAt = t;
+      p.twitchNext = t + 3500 + Math.random() * 6000;
+    }
+    if (p !== main) {
+      return;
+    }
+    const state = displayState(p);
+    const size = petPx(p);
+    const reacting = p.reaction && t < p.reaction.until;
+    if (state === 'idle' && !reacting && !dragging) {
+      if (config.wander && !p.walking && t > p.wanderNext) {
+        p.wxTarget = (Math.random() - 0.5) * viewW * 0.8;
+        p.wanderNext = t + 7000 + Math.random() * 7000;
+      }
+      if (!p.walking && t > p.fidgetNext && (!p.fidget || t > p.fidget.until)) {
+        const [kind, dur] = FIDGETS[Math.floor(Math.random() * FIDGETS.length)];
+        p.fidget = { kind, start: t, until: t + dur };
+        p.fidgetNext = t + dur + 3000 + Math.random() * 5000;
+      }
+    } else if (state === 'sleeping') {
+      p.wxTarget = p.wx;
+    } else {
+      // Work started: run back home.
+      p.wxTarget = 0;
+    }
+    if (!config.wander) {
+      p.wxTarget = 0;
+    }
+    p.wxTarget = Math.max(-p.x, Math.min(viewW - size - p.x, p.wxTarget));
+    const diff = p.wxTarget - p.wx;
+    const speed = state === 'idle' ? size * 0.7 : size * 2.5;
+    if (Math.abs(diff) > 1) {
+      p.wx += Math.sign(diff) * Math.min(Math.abs(diff), speed * dt);
+      p.walking = Math.sign(diff);
+    } else {
+      p.wx = p.wxTarget;
+      p.walking = 0;
+    }
+  }
+
+  /** Click = pet it (hearts), double-click = trick (spin jump). Clicking wakes it up. */
+  function clickPet(p) {
+    const t = now();
+    const double = lastClick.pet === p && t - lastClick.at < 350;
+    lastClick = { pet: p, at: t };
+    if (displayState(p) === 'sleeping') {
+      startOneShot(p, 'waking', 'idle');
+      p.oneShotUntil = t + 900;
+    }
+    p.lastActivity = t;
+    p.fidget = null;
+    const c = center(p);
+    const s = petPx(p);
+    if (double) {
+      p.reaction = { kind: 'trick', start: t, until: t + 1200 };
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        emit({
+          x: c.x,
+          y: c.y,
+          vx: Math.cos(a) * s * 0.9,
+          vy: Math.sin(a) * s * 0.9,
+          text: '⭐',
+          size: s * 0.12,
+          life: 0.8,
+        });
+      }
+    } else {
+      p.reaction = { kind: 'pet', start: t, until: t + 1500 };
+      const hearts = ['💖', '💕', '💗'];
+      for (let i = 0; i < 5; i++) {
+        emit({
+          x: c.x + (Math.random() - 0.5) * s * 0.5,
+          y: p.y + s * 0.25,
+          vx: (Math.random() - 0.5) * s * 0.3,
+          vy: -s * (0.35 + Math.random() * 0.3),
+          text: hearts[i % hearts.length],
+          size: s * 0.12,
+          life: 1.2,
+        });
+      }
+    }
   }
 
   // -- Particles --------------------------------------------------------------
@@ -566,6 +697,33 @@
         m.rot = Math.sin(tt * 2.75) * 0.08;
         break;
       }
+      case 'walk':
+        m.dy = -Math.abs(Math.sin(tt * 9)) * 1.5;
+        m.rot = p.walking * 0.06;
+        break;
+      case 'wiggle': {
+        const k = Math.max(0, 1 - tt / 1.5);
+        m.rot = Math.sin(tt * 14) * 0.07 * k;
+        m.sy = 1 + Math.sin(tt * 14) * 0.04 * k;
+        break;
+      }
+      case 'trick': {
+        const u = Math.min(tt / 1.2, 1);
+        m.dy = -Math.sin(u * Math.PI) * 9;
+        m.sx = Math.cos(u * Math.PI * 2);
+        break;
+      }
+      case 'spin':
+        m.sx = Math.cos(tt * Math.PI * 2.5);
+        m.dx = Math.sin(tt * Math.PI * 2.5) * 2;
+        break;
+      case 'groom':
+        m.rot = Math.sin(tt * 3) * 0.1;
+        m.dy = Math.sin(tt * 7) * 0.3;
+        break;
+    }
+    if (name !== 'breathe') {
+      m.sy *= 1 + 0.012 * Math.sin(now() / 450 + p.hue);
     }
     if (p !== main) {
       m.dy += -Math.abs(Math.sin(tt * 3 + p.hue)) * 0.6;
@@ -573,18 +731,98 @@
     return m;
   }
 
-  function eyesFor(p, def, state, tt, t) {
+  /**
+   * Everything about how the pet looks this frame. Layers, lowest priority
+   * first: agent state, idle fidget, walking, click reaction, mouse-following
+   * pupils, ear twitch, blink.
+   */
+  function pose(p, def, state, tt, t) {
+    const out = {
+      eyes: def.eyes,
+      mouth: def.mouth,
+      look: 0,
+      twitch: false,
+      wag: def.wag,
+      motion: def.motion,
+      mt: tt,
+    };
     if (state === 'waking') {
-      return tt < 0.7 ? 'sleepy' : 'open';
+      out.eyes = tt < 0.7 ? 'sleepy' : 'open';
     }
     if (state === 'reading' && Math.floor(tt / 1.6) % 3 === 2) {
-      return 'open';
+      out.eyes = 'open';
     }
-    const blinkable = def.eyes === 'open' || def.eyes === 'lookDown' || def.eyes === 'focus';
+
+    const f = state === 'idle' && p.fidget && t < p.fidget.until ? p.fidget : null;
+    if (f) {
+      const ft = (t - f.start) / 1000;
+      out.mt = ft;
+      switch (f.kind) {
+        case 'lookL':
+          out.look = -1;
+          break;
+        case 'lookR':
+          out.look = 1;
+          break;
+        case 'twitch':
+          out.twitch = Math.floor(ft * 8) % 2 === 0;
+          break;
+        case 'yawn':
+          out.eyes = 'closed';
+          out.mouth = 'yawn';
+          out.motion = 'stretch';
+          break;
+        case 'hop':
+          out.eyes = 'happy';
+          out.motion = 'hop';
+          break;
+        case 'chase':
+          out.mouth = 'open';
+          out.motion = 'spin';
+          out.wag = 10;
+          break;
+        case 'groom':
+          out.eyes = 'happy';
+          out.mouth = 'tongue';
+          out.motion = 'groom';
+          break;
+        case 'wag':
+          out.eyes = 'happy';
+          out.mouth = 'smile';
+          out.wag = 9;
+          break;
+      }
+    }
+
+    if (p.walking) {
+      out.motion = 'walk';
+      out.mt = t / 1000;
+      out.look = p.walking;
+      out.wag = 5;
+    }
+
+    const r = p.reaction && t < p.reaction.until ? p.reaction : null;
+    if (r) {
+      out.mt = (t - r.start) / 1000;
+      out.eyes = 'happy';
+      out.mouth = r.kind === 'trick' ? 'open' : 'smile';
+      out.motion = r.kind === 'trick' ? 'trick' : 'wiggle';
+      out.wag = 10;
+    }
+
+    if (out.eyes === 'open' && out.look === 0 && mouse && t - mouse.at < 4000) {
+      const cx = center(p).x;
+      const band = petPx(p) * 0.2;
+      out.look = mouse.x < cx - band ? -1 : mouse.x > cx + band ? 1 : 0;
+    }
+    if (state !== 'sleeping' && t - p.twitchAt < 260) {
+      out.twitch = true;
+    }
+    const blinkable = out.eyes === 'open' || out.eyes === 'lookDown' || out.eyes === 'focus';
     if (blinkable && (t + p.hue * 1000) % p.blinkEvery < 130) {
-      return 'closed';
+      out.eyes = 'closed';
     }
-    return def.eyes;
+    return out;
   }
 
   function drawAura(p, def, t) {
@@ -635,15 +873,16 @@
 
   function drawBubble(p, def, tt) {
     const s = petPx(p);
-    const bx = p.x + s * 0.88;
+    const px = p.x + p.wx;
+    const bx = px + s * 0.88;
     const by = p.y + s * 0.02;
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#22222a';
     ctx.lineWidth = Math.max(1.5, p.scale * 0.4);
     if (def.bubble === 'thought') {
       const dots = [
-        [p.x + s * 0.7, p.y + s * 0.22, s * 0.03],
-        [p.x + s * 0.78, p.y + s * 0.12, s * 0.045],
+        [px + s * 0.7, p.y + s * 0.22, s * 0.03],
+        [px + s * 0.78, p.y + s * 0.12, s * 0.045],
       ];
       for (const [x, y, r] of dots) {
         ctx.beginPath();
@@ -737,8 +976,17 @@
     const sp = Art.SPECIES[species];
     const color = p === main ? baseColor() : Art.rotateHue(baseColor(), p.hue);
     const tint = config.stateColors && def.color ? def.color : '';
-    const frame = def.wag > 0 ? Math.floor(tt * def.wag) % 2 : 0;
-    const m = motionFor(def.motion, tt, p);
+    const ps = pose(p, def, state, tt, t);
+    const frame = ps.wag > 0 ? Math.floor((t / 1000) * ps.wag) % 2 : 0;
+    const m = motionFor(ps.motion, ps.mt, p);
+    const x0 = p.x + p.wx;
+    const hide = [];
+    if (def.prop === 'partyHat' || def.prop === 'nightcap') {
+      hide.push('head');
+    }
+    if (def.prop === 'binoculars') {
+      hide.push('face');
+    }
 
     let k = 1;
     if (p.spawnAt) {
@@ -759,22 +1007,23 @@
     // Ground shadow
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
     ctx.beginPath();
-    ctx.ellipse(
-      p.x + size / 2,
-      p.y + size - s,
-      size * 0.32 * k,
-      size * 0.05 * k,
-      0,
-      0,
-      Math.PI * 2,
-    );
+    ctx.ellipse(x0 + size / 2, p.y + size - s, size * 0.32 * k, size * 0.05 * k, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.save();
-    ctx.translate(Math.round(p.x + size / 2 + m.dx * s), Math.round(p.y + size + m.dy * s));
+    ctx.translate(Math.round(x0 + size / 2 + m.dx * s), Math.round(p.y + size + m.dy * s));
     ctx.rotate(m.rot);
     ctx.scale(m.sx * k, m.sy * k);
-    const sprite = petSprite(species, color, tint, eyesFor(p, def, state, tt, t), def.mouth, frame);
+    const sprite = petSprite({
+      color,
+      tint,
+      eyes: ps.eyes,
+      mouth: ps.mouth,
+      frame,
+      look: ps.look,
+      twitch: ps.twitch,
+      hide: hide.join(','),
+    });
     ctx.drawImage(sprite, -size / 2, -size, size, size);
 
     if (state === 'sleeping') {
@@ -793,7 +1042,7 @@
       }
     }
     if (state === 'writing') {
-      drawTypingPaws(p, Art.palette(species, color, tint, tint ? 0.22 : 0), tt);
+      drawTypingPaws(p, petPalette(color, tint), tt);
     }
     ctx.restore();
 
@@ -805,7 +1054,7 @@
       ctx.font = `${Math.round(size * 0.3)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(e, p.x + size * 0.95, p.y + size * 0.12 + Math.sin(tt * 4) * 2);
+      ctx.fillText(e, x0 + size * 0.95, p.y + size * 0.12 + Math.sin(tt * 4) * 2);
     }
     ambientFx(p, state, t);
     drawLabels(p, def, k);
@@ -813,7 +1062,7 @@
 
   function drawLabels(p, def, k) {
     const size = petPx(p);
-    const cx = p.x + size / 2;
+    const cx = center(p).x;
     const y = p.y + size + 4;
     const isMain = p === main;
     const maxW = Math.max(size + 30, isMain ? 220 : 110);
@@ -1036,8 +1285,10 @@
     }
 
     tickState(main, t);
+    tickLife(main, t, dt);
     minis.forEach((m, id) => {
       tickState(m, t);
+      tickLife(m, t, dt);
       m.x += (m.tx - m.x) * Math.min(1, dt * 5);
       m.y += (m.ty - m.y) * Math.min(1, dt * 5);
       if (m.leavingAt && t - m.leavingAt > 500) {
@@ -1092,7 +1343,8 @@
   // -- Tooltip ----------------------------------------------------------------
   function hit(p, x, y) {
     const s = petPx(p);
-    return x >= p.x && x <= p.x + s && y >= p.y && y <= p.y + s;
+    const px = p.x + p.wx;
+    return x >= px && x <= px + s && y >= p.y && y <= p.y + s;
   }
 
   function tooltipHtml(x, y) {
@@ -1131,11 +1383,22 @@
     return null;
   }
 
+  function petAt(x, y) {
+    for (const m of minis.values()) {
+      if (!m.leavingAt && hit(m, x, y)) {
+        return m;
+      }
+    }
+    return main && hit(main, x, y) ? main : null;
+  }
+
   canvas.addEventListener('mousemove', (e) => {
+    mouse = { x: e.offsetX, y: e.offsetY, at: now() };
     if (dragging) {
       return;
     }
-    canvas.style.cursor = main && hit(main, e.offsetX, e.offsetY) ? 'grab' : '';
+    const over = petAt(e.offsetX, e.offsetY);
+    canvas.style.cursor = over === main ? 'grab' : over ? 'pointer' : '';
     const html = tooltipHtml(e.offsetX, e.offsetY);
     if (!html) {
       tooltip.style.display = 'none';
@@ -1153,42 +1416,61 @@
     tooltip.style.display = 'none';
   });
 
-  // -- Drag to reposition -----------------------------------------------------
-  let dragging = false;
-  let dragOffX = 0;
-  let dragOffY = 0;
+  // -- Click and drag ---------------------------------------------------------
+  // A press becomes a drag (main pet only) once the mouse moves 4px; otherwise
+  // releasing it counts as a click.
 
   canvas.addEventListener('mousedown', (e) => {
-    if (e.button !== 0 || !main || !hit(main, e.offsetX, e.offsetY)) {
+    if (e.button !== 0) {
       return;
     }
-    dragging = true;
-    dragOffX = e.offsetX - main.x;
-    dragOffY = e.offsetY - main.y;
-    canvas.style.cursor = 'grabbing';
-    tooltip.style.display = 'none';
+    const pet = petAt(e.offsetX, e.offsetY);
+    if (!pet) {
+      return;
+    }
+    press = {
+      pet,
+      x: e.offsetX,
+      y: e.offsetY,
+      offX: e.offsetX - pet.x - pet.wx,
+      offY: e.offsetY - pet.y,
+    };
     e.preventDefault();
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (!dragging || !main) {
+    if (!press || press.pet !== main) {
       return;
     }
-    main.x = e.clientX - dragOffX;
-    main.y = e.clientY - dragOffY;
-    clampMain();
-    layoutMinis();
+    if (!dragging && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) {
+      dragging = true;
+      main.wx = 0;
+      main.wxTarget = 0;
+      canvas.style.cursor = 'grabbing';
+      tooltip.style.display = 'none';
+    }
+    if (dragging) {
+      main.x = e.clientX - press.offX;
+      main.y = e.clientY - press.offY;
+      clampMain();
+      layoutMinis();
+    }
   });
 
   document.addEventListener('mouseup', () => {
-    if (!dragging || !main) {
+    if (!press) {
       return;
     }
+    if (dragging && main) {
+      const pos = { petX: Math.round(main.x), petY: Math.round(main.y) };
+      vscodeApi.setState(pos);
+      vscodeApi.postMessage({ command: 'save-state', state: pos });
+    } else {
+      clickPet(press.pet);
+    }
     dragging = false;
+    press = null;
     canvas.style.cursor = '';
-    const pos = { petX: Math.round(main.x), petY: Math.round(main.y) };
-    vscodeApi.setState(pos);
-    vscodeApi.postMessage({ command: 'save-state', state: pos });
   });
 
   vscodeApi.postMessage({ command: 'ready' });

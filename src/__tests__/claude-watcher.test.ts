@@ -1,7 +1,8 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
-const mockHome = fs.mkdtempSync(path.join(require('os').tmpdir(), 'pet-home-'));
+const mockHome = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-home-'));
 
 jest.mock('os', () => ({ ...jest.requireActual('os'), homedir: () => mockHome }));
 jest.mock(

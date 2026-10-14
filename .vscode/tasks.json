@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Pet into VS Code",
+      "detail": "Build the extension, package a .vsix and install it into this VS Code",
+      "type": "npm",
+      "script": "install:vscode",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Build Pet (watch)",
+      "type": "npm",
+      "script": "watch",
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

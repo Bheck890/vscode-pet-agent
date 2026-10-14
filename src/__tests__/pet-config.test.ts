@@ -11,17 +11,24 @@ describe('sizeFromSetting', () => {
   });
 });
 
+const DEFAULTS = {
+  species: 'fox',
+  color: '',
+  accentColor: '',
+  eyeColor: '',
+  pattern: '',
+  accessory: '',
+  accessoryColor: '',
+  name: DEFAULT_NAMES.fox,
+  stateColors: true,
+  wander: true,
+  size: 200,
+};
+
 describe('readPetConfig', () => {
   it('applies defaults for missing or invalid settings', () => {
-    const cfg = readPetConfig(() => undefined);
-    expect(cfg).toEqual({
-      species: 'cat',
-      color: '',
-      name: DEFAULT_NAMES.cat,
-      stateColors: true,
-      size: 200,
-    });
-    expect(readPetConfig((k) => (k === 'species' ? 'dragon' : undefined)).species).toBe('cat');
+    expect(readPetConfig(() => undefined)).toEqual(DEFAULTS);
+    expect(readPetConfig((k) => (k === 'species' ? 'dragon' : undefined)).species).toBe('fox');
   });
 
   it('uses the species default name when name is blank', () => {
@@ -29,19 +36,38 @@ describe('readPetConfig', () => {
     expect(readPetConfig((k) => values[k]).name).toBe('Rusty');
   });
 
+  it('drops unknown patterns and accessories, and treats none as empty', () => {
+    const values: Record<string, unknown> = { pattern: 'plaid', accessory: 'none' };
+    const cfg = readPetConfig((k) => values[k]);
+    expect(cfg.pattern).toBe('');
+    expect(cfg.accessory).toBe('');
+  });
+
   it('passes through user choices', () => {
     const values: Record<string, unknown> = {
       species: 'bird',
       color: ' hotpink ',
+      accentColor: '#ffeeaa',
+      eyeColor: 'blue',
+      pattern: 'spots',
+      accessory: 'crown',
+      accessoryColor: 'gold',
       name: 'Tweety',
       stateColors: false,
+      wander: false,
       size: 'large',
     };
     expect(readPetConfig((k) => values[k])).toEqual({
       species: 'bird',
       color: 'hotpink',
+      accentColor: '#ffeeaa',
+      eyeColor: 'blue',
+      pattern: 'spots',
+      accessory: 'crown',
+      accessoryColor: 'gold',
       name: 'Tweety',
       stateColors: false,
+      wander: false,
       size: 250,
     });
   });

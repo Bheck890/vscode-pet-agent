@@ -1,6 +1,23 @@
 export const SPECIES = ['cat', 'dog', 'bird', 'fox'] as const;
 export type Species = (typeof SPECIES)[number];
 
+/** Must match PATTERNS in media/pets.js. */
+export const PATTERNS = ['none', 'spots', 'stripes', 'socks', 'mask', 'patch'] as const;
+/** Must match ACCESSORIES in media/pets.js. */
+export const ACCESSORIES = [
+  'none',
+  'bow',
+  'flower',
+  'crown',
+  'beanie',
+  'headphones',
+  'glasses',
+  'sunglasses',
+  'bandana',
+  'scarf',
+  'collar',
+] as const;
+
 export const DEFAULT_NAMES: Record<Species, string> = {
   cat: 'Mochi',
   dog: 'Biscuit',
@@ -22,16 +39,34 @@ export const COLOR_PRESETS: Array<{ label: string; color: string }> = [
   { label: 'Lavender', color: '#a98be0' },
   { label: 'Bubblegum', color: '#f27fb2' },
   { label: 'Lime', color: '#9ad94a' },
+  { label: 'Cream', color: '#fbf3ea' },
+  { label: 'Red', color: '#e63946' },
+  { label: 'Black', color: '#22222a' },
 ];
 
-/** Everything the webview needs to draw the pet. */
+export const EYE_PRESETS: Array<{ label: string; color: string }> = [
+  { label: 'Black', color: '' },
+  { label: 'Blue', color: '#3a7bd5' },
+  { label: 'Green', color: '#2f9e5a' },
+  { label: 'Amber', color: '#e09b1f' },
+  { label: 'Violet', color: '#8a4fd8' },
+  { label: 'Red', color: '#d63a3a' },
+];
+
+/** Everything the webview needs to draw the pet. Colours are any CSS colour or '' for default. */
 export interface PetConfig {
   species: Species;
-  /** Any CSS colour, or '' for the species default. Validated in the webview. */
   color: string;
+  accentColor: string;
+  eyeColor: string;
+  pattern: string;
+  accessory: string;
+  accessoryColor: string;
   name: string;
   /** Tint the pet and its aura with a colour per agent state. */
   stateColors: boolean;
+  /** Let the pet roam around the panel when idle. */
+  wander: boolean;
   size: number;
 }
 
@@ -51,18 +86,30 @@ export function sizeFromSetting(setting: string): number {
   }
 }
 
+function oneOf(v: unknown, allowed: readonly string[]): string {
+  return typeof v === 'string' && allowed.includes(v) && v !== 'none' ? v : '';
+}
+
 /** Builds a {@link PetConfig} from a settings getter, applying defaults for bad values. */
 export function readPetConfig(get: (key: string) => unknown): PetConfig {
+  const text = (key: string) => {
+    const v = get(key);
+    return typeof v === 'string' ? v.trim() : '';
+  };
   const rawSpecies = get('species');
-  const species: Species = isSpecies(rawSpecies) ? rawSpecies : 'cat';
-  const color = typeof get('color') === 'string' ? (get('color') as string).trim() : '';
-  const name = typeof get('name') === 'string' ? (get('name') as string).trim() : '';
+  const species: Species = isSpecies(rawSpecies) ? rawSpecies : 'fox';
   const size = get('size');
   return {
     species,
-    color,
-    name: name || DEFAULT_NAMES[species],
+    color: text('color'),
+    accentColor: text('accentColor'),
+    eyeColor: text('eyeColor'),
+    pattern: oneOf(get('pattern'), PATTERNS),
+    accessory: oneOf(get('accessory'), ACCESSORIES),
+    accessoryColor: text('accessoryColor'),
+    name: text('name') || DEFAULT_NAMES[species],
     stateColors: get('stateColors') !== false,
+    wander: get('wander') !== false,
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };
 }

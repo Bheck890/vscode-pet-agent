@@ -1,69 +1,227 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { COLOR_PRESETS, DEFAULT_NAMES, SPECIES, readPetConfig, PetConfig } from './pet-config';
+import {
+  ACCESSORIES,
+  COLOR_PRESETS,
+  DEFAULT_NAMES,
+  EYE_PRESETS,
+  PATTERNS,
+  SPECIES,
+  readPetConfig,
+  PetConfig,
+} from './pet-config';
 import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
 import { PeonViewProvider } from './PeonViewProvider';
 
 const SPECIES_ICONS: Record<string, string> = { cat: '🐱', dog: '🐶', bird: '🐦', fox: '🦊' };
+const ACCESSORY_ICONS: Record<string, string> = {
+  none: '🚫',
+  bow: '🎀',
+  flower: '🌸',
+  crown: '👑',
+  beanie: '🧢',
+  headphones: '🎧',
+  glasses: '👓',
+  sunglasses: '🕶️',
+  bandana: '🔺',
+  scarf: '🧣',
+  collar: '🔔',
+};
+const PATTERN_ICONS: Record<string, string> = {
+  none: '⬜',
+  spots: '🐆',
+  stripes: '🐯',
+  socks: '🧦',
+  mask: '🦝',
+  patch: '🏴',
+};
 
 function getConfig(): PetConfig {
   const cfg = vscode.workspace.getConfiguration('peon-pet');
   return readPetConfig((key) => cfg.get(key));
 }
 
-/** Walks the user through species -> colour -> name. Escape at any step keeps earlier picks. */
-async function customizePet(): Promise<void> {
-  const cfg = vscode.workspace.getConfiguration('peon-pet');
-  const current = getConfig();
-  const save = (key: string, value: unknown) =>
-    cfg.update(key, value, vscode.ConfigurationTarget.Global);
+function save(key: string, value: unknown): Thenable<void> {
+  return vscode.workspace
+    .getConfiguration('peon-pet')
+    .update(key, value, vscode.ConfigurationTarget.Global);
+}
 
-  const species = await vscode.window.showQuickPick(
-    SPECIES.map((s) => ({
-      label: `${SPECIES_ICONS[s]} ${s[0].toUpperCase()}${s.slice(1)}`,
-      id: s,
-      picked: s === current.species,
-    })),
-    { title: 'Customize Pet (1/3): species', placeHolder: `Currently: ${current.species}` },
-  );
-  if (!species) {
-    return;
-  }
-  await save('species', species.id);
+function title(s: string): string {
+  return s[0].toUpperCase() + s.slice(1);
+}
 
-  const color = await vscode.window.showQuickPick(
+function pick<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+/** Colour picker with presets, a default option and free CSS input. Returns undefined on Escape. */
+async function pickColor(
+  heading: string,
+  current: string,
+  presets: Array<{ label: string; color: string }>,
+  defaultLabel: string,
+): Promise<string | undefined> {
+  const choice = await vscode.window.showQuickPick(
     [
-      { label: '$(sparkle) Species default', color: '' },
-      ...COLOR_PRESETS.map((p) => ({ label: p.label, description: p.color, color: p.color })),
+      { label: `$(sparkle) ${defaultLabel}`, color: '' },
+      ...presets
+        .filter((p) => p.color)
+        .map((p) => ({ label: p.label, description: p.color, color: p.color })),
       { label: '$(edit) Custom...', color: '?' },
     ],
-    { title: 'Customize Pet (2/3): colour', placeHolder: current.color || 'Species default' },
+    { title: heading, placeHolder: current || defaultLabel },
   );
-  if (!color) {
-    return;
+  if (!choice) {
+    return undefined;
   }
-  if (color.color === '?') {
-    const custom = await vscode.window.showInputBox({
-      title: 'Custom colour',
-      prompt: 'Any CSS colour: #ff8800, hotpink, rebeccapurple...',
-      value: current.color,
-    });
-    if (custom === undefined) {
+  if (choice.color !== '?') {
+    return choice.color;
+  }
+  const custom = await vscode.window.showInputBox({
+    title: heading,
+    prompt: 'Any CSS colour: #ff8800, hotpink, rebeccapurple...',
+    value: current,
+  });
+  return custom?.trim();
+}
+
+async function pickFrom(
+  heading: string,
+  options: readonly string[],
+  icons: Record<string, string>,
+  current: string,
+): Promise<string | undefined> {
+  const choice = await vscode.window.showQuickPick(
+    options.map((o) => ({
+      label: `${icons[o] ?? ''} ${title(o)}`,
+      id: o,
+      description: o === (current || 'none') ? 'current' : undefined,
+    })),
+    { title: heading },
+  );
+  return choice?.id;
+}
+
+const COLOR_LABELS: Record<string, string> = {
+  color: 'Fur colour',
+  accentColor: 'Belly / muzzle colour',
+  accessoryColor: 'Accessory colour',
+};
+
+/**
+ * A menu of everything about the pet. Each change is saved immediately (the
+ * pet redraws live), then the menu reopens until the user presses Escape.
+ */
+async function customizePet(): Promise<void> {
+  for (;;) {
+    const c = getConfig();
+    const menu = await vscode.window.showQuickPick(
+      [
+        { id: 'species', label: `${SPECIES_ICONS[c.species]} Species`, description: c.species },
+        { id: 'color', label: '🎨 Fur colour', description: c.color || 'default' },
+        {
+          id: 'accentColor',
+          label: '🤍 Belly / muzzle colour',
+          description: c.accentColor || 'default',
+        },
+        { id: 'eyeColor', label: '👁️ Eye colour', description: c.eyeColor || 'black' },
+        { id: 'pattern', label: '🐾 Pattern', description: c.pattern || 'none' },
+        { id: 'accessory', label: '🎀 Accessory', description: c.accessory || 'none' },
+        {
+          id: 'accessoryColor',
+          label: '🖌️ Accessory colour',
+          description: c.accessoryColor || 'default',
+        },
+        { id: 'name', label: '🏷️ Name', description: c.name },
+        { id: 'wander', label: '🚶 Wander when idle', description: c.wander ? 'on' : 'off' },
+        { id: 'stateColors', label: '🌈 State colours', description: c.stateColors ? 'on' : 'off' },
+        { id: 'random', label: '🎲 Randomize look' },
+        { id: 'reset', label: '🔄 Reset look to defaults' },
+      ],
+      { title: `Customize ${c.name}`, placeHolder: 'Pick something to change (Esc when done)' },
+    );
+    if (!menu) {
       return;
     }
-    await save('color', custom.trim());
-  } else {
-    await save('color', color.color);
-  }
 
-  const wasDefaultName = current.name === DEFAULT_NAMES[current.species];
-  const name = await vscode.window.showInputBox({
-    title: 'Customize Pet (3/3): name',
-    value: wasDefaultName ? DEFAULT_NAMES[species.id] : current.name,
-  });
-  if (name !== undefined) {
-    await save('name', name.trim() === DEFAULT_NAMES[species.id] ? '' : name.trim());
+    switch (menu.id) {
+      case 'species': {
+        const s = await pickFrom('Species', SPECIES, SPECIES_ICONS, c.species);
+        if (s) {
+          const customName = c.name !== DEFAULT_NAMES[c.species];
+          await save('species', s);
+          if (!customName) {
+            await save('name', '');
+          }
+        }
+        break;
+      }
+      case 'color':
+      case 'accentColor':
+      case 'accessoryColor': {
+        const v = await pickColor(COLOR_LABELS[menu.id], c[menu.id], COLOR_PRESETS, 'Default');
+        if (v !== undefined) {
+          await save(menu.id, v);
+        }
+        break;
+      }
+      case 'eyeColor': {
+        const v = await pickColor('Eye colour', c.eyeColor, EYE_PRESETS, 'Black');
+        if (v !== undefined) {
+          await save('eyeColor', v);
+        }
+        break;
+      }
+      case 'pattern': {
+        const v = await pickFrom('Pattern', PATTERNS, PATTERN_ICONS, c.pattern);
+        if (v) {
+          await save('pattern', v === 'none' ? '' : v);
+        }
+        break;
+      }
+      case 'accessory': {
+        const v = await pickFrom('Accessory', ACCESSORIES, ACCESSORY_ICONS, c.accessory);
+        if (v) {
+          await save('accessory', v === 'none' ? '' : v);
+        }
+        break;
+      }
+      case 'name': {
+        const v = await vscode.window.showInputBox({ title: 'Name', value: c.name });
+        if (v !== undefined) {
+          await save('name', v.trim() === DEFAULT_NAMES[c.species] ? '' : v.trim());
+        }
+        break;
+      }
+      case 'wander':
+        await save('wander', !c.wander);
+        break;
+      case 'stateColors':
+        await save('stateColors', !c.stateColors);
+        break;
+      case 'random':
+        await save('color', pick(COLOR_PRESETS).color);
+        await save('accentColor', Math.random() < 0.6 ? '' : pick(COLOR_PRESETS).color);
+        await save('eyeColor', pick(EYE_PRESETS).color);
+        await save('pattern', pick(PATTERNS).replace('none', ''));
+        await save('accessory', pick(ACCESSORIES).replace('none', ''));
+        await save('accessoryColor', Math.random() < 0.5 ? '' : pick(COLOR_PRESETS).color);
+        break;
+      case 'reset':
+        for (const key of [
+          'color',
+          'accentColor',
+          'eyeColor',
+          'pattern',
+          'accessory',
+          'accessoryColor',
+        ]) {
+          await save(key, undefined);
+        }
+        break;
+    }
   }
 }
 

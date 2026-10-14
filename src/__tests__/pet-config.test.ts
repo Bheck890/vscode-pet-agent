@@ -22,6 +22,7 @@ const DEFAULTS = {
   name: DEFAULT_NAMES.fox,
   stateColors: true,
   wander: true,
+  artStyle: 'smooth',
   size: 200,
 };
 
@@ -55,6 +56,7 @@ describe('readPetConfig', () => {
       name: 'Tweety',
       stateColors: false,
       wander: false,
+      artStyle: 'pixel',
       size: 'large',
     };
     expect(readPetConfig((k) => values[k])).toEqual({
@@ -68,6 +70,7 @@ describe('readPetConfig', () => {
       name: 'Tweety',
       stateColors: false,
       wander: false,
+      artStyle: 'pixel',
       size: 250,
     });
   });

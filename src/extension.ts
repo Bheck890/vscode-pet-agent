@@ -13,6 +13,7 @@ import {
 import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
 import { PeonViewProvider } from './PeonViewProvider';
+import { CareStore } from './pet-care';
 
 const SPECIES_ICONS: Record<string, string> = { cat: '🐱', dog: '🐶', bird: '🐦', fox: '🦊' };
 const ACCESSORY_ICONS: Record<string, string> = {
@@ -137,6 +138,7 @@ async function customizePet(): Promise<void> {
         { id: 'name', label: '🏷️ Name', description: c.name },
         { id: 'wander', label: '🚶 Wander when idle', description: c.wander ? 'on' : 'off' },
         { id: 'stateColors', label: '🌈 State colours', description: c.stateColors ? 'on' : 'off' },
+        { id: 'artStyle', label: '✏️ Art style', description: c.artStyle },
         { id: 'random', label: '🎲 Randomize look' },
         { id: 'reset', label: '🔄 Reset look to defaults' },
       ],
@@ -201,6 +203,9 @@ async function customizePet(): Promise<void> {
       case 'stateColors':
         await save('stateColors', !c.stateColors);
         break;
+      case 'artStyle':
+        await save('artStyle', c.artStyle === 'smooth' ? 'pixel' : 'smooth');
+        break;
       case 'random':
         await save('color', pick(COLOR_PRESETS).color);
         await save('accentColor', Math.random() < 0.6 ? '' : pick(COLOR_PRESETS).color);
@@ -242,12 +247,20 @@ export function activate(context: vscode.ExtensionContext): void {
   claude.start();
   context.subscriptions.push(claude);
 
-  const viewProvider = new PeonViewProvider(mediaPath, peon, claude, getConfig);
+  const viewProvider = new PeonViewProvider(
+    mediaPath,
+    peon,
+    claude,
+    getConfig,
+    new CareStore(context.globalState),
+  );
+  const careTimer = setInterval(() => viewProvider.sendCare(), 60_000);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(PeonViewProvider.viewId, viewProvider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.commands.registerCommand('peon-pet.customize', customizePet),
+    new vscode.Disposable(() => clearInterval(careTimer)),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('peon-pet')) {
         viewProvider.reinit();

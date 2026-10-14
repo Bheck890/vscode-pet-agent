@@ -56,6 +56,7 @@ describe('webview-helpers', () => {
 <head><!--CSP_PLACEHOLDER--></head>
 <link rel="stylesheet" href="<!--CSS_URI-->">
 <script nonce="<!--NONCE-->" src="<!--PETS_URI-->"></script>
+<script nonce="<!--NONCE-->" src="<!--PLAY_URI-->"></script>
 <script nonce="<!--NONCE-->" src="<!--SCRIPT_URI-->"></script>` as unknown as ReturnType<
         typeof fs.readFileSync
       >,
@@ -74,7 +75,8 @@ describe('webview-helpers', () => {
     expect(html).toContain(`webview:${path.join('/ext/media', 'webview.css')}`);
     expect(html).toContain(`webview:${path.join('/ext/media', 'pets.js')}`);
     expect(html).toContain(`webview:${path.join('/ext/media', 'webview.js')}`);
-    expect(html.match(/nonce="abc123"/g)).toHaveLength(2);
+    expect(html).toContain(`webview:${path.join('/ext/media', 'play.js')}`);
+    expect(html.match(/nonce="abc123"/g)).toHaveLength(3);
     expect(html).not.toContain('<!--');
   });
 

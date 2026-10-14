@@ -10,7 +10,32 @@
   <body>
     <canvas id="c"></canvas>
     <div id="tooltip"></div>
+    <button id="care-toggle" title="Pet care">🐾</button>
+    <div id="care-panel" hidden>
+      <div class="care-bars">
+        <div class="care-bar" title="Fullness">
+          <span>🍖</span>
+          <div class="track"><div class="fill" id="bar-fullness"></div></div>
+        </div>
+        <div class="care-bar" title="Happiness">
+          <span>💖</span>
+          <div class="track"><div class="fill" id="bar-fun"></div></div>
+        </div>
+        <div class="care-bar" title="Cleanliness">
+          <span>🫧</span>
+          <div class="track"><div class="fill" id="bar-clean"></div></div>
+        </div>
+      </div>
+      <div class="care-actions">
+        <button data-care="feed">🍖 Feed</button>
+        <button data-care="treat">🍪 Treat</button>
+        <button data-care="play">🎾 Play</button>
+        <button data-care="bath">🛁 Bath</button>
+      </div>
+      <div id="care-note"></div>
+    </div>
     <script nonce="<!--NONCE-->" src="<!--PETS_URI-->"></script>
+    <script nonce="<!--NONCE-->" src="<!--PLAY_URI-->"></script>
     <script nonce="<!--NONCE-->" src="<!--SCRIPT_URI-->"></script>
   </body>
 </html>

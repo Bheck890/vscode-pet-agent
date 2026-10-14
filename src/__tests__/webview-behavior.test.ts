@@ -38,6 +38,7 @@ function fakeContext() {
 }
 
 function runWebviewScript() {
+  let frame: (() => void) | null = null;
   const windowListeners: ListenerMap = {};
   const canvasListeners: ListenerMap = {};
   const documentListeners: ListenerMap = {};
@@ -60,6 +61,31 @@ function runWebviewScript() {
 
   const vscodeApi = { postMessage: jest.fn(), setState: jest.fn() };
 
+  const fakeEl = (care?: string) => {
+    const listeners: ListenerMap = {};
+    return {
+      hidden: true,
+      disabled: false,
+      textContent: '',
+      style: {} as Record<string, string>,
+      dataset: { care },
+      listeners,
+      addEventListener: listenerTarget(listeners),
+    };
+  };
+  const elements: Record<string, ReturnType<typeof fakeEl>> = {};
+  for (const id of [
+    'care-toggle',
+    'care-panel',
+    'care-note',
+    'bar-fullness',
+    'bar-fun',
+    'bar-clean',
+  ]) {
+    elements[id] = fakeEl();
+  }
+  const careButtons = ['feed', 'treat', 'play', 'bath'].map((a) => fakeEl(a));
+
   const windowObj: Record<string, unknown> = {
     addEventListener: listenerTarget(windowListeners),
     devicePixelRatio: 1,
@@ -69,18 +95,26 @@ function runWebviewScript() {
     window: windowObj,
     document: {
       body: { clientWidth: 600, clientHeight: 600 },
-      getElementById: (id: string) => (id === 'c' ? canvas : id === 'tooltip' ? tooltip : null),
+      getElementById: (id: string) =>
+        id === 'c' ? canvas : id === 'tooltip' ? tooltip : (elements[id] ?? null),
+      querySelectorAll: () => careButtons,
       createElement: () => makeCanvas(),
       addEventListener: listenerTarget(documentListeners),
     },
     acquireVsCodeApi: () => vscodeApi,
-    requestAnimationFrame: () => 0,
+    requestAnimationFrame: (cb: () => void) => {
+      frame = cb;
+      return 0;
+    },
+    Date,
     console,
   };
 
   const media = path.join(process.cwd(), 'media');
   vm.runInNewContext(fs.readFileSync(path.join(media, 'pets.js'), 'utf8'), context);
+  vm.runInNewContext(fs.readFileSync(path.join(media, 'play.js'), 'utf8'), context);
   windowObj['PetArt'] = context['PetArt'];
+  windowObj['PetPlay'] = context['PetPlay'];
   vm.runInNewContext(fs.readFileSync(path.join(media, 'webview.js'), 'utf8'), context);
 
   const send = (data: unknown) => windowListeners['message'].forEach((l) => l({ data }));
@@ -94,7 +128,29 @@ function runWebviewScript() {
     documentListeners['mouseup'].forEach((l) => l({}));
   };
 
-  return { send, hover, click, tooltip, vscodeApi };
+  const pressCare = (action: string) =>
+    careButtons.find((b) => b.dataset.care === action)!.listeners['click'].forEach((l) => l({}));
+
+  /** Runs the render loop for `ms` of (fake) time. Needs jest fake timers. */
+  const runFrames = (ms: number, step = 16) => {
+    for (let t = 0; t < ms; t += step) {
+      jest.advanceTimersByTime(step);
+      frame?.();
+    }
+  };
+
+  return {
+    runFrames,
+    send,
+    hover,
+    click,
+    pressCare,
+    elements,
+    tooltip,
+    vscodeApi,
+    canvasListeners,
+    documentListeners,
+  };
 }
 
 const CONFIG = { species: 'fox', color: '', name: 'Rusty', stateColors: true, size: 200 };
@@ -202,5 +258,157 @@ describe('webview behavior', () => {
 
     expect(tooltip.innerHTML).toContain('waking up');
     expect(vscodeApi.setState).not.toHaveBeenCalled();
+  });
+
+  const working = (state: string) => ({
+    command: 'claude-update',
+    main: { sessionId: 's', state, detail: '', seq: 7, project: null },
+    subagents: [],
+    sessions: [],
+  });
+
+  it('locks care while the agent is working', () => {
+    const { send, pressCare, click, elements, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send(working('writing'));
+    vscodeApi.postMessage.mockClear();
+
+    pressCare('treat');
+    click(50, 80);
+
+    expect(vscodeApi.postMessage).not.toHaveBeenCalled();
+    expect(elements['care-note'].textContent).toContain('busy working');
+  });
+
+  it('locks care while sub-agents are out, even if the main pet looks idle', () => {
+    const { send, pressCare, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send({
+      command: 'claude-update',
+      main: { sessionId: 's', state: 'idle', detail: '', seq: 1, project: null },
+      subagents: [
+        {
+          id: 'a',
+          name: 'Scout Bean',
+          agentType: 'Explore',
+          task: 'x',
+          state: 'reading',
+          detail: '',
+          seq: 1,
+        },
+      ],
+      sessions: [],
+    });
+    vscodeApi.postMessage.mockClear();
+    pressCare('feed');
+    expect(vscodeApi.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('picks up a care tool when the agent is done, and shows refusals', () => {
+    const { send, pressCare, elements, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send(working('idle'));
+    vscodeApi.postMessage.mockClear();
+
+    pressCare('feed');
+    expect(elements['care-note'].textContent).toContain('drop kibble');
+    expect(vscodeApi.postMessage).not.toHaveBeenCalled();
+
+    send({
+      command: 'care-update',
+      action: 'kibble',
+      ok: false,
+      reason: "isn't hungry right now",
+      stats: { fullness: 96, fun: 50, clean: 20, updatedAt: 0 },
+    });
+    expect(elements['care-note'].textContent).toBe("Rusty isn't hungry right now.");
+    expect(elements['bar-clean'].style.width).toBe('20%');
+  });
+
+  it('stroking the pet in care mode pets it instead of dragging it', () => {
+    const { send, elements, canvasListeners, documentListeners, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send(working('idle'));
+    elements['care-toggle'].listeners['click'].forEach((l) => l({}));
+    vscodeApi.postMessage.mockClear();
+
+    canvasListeners['mousedown'].forEach((l) =>
+      l({ button: 0, offsetX: 60, offsetY: 100, preventDefault: () => undefined }),
+    );
+    for (let i = 0; i < 12; i++) {
+      const x = i % 2 ? 140 : 40;
+      documentListeners['mousemove'].forEach((l) => l({ clientX: x, clientY: 100 }));
+    }
+    documentListeners['mouseup'].forEach((l) => l({}));
+
+    expect(vscodeApi.postMessage).toHaveBeenCalledWith({ command: 'care', action: 'pet' });
+    expect(vscodeApi.setState).not.toHaveBeenCalled();
+  });
+
+  it('toggles the care panel', () => {
+    const { elements } = runWebviewScript();
+    elements['care-toggle'].listeners['click'].forEach((l) => l({}));
+    expect(elements['care-panel'].hidden).toBe(false);
+  });
+
+  it('plays a real game of fetch: throw the ball and the pet brings it back', () => {
+    jest.useFakeTimers();
+    try {
+      const {
+        send,
+        runFrames,
+        pressCare,
+        elements,
+        canvasListeners,
+        documentListeners,
+        vscodeApi,
+      } = runWebviewScript();
+      send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      send(working('idle'));
+      send({
+        command: 'care-update',
+        stats: { fullness: 80, fun: 40, clean: 80, updatedAt: 0 },
+      });
+      elements['care-toggle'].listeners['click'].forEach((l) => l({}));
+      pressCare('play');
+      runFrames(100);
+      vscodeApi.postMessage.mockClear();
+
+      // The ball starts on the floor to the right of the pet (pet is 192px at x=0, y=30).
+      canvasListeners['mousedown'].forEach((l) =>
+        l({ button: 0, offsetX: 211, offsetY: 210, preventDefault: () => undefined }),
+      );
+      for (const [x, y] of [
+        [260, 190],
+        [330, 160],
+        [420, 120],
+      ]) {
+        jest.advanceTimersByTime(16);
+        documentListeners['mousemove'].forEach((l) => l({ clientX: x, clientY: y }));
+      }
+      documentListeners['mouseup'].forEach((l) => l({}));
+
+      runFrames(8000);
+
+      expect(vscodeApi.postMessage).toHaveBeenCalledWith({ command: 'care', action: 'fetch' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('puts the care tool away when the agent starts working', () => {
+    jest.useFakeTimers();
+    try {
+      const { send, runFrames, pressCare, elements } = runWebviewScript();
+      send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      send(working('idle'));
+      elements['care-toggle'].listeners['click'].forEach((l) => l({}));
+      pressCare('treat');
+      send({ ...working('running'), main: { ...working('running').main, seq: 8 } });
+      runFrames(50);
+      expect(elements['care-note'].textContent).toContain('work to do');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

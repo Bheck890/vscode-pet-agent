@@ -144,6 +144,19 @@
           "default": true,
           "description": "Let the pet wander around the panel and fidget when idle."
         },
+        "peon-pet.artStyle": {
+          "type": "string",
+          "default": "smooth",
+          "enum": [
+            "smooth",
+            "pixel"
+          ],
+          "enumDescriptions": [
+            "Rounded, soft edges",
+            "Crisp retro pixel art"
+          ],
+          "description": "How the pet is drawn."
+        },
         "peon-pet.size": {
           "type": "string",
           "enum": [

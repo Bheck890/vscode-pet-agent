@@ -67,6 +67,8 @@ export interface PetConfig {
   stateColors: boolean;
   /** Let the pet roam around the panel when idle. */
   wander: boolean;
+  /** 'smooth' rounds the pixel art off; 'pixel' keeps the crisp blocks. */
+  artStyle: 'smooth' | 'pixel';
   size: number;
 }
 
@@ -110,6 +112,7 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     name: text('name') || DEFAULT_NAMES[species],
     stateColors: get('stateColors') !== false,
     wander: get('wander') !== false,
+    artStyle: get('artStyle') === 'pixel' ? 'pixel' : 'smooth',
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };
 }

@@ -40,11 +40,30 @@ The pet also blinks, wags its tail (or flaps its wings), twitches its ears, and 
 
 Every sub-agent the agent starts appears as a mini version of your pet in its own colour. Each one gets a name that fits its job (explorers become "Detective Noodle" or "Scout Waffles", planners become "Professor Pickles"), with its task shown underneath. Minis act out their own state, celebrate when they finish, then vanish in a puff.
 
+### Take care of it
+
+Click the 🐾 button in the corner of the panel to open care mode. Three stats wear down slowly in real time, even while VS Code is closed: 🍖 fullness, 💖 happiness and 🫧 cleanliness. Care is hands-on: pick a tool and actually do it.
+
+| Tool       | What you do                                                                 | What your pet does                                              |
+| ---------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 🍖 Feed    | Your cursor becomes a bowl. Click anywhere to drop kibble (up to 6 pieces).  | Trots over to each piece and eats it, crumbs flying. +10 fullness each |
+| 🍪 Treat   | Hold the cookie on your cursor, then click to drop it.                      | Follows the treat, begs and hops when it's held above its head. Catches it mid-air ("Nice catch!") or eats it off the floor. |
+| 🎾 Play    | Grab the ball and fling it. It bounces off the floor and walls.             | Chases it, picks it up, and brings it back to where you threw from. +12 happiness per fetch |
+| 🛁 Bath    | Your cursor becomes a sponge. Hold the button and scrub your pet.           | Foam builds up and dirt fades as you scrub. At 100% it does a big wet shake. |
+| 💖 Stroke  | No tool needed: hold the button and rub your pet back and forth.            | Wiggles happily with hearts. Small happiness boost              |
+
+Click a tool again to put it away. While care mode is open you can't drag your pet; close the panel to move it again.
+
+Your pet has opinions: it won't eat when it's full, won't take treats when stuffed, and is too hungry to play when starving. Playing makes it a little hungry and messy. When a stat is low you'll see it: dirt smudges on its fur, and "hungry", "bored" or "needs a bath" under its name with little 🍖 / 🥺 / 🪰 hints.
+
+**No treats on the clock.** While the agent is working, or any helper pets are out, care is locked: the buttons grey out, any tool in hand is put away, and clicking the pet just gets a 🛠️ "busy working" bubble. Care unlocks as soon as the task is done.
+
 ### Make it yours
 
 Run **Peon Pet: Customize Pet** for a menu of everything below. Every change shows up live, and the menu stays open so you can keep tweaking. There is also **Randomize look** and **Reset look to defaults**.
 
 - **Species:** fox, cat, dog or bird
+- **Art style:** `smooth` (rounded, soft edges) or `pixel` (crisp retro blocks)
 - **Colours:** fur, belly/muzzle, eyes and accessory
 - **Patterns:** spots, stripes, white socks, bandit mask, eye patch
 - **Accessories:** bow, flower, crown, beanie, headphones, glasses, sunglasses, bandana, scarf, collar with a bell tag. Hats step aside when a state needs the party hat or nightcap.
@@ -115,6 +134,7 @@ To update after pulling changes, run the task again and reload the window.
 | `peon-pet.name`        | *(empty)*| Your pet's name. Empty uses the species default: Rusty, Mochi, Biscuit, Pip |
 | `peon-pet.stateColors` | `true`   | Tint the pet and its aura with a colour per agent state                     |
 | `peon-pet.wander`      | `true`   | Wander around the panel and fidget when idle                                |
+| `peon-pet.artStyle`    | `smooth` | `smooth` rounds the pixel art off with Scale2x upscaling; `pixel` keeps it crisp |
 | `peon-pet.size`        | `medium` | `small`, `medium` or `large`                                                |
 
 Settings changes apply instantly; no reload needed. All colour settings take any CSS colour, so you can also just ask your AI agent, e.g. *"give my pet a gold crown and blue eyes"*.
@@ -139,6 +159,8 @@ Where things live:
 | `src/state-watcher.ts`      | Polls the peon-ping state file                                          |
 | `src/pet-names.ts`          | Funny sub-agent names                                                   |
 | `src/pet-config.ts`         | Settings, defaults and colour presets                                   |
+| `src/pet-care.ts`           | Care stats, decay, reward/refusal rules and persistence                 |
+| `media/play.js`             | Hands-on care: kibble, treats, fetch physics, bath scrubbing, stroking  |
 | `media/pets.js`             | All pixel art: species, expressions, props, palettes                    |
 | `media/webview.js`          | Canvas renderer, animations, emoji orbits, particles, mini-pet layout   |
 

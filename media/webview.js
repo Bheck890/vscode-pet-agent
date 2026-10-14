@@ -181,6 +181,24 @@
   let press = null;
   /** @type {{pet: any, at: number}} */
   let lastClick = { pet: null, at: 0 };
+  /** @type {null | {fullness: number, fun: number, clean: number}} */
+  let care = null;
+  let lastPetCareAt = 0;
+  let noteUntil = 0;
+
+  /** States where the agent is busy; care actions are locked while any of these show. */
+  const WORKING = new Set([
+    'thinking',
+    'reading',
+    'writing',
+    'running',
+    'browsing',
+    'delegating',
+    'waiting',
+    'error',
+  ]);
+  /** Short reactions played during hands-on care (see play.js). */
+  const CARE_MS = { eat: 900, catch: 1000, shake: 1100, refuse: 900 };
 
   // -- Helpers ----------------------------------------------------------------
   function now() {
@@ -252,7 +270,17 @@
   // -- Sprite cache -----------------------------------------------------------
   const spriteCache = new Map();
 
-  function toCanvas(px) {
+  function smoothArt() {
+    return !!config && config.artStyle === 'smooth';
+  }
+
+  /** Sprites are 8x larger in smooth style; props divide by this to keep their logical size. */
+  function artFactor() {
+    return smoothArt() ? 8 : 1;
+  }
+
+  function toCanvas(grid) {
+    const px = smoothArt() ? Art.smooth(grid, 3) : grid;
     const h = px.length;
     const w = px[0].length;
     const c = document.createElement('canvas');
@@ -279,7 +307,7 @@
   function cached(key, build) {
     let c = spriteCache.get(key);
     if (!c) {
-      if (spriteCache.size > 400) {
+      if (spriteCache.size > (smoothArt() ? 160 : 400)) {
         spriteCache.clear();
       }
       c = toCanvas(build());
@@ -382,6 +410,9 @@
     p.detail = detail || '';
     p.lastActivity = t;
     const def = STATES[state];
+    if (WORKING.has(state)) {
+      p.care = null;
+    }
 
     if (def.oneShot) {
       const next = state === 'error' ? (p.base === 'sleeping' ? 'idle' : p.base) : 'idle';
@@ -430,6 +461,126 @@
     return { x: p.x + p.wx + s / 2, y: p.y + s / 2 };
   }
 
+  // -- Care -------------------------------------------------------------------
+  /** The agent is working if the main pet shows a working state or any helper is out. */
+  function isBusy() {
+    if (!main) {
+      return false;
+    }
+    // While a one-shot plays (e.g. waking up into work), what follows it counts too.
+    const upNext = main.oneShot ? main.oneShotNext : main.base;
+    if (WORKING.has(displayState(main)) || WORKING.has(upNext)) {
+      return true;
+    }
+    return [...minis.values()].some((m) => !m.leavingAt);
+  }
+
+  function startCareAnim(kind) {
+    const t = now();
+    if (displayState(main) === 'sleeping') {
+      startOneShot(main, 'waking', 'idle');
+      main.oneShotUntil = t + 600;
+    }
+    main.care = { kind, start: t, until: t + CARE_MS[kind], fxAt: 0, burst: false };
+    main.fidget = null;
+    main.reaction = null;
+    main.lastActivity = t;
+  }
+
+  function lowestStat() {
+    if (!care) {
+      return null;
+    }
+    const [stat, value] = Object.entries(care)
+      .filter(([k]) => k !== 'updatedAt')
+      .sort((a, b) => a[1] - b[1])[0];
+    return value < 30 ? stat : null;
+  }
+
+  const MOOD = {
+    fullness: { label: 'hungry', emoji: '🍖' },
+    fun: { label: 'bored', emoji: '🥺' },
+    clean: { label: 'needs a bath', emoji: '🪰' },
+  };
+
+  /** Effects for care animations, plus mood hints when the pet is idle and a stat is low. */
+  function careFx(p, t, size, x0) {
+    const cr = p.care && t < p.care.until ? p.care : null;
+    const sp = Art.SPECIES[config.species];
+    const cx = x0 + size / 2;
+    const mouthY = p.y + (size * sp.mouthY) / Art.SIZE;
+    if (!cr) {
+      const low = lowestStat();
+      if (low && displayState(p) === 'idle' && t - p.fxAt > 4500) {
+        p.fxAt = t;
+        emit({
+          x: cx + size * 0.3,
+          y: p.y + size * 0.15,
+          vy: -size * 0.2,
+          text: MOOD[low].emoji,
+          size: size * 0.14,
+          life: 1.8,
+        });
+      }
+      return;
+    }
+    switch (cr.kind) {
+      case 'eat':
+        if (t - cr.fxAt > 200) {
+          cr.fxAt = t;
+          emit({
+            x: cx + (Math.random() - 0.5) * size * 0.2,
+            y: mouthY,
+            vx: (Math.random() - 0.5) * size * 0.6,
+            vy: -size * 0.3,
+            g: size * 2.5,
+            size: Math.max(2, p.scale * 0.7),
+            color: '#c48a4a',
+            life: 0.6,
+          });
+        }
+        break;
+      case 'catch':
+        if (!cr.burst) {
+          cr.burst = true;
+          for (let i = 0; i < 6; i++) {
+            emit({
+              x: cx + (Math.random() - 0.5) * size * 0.5,
+              y: p.y + size * 0.2,
+              vx: (Math.random() - 0.5) * size * 0.4,
+              vy: -size * (0.4 + Math.random() * 0.3),
+              text: i % 2 ? '💖' : '✨',
+              size: size * 0.11,
+              life: 1.1,
+            });
+          }
+        }
+        break;
+      case 'shake':
+        if (t - cr.fxAt > 60) {
+          cr.fxAt = t;
+          const side = Math.random() < 0.5 ? -1 : 1;
+          emit({
+            x: cx + side * size * 0.3,
+            y: p.y + size * (0.3 + Math.random() * 0.4),
+            vx: side * size * (0.8 + Math.random()),
+            vy: -size * 0.5,
+            g: size * 3,
+            size: Math.max(2, p.scale * 0.8),
+            color: '#7fd3ff',
+            life: 0.6,
+          });
+        }
+        break;
+      case 'refuse':
+        if (!cr.burst) {
+          cr.burst = true;
+          emit({ x: cx, y: p.y, vy: -30, text: '🙅', size: size * 0.16, life: 1 });
+        }
+        break;
+    }
+  }
+
   // -- Idle life: fidgets, wandering, ear twitches ------------------------------
   const FIDGETS = [
     ['lookL', 1400],
@@ -452,8 +603,14 @@
     }
     const state = displayState(p);
     const size = petPx(p);
-    const reacting = p.reaction && t < p.reaction.until;
-    if (state === 'idle' && !reacting && !dragging) {
+    const reacting = (p.reaction && t < p.reaction.until) || (p.care && t < p.care.until);
+    const steer = play.target();
+    if (steer !== null) {
+      p.wxTarget = steer - (p.x + size / 2);
+      p.fidget = null;
+    } else if (play.tool()) {
+      p.wxTarget = p.wx;
+    } else if (state === 'idle' && !reacting && !dragging) {
       if (config.wander && !p.walking && t > p.wanderNext) {
         p.wxTarget = (Math.random() - 0.5) * viewW * 0.8;
         p.wanderNext = t + 7000 + Math.random() * 7000;
@@ -469,12 +626,12 @@
       // Work started: run back home.
       p.wxTarget = 0;
     }
-    if (!config.wander) {
+    if (!config.wander && !play.tool()) {
       p.wxTarget = 0;
     }
     p.wxTarget = Math.max(-p.x, Math.min(viewW - size - p.x, p.wxTarget));
     const diff = p.wxTarget - p.wx;
-    const speed = state === 'idle' ? size * 0.7 : size * 2.5;
+    const speed = steer !== null ? size * 1.8 : state === 'idle' ? size * 0.7 : size * 2.5;
     if (Math.abs(diff) > 1) {
       p.wx += Math.sign(diff) * Math.min(Math.abs(diff), speed * dt);
       p.walking = Math.sign(diff);
@@ -487,6 +644,16 @@
   /** Click = pet it (hearts), double-click = trick (spin jump). Clicking wakes it up. */
   function clickPet(p) {
     const t = now();
+    if (isBusy()) {
+      const c = center(p);
+      emit({ x: c.x, y: p.y, vy: -30, text: '🛠️', size: petPx(p) * 0.18, life: 1 });
+      showNote(`🛠️ ${main.name} is busy working! Try again when the task is done.`);
+      return;
+    }
+    if (p === main && t - lastPetCareAt > 3000) {
+      lastPetCareAt = t;
+      vscodeApi.postMessage({ command: 'care', action: 'pet' });
+    }
     const double = lastClick.pet === p && t - lastClick.at < 350;
     lastClick = { pet: p, at: t };
     if (displayState(p) === 'sleeping') {
@@ -721,6 +888,9 @@
         m.rot = Math.sin(tt * 3) * 0.1;
         m.dy = Math.sin(tt * 7) * 0.3;
         break;
+      case 'eat':
+        m.dy = 1 + Math.abs(Math.sin(tt * 10)) * 0.8;
+        break;
     }
     if (name !== 'breathe') {
       m.sy *= 1 + 0.012 * Math.sin(now() / 450 + p.hue);
@@ -799,6 +969,48 @@
       out.mt = t / 1000;
       out.look = p.walking;
       out.wag = 5;
+    }
+
+    const hint = p === main ? play.pose() : null;
+    if (hint) {
+      Object.assign(out, hint);
+      if (hint.motion) {
+        out.mt = t / 1000;
+      }
+    }
+
+    const cr = p.care && t < p.care.until ? p.care : null;
+    if (cr) {
+      const ct = (t - cr.start) / 1000;
+      out.mt = ct;
+      out.look = 0;
+      switch (cr.kind) {
+        case 'eat':
+          out.eyes = 'happy';
+          out.mouth = Math.floor(ct * 6) % 2 ? 'open' : 'neutral';
+          out.motion = 'eat';
+          out.wag = 6;
+          break;
+        case 'catch':
+          out.eyes = 'happy';
+          out.mouth = 'smile';
+          out.motion = 'jump';
+          out.wag = 10;
+          break;
+        case 'shake':
+          out.eyes = 'closed';
+          out.mouth = 'flat';
+          out.motion = 'shake';
+          break;
+        case 'refuse':
+          out.eyes = 'closed';
+          out.mouth = 'frown';
+          out.motion = 'shake';
+          out.wag = 0;
+          break;
+      }
+    } else if (state === 'idle' && !f && !hint && lowestStat() === 'fun') {
+      out.mouth = 'frown';
     }
 
     const r = p.reaction && t < p.reaction.until ? p.reaction : null;
@@ -925,6 +1137,17 @@
     }
   }
 
+  /** A rect in pixel style, a rounded blob in smooth style. */
+  function blob(x, y, w, h) {
+    if (smoothArt()) {
+      ctx.beginPath();
+      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y, w, h);
+    }
+  }
+
   /** Paws tapping on the laptop keyboard while writing. */
   function drawTypingPaws(p, pal, tt) {
     const s = p.scale;
@@ -936,9 +1159,9 @@
       [18, 1 - up],
     ]) {
       ctx.fillStyle = pal.o;
-      ctx.fillRect((x - 16) * s, (y - lift - 32) * s, 4 * s, 3 * s);
+      blob((x - 16) * s, (y - lift - 32) * s, 4 * s, 3 * s);
       ctx.fillStyle = pal.l;
-      ctx.fillRect((x - 15) * s, (y - lift - 31) * s, 2 * s, 1 * s);
+      blob((x - 15) * s, (y - lift - 31) * s, 2 * s, 1 * s);
     }
   }
 
@@ -1025,6 +1248,9 @@
       hide: hide.join(','),
     });
     ctx.drawImage(sprite, -size / 2, -size, size, size);
+    if (p === main) {
+      play.drawOnPet(p, s);
+    }
 
     if (state === 'sleeping') {
       // Snot bubble
@@ -1038,7 +1264,14 @@
       const at = propPlacement(def.prop, sp, tt);
       if (def.prop !== 'cloud' || Math.floor(tt * 6) % 4 !== 0) {
         const img = propSprite(def.prop);
-        ctx.drawImage(img, (at.x - 16) * s, (at.y - 32) * s, img.width * s, img.height * s);
+        const f = artFactor();
+        ctx.drawImage(
+          img,
+          (at.x - 16) * s,
+          (at.y - 32) * s,
+          (img.width / f) * s,
+          (img.height / f) * s,
+        );
       }
     }
     if (state === 'writing') {
@@ -1057,6 +1290,9 @@
       ctx.fillText(e, x0 + size * 0.95, p.y + size * 0.12 + Math.sin(tt * 4) * 2);
     }
     ambientFx(p, state, t);
+    if (p === main) {
+      careFx(p, t, size, x0);
+    }
     drawLabels(p, def, k);
   }
 
@@ -1074,8 +1310,10 @@
     ctx.fillText(clipText(p.name, maxW), cx, y);
     ctx.globalAlpha = 0.7 * k;
     ctx.font = `${isMain ? 11 : 9}px sans-serif`;
+    const low = isMain && displayState(p) === 'idle' ? lowestStat() : null;
     const second = isMain
-      ? def.label + (p.detail && def.color ? ' - ' + p.detail : '')
+      ? (low ? MOOD[low].label + ' ' + MOOD[low].emoji : def.label) +
+        (p.detail && def.color ? ' - ' + p.detail : '')
       : p.task || def.label;
     ctx.fillText(clipText(second, maxW), cx, y + (isMain ? 16 : 12));
     ctx.globalAlpha = 1;
@@ -1173,7 +1411,8 @@
     canvas.style.width = viewW + 'px';
     canvas.style.height = viewH + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = smoothArt();
+    canvas.style.imageRendering = smoothArt() ? 'auto' : 'pixelated';
     clampMain();
     layoutMinis();
   }
@@ -1297,9 +1536,12 @@
       }
     });
 
+    play.update(t, dt);
+    updateCareUi(t);
     drawDots(t);
     const drawOrder = [...minis.values(), main].sort((a, b) => a.y - b.y);
     drawOrder.forEach((p) => drawPet(p, t));
+    play.draw(t);
     stepParticles(dt);
     drawParticles();
   }
@@ -1335,6 +1577,14 @@
       case 'claude-update':
         applyClaude(msg);
         break;
+      case 'care-update':
+        care = msg.stats;
+        if (main && msg.action && msg.ok === false) {
+          showNote(`${main.name} ${msg.reason}.`);
+          startCareAnim('refuse');
+        }
+        updateCareUi(now());
+        break;
     }
   });
 
@@ -1365,6 +1615,9 @@
         `<b>${escapeHtml(main.name)}</b> is ${escapeHtml(def.label)}` +
         (main.detail ? `<br>${escapeHtml(main.detail)}` : '') +
         (project ? `<br><span class="dim">in ${escapeHtml(project)}</span>` : '') +
+        (care
+          ? `<br>🍖 ${Math.round(care.fullness)} &nbsp;💖 ${Math.round(care.fun)} &nbsp;🫧 ${Math.round(care.clean)}`
+          : '') +
         (helpers
           ? `<br><span class="dim">${helpers} helper${helpers > 1 ? 's' : ''} working</span>`
           : '')
@@ -1398,8 +1651,11 @@
       return;
     }
     const over = petAt(e.offsetX, e.offsetY);
-    canvas.style.cursor = over === main ? 'grab' : over ? 'pointer' : '';
-    const html = tooltipHtml(e.offsetX, e.offsetY);
+    const careCursor = carePanel.hidden ? null : play.cursor(e.offsetX, e.offsetY);
+    canvas.style.cursor =
+      careCursor ??
+      (over === main ? (carePanel.hidden ? 'grab' : 'pointer') : over ? 'pointer' : '');
+    const html = play.tool() ? null : tooltipHtml(e.offsetX, e.offsetY);
     if (!html) {
       tooltip.style.display = 'none';
       return;
@@ -1414,7 +1670,86 @@
 
   canvas.addEventListener('mouseleave', () => {
     tooltip.style.display = 'none';
+    play.pointerLeave();
   });
+
+  // -- Care panel -------------------------------------------------------------
+  const careToggle = /** @type {HTMLButtonElement} */ (document.getElementById('care-toggle'));
+  const carePanel = /** @type {HTMLDivElement} */ (document.getElementById('care-panel'));
+  const careNote = /** @type {HTMLDivElement} */ (document.getElementById('care-note'));
+  const careButtons = /** @type {HTMLButtonElement[]} */ (
+    Array.from(document.querySelectorAll('[data-care]'))
+  );
+  const careBars = {
+    fullness: /** @type {HTMLDivElement} */ (document.getElementById('bar-fullness')),
+    fun: /** @type {HTMLDivElement} */ (document.getElementById('bar-fun')),
+    clean: /** @type {HTMLDivElement} */ (document.getElementById('bar-clean')),
+  };
+
+  function showNote(text, ms = 2600) {
+    careNote.textContent = text;
+    noteUntil = now() + ms;
+  }
+
+  const play = window.PetPlay.create({
+    ctx,
+    main: () => main,
+    busy: isBusy,
+    care: () => care,
+    sendCare: (action) => vscodeApi.postMessage({ command: 'care', action }),
+    emit,
+    note: showNote,
+    anim: startCareAnim,
+    animating: () => !!main && !!main.care && now() < main.care.until,
+    petPx,
+    species: () => Art.SPECIES[config.species],
+    view: () => ({ w: viewW, h: viewH }),
+    now,
+    toolChanged: () => updateCareUi(now()),
+  });
+
+  function updateCareUi(t) {
+    const busy = isBusy();
+    careButtons.forEach((b) => {
+      b.disabled = busy || !main;
+      b.className = play.tool() === b.dataset.care ? 'active' : '';
+    });
+    if (t > noteUntil) {
+      careNote.textContent =
+        busy && main ? `🛠️ ${main.name} is working. Care unlocks when the task is done.` : '';
+    }
+    if (care) {
+      for (const [k, el] of Object.entries(careBars)) {
+        const v = care[k];
+        el.style.width = Math.round(v) + '%';
+        el.style.background = v < 30 ? '#ff5d5d' : v < 60 ? '#ffc94d' : '#5ad17a';
+      }
+    }
+  }
+
+  careToggle.addEventListener('click', () => {
+    carePanel.hidden = !carePanel.hidden;
+    if (carePanel.hidden) {
+      play.setTool(null);
+    } else if (main && !isBusy()) {
+      showNote(`Pick a tool, or hold and stroke ${main.name} 💖`, 4000);
+    }
+    updateCareUi(now());
+  });
+
+  careButtons.forEach((b) =>
+    b.addEventListener('click', () => {
+      if (!main) {
+        return;
+      }
+      if (isBusy()) {
+        showNote(`🛠️ ${main.name} is busy working! Try again when the task is done.`);
+        return;
+      }
+      const tool = b.dataset.care || null;
+      play.setTool(play.tool() === tool ? null : tool);
+    }),
+  );
 
   // -- Click and drag ---------------------------------------------------------
   // A press becomes a drag (main pet only) once the mouse moves 4px; otherwise
@@ -1425,6 +1760,11 @@
       return;
     }
     const pet = petAt(e.offsetX, e.offsetY);
+    if (!carePanel.hidden && play.pointerDown(e.offsetX, e.offsetY, pet === main)) {
+      tooltip.style.display = 'none';
+      e.preventDefault();
+      return;
+    }
     if (!pet) {
       return;
     }
@@ -1439,6 +1779,9 @@
   });
 
   document.addEventListener('mousemove', (e) => {
+    if (!carePanel.hidden) {
+      play.pointerMove(e.clientX, e.clientY, () => petAt(e.clientX, e.clientY) === main);
+    }
     if (!press || press.pet !== main) {
       return;
     }
@@ -1458,6 +1801,9 @@
   });
 
   document.addEventListener('mouseup', () => {
+    if (!carePanel.hidden && play.pointerUp()) {
+      return;
+    }
     if (!press) {
       return;
     }

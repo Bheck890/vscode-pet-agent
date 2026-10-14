@@ -86,6 +86,7 @@ export function buildHtml(webview: vscode.Webview, mediaPath: string, nonce: str
     .replace('<!--CSS_URI-->', uri('webview.css'))
     .replace(/<!--NONCE-->/g, nonce)
     .replace('<!--PETS_URI-->', uri('pets.js'))
+    .replace('<!--PLAY_URI-->', uri('play.js'))
     .replace('<!--SCRIPT_URI-->', uri('webview.js'));
 }
 

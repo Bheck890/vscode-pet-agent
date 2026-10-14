@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { PetConfig } from './pet-config';
 import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
+import { CareStore, isCareAction } from './pet-care';
 import {
   WebviewState,
   getNonce,
@@ -42,6 +43,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
     private readonly peon: StateWatcher,
     private readonly claude: ClaudeWatcher,
     private readonly getConfig: () => PetConfig,
+    private readonly care: CareStore,
   ) {}
 
   resolveWebviewView(
@@ -65,6 +67,11 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       const message = msg as Record<string, unknown>;
       if (message['command'] === 'ready') {
         sendInit(webviewView.webview, this.getConfig(), this.savedState, this.claude.latest());
+        this.sendCare();
+      } else if (message['command'] === 'care' && isCareAction(message['action'])) {
+        // The webview only sends this when the agent is not working.
+        const result = this.care.act(message['action']);
+        webviewView.webview.postMessage({ command: 'care-update', ...result });
       } else if (
         message['command'] === 'save-state' &&
         PeonViewProvider.isWebviewState(message['state'])
@@ -82,6 +89,11 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       this.watcherDisposable = undefined;
       this.view = undefined;
     });
+  }
+
+  /** Pushes current (decayed) care stats to the view, if it is open. */
+  sendCare(): void {
+    this.view?.webview.postMessage({ command: 'care-update', stats: this.care.get() });
   }
 
   /** Call when a pet setting changes to redraw with the new look. */

@@ -438,6 +438,23 @@
         '.oooooooo',
       ],
     },
+    bowl: {
+      palette: {
+        o: '#2b2b33',
+        b: '#d94f4f',
+        l: '#ff8a8a',
+        f: '#8b5a2b',
+        F: '#c48a4a',
+      },
+      grid: [
+        '...fFfFFfFf...',
+        '..FfFfffFfFF..',
+        'oooooooooooooo',
+        'obbbbbbbbbbbbo',
+        '.obbbllllbbbo.',
+        '..oooooooooo..',
+      ],
+    },
     cloud: {
       palette: { o: '#2a2d38', g: '#6b7184', l: '#8a90a6', y: '#ffe14d' },
       grid: [
@@ -900,6 +917,37 @@
     return px;
   }
 
+  /**
+   * Scale2x (EPX) upscaling, applied `passes` times. Rounds off the pixel
+   * staircases so the 'smooth' art style looks drawn rather than blocky,
+   * while keeping every colour and accessory from the pixel grid.
+   */
+  function smooth(px, passes) {
+    let cur = px;
+    for (let n = 0; n < passes; n++) {
+      const h = cur.length;
+      const w = cur[0].length;
+      const src = cur;
+      const at = (x, y) => src[Math.max(0, Math.min(h - 1, y))][Math.max(0, Math.min(w - 1, x))];
+      const out = Array.from({ length: h * 2 }, () => new Array(w * 2).fill(null));
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const p = src[y][x];
+          const up = at(x, y - 1);
+          const right = at(x + 1, y);
+          const left = at(x - 1, y);
+          const down = at(x, y + 1);
+          out[2 * y][2 * x] = left === up && left !== down && up !== right ? up : p;
+          out[2 * y][2 * x + 1] = up === right && up !== left && right !== down ? right : p;
+          out[2 * y + 1][2 * x] = down === left && down !== right && left !== up ? left : p;
+          out[2 * y + 1][2 * x + 1] = right === down && right !== up && down !== left ? down : p;
+        }
+      }
+      cur = out;
+    }
+    return cur;
+  }
+
   /** Renders a prop to a colour array. */
   function composeProp(name) {
     const prop = PROPS[name];
@@ -921,6 +969,7 @@
     palette,
     compose,
     composeProp,
+    smooth,
     mix,
     rotateHue,
     hexToRgb,

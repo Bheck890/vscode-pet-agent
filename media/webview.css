@@ -49,3 +49,108 @@ canvas {
 #tooltip .dim {
   color: #888;
 }
+
+#care-toggle {
+  position: fixed;
+  right: 8px;
+  top: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.15));
+  background: var(--vscode-button-secondaryBackground, rgba(255, 255, 255, 0.08));
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  z-index: 10;
+}
+
+#care-toggle:hover {
+  background: var(--vscode-button-secondaryHoverBackground, rgba(255, 255, 255, 0.16));
+}
+
+#care-panel {
+  position: fixed;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--vscode-editorWidget-background, rgba(20, 20, 28, 0.92));
+  border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+  color: var(--vscode-foreground, #ccc);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 11px;
+  z-index: 10;
+}
+
+#care-panel[hidden] {
+  display: none;
+}
+
+.care-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.care-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.care-bar .track {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.25);
+  overflow: hidden;
+}
+
+.care-bar .fill {
+  height: 100%;
+  width: 0;
+  border-radius: 4px;
+  transition:
+    width 0.6s ease,
+    background 0.6s ease;
+}
+
+.care-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 4px;
+}
+
+.care-actions button {
+  padding: 4px 2px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--vscode-button-foreground, #fff);
+  background: var(--vscode-button-background, #3a6df0);
+}
+
+.care-actions button:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground, #4a7dff);
+}
+
+.care-actions button.active {
+  outline: 2px solid var(--vscode-focusBorder, #ffd23f);
+  outline-offset: 1px;
+}
+
+.care-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#care-note {
+  min-height: 14px;
+  margin-top: 6px;
+  text-align: center;
+  opacity: 0.85;
+}

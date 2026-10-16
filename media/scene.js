@@ -75,8 +75,11 @@
     server: 'server rack',
   };
 
-  const MAX_TOYS = 3;
+  /** At most this many toys are out of the bag at once. */
+  const MAX_OUT = 3;
   const MAX_MACHINES = 4;
+  /** How long a store-into-the-bag flight takes, ms. */
+  const STORE_MS = 650;
 
   function rnd(a, b) {
     return a + Math.random() * (b - a);
@@ -113,7 +116,7 @@
    *   emit: (part: object) => void,
    *   config: () => any,
    *   playing: () => boolean,
-   *   onDiscover: (seen: string[]) => void,
+   *   onBag: (bag: Record<string, number>) => void,
    * }} api
    */
   function create(api) {
@@ -128,8 +131,11 @@
     let critter = null;
     /** @type {any} */
     let banner = null;
-    const seen = new Set();
-    let nextSpawn = api.now() + rnd(6000, 12000);
+    /** The inventory: toy id -> how many have been found. */
+    /** @type {Map<string, number>} */
+    const bag = new Map();
+    let nextFind = api.now() + rnd(8000, 15000);
+    let toysWereOn = true;
     let pose = null;
     let target = null;
     let lift = 0;
@@ -153,76 +159,152 @@
       banner = { text, color, until: api.now() + ms, start: api.now() };
     }
 
-    // -- Toys -----------------------------------------------------------------
+    // -- Toys and the bag -------------------------------------------------------
+    // Every find goes straight into the bag. Toys only spend a while on the
+    // floor (a fresh find, one the pet pulls out to play with, or one you take
+    // out) and then fly back into the bag.
 
-    function spawnToy(t) {
-      const g = geom();
-      const def = rollToy(Math.random);
+    /** Where the bag button sits, in canvas coordinates. */
+    function bagSpot() {
+      return { x: api.view().w - 51, y: 19 };
+    }
+
+    function saveBag() {
+      api.onBag(Object.fromEntries(bag));
+    }
+
+    function freeX(g) {
       const ts = toySize(g);
       const w = api.view().w;
       let x = rnd(ts, w - ts);
       for (let i = 0; i < 6 && toys.some((o) => Math.abs(o.x - x) < ts * 1.2); i++) {
         x = rnd(ts, w - ts);
       }
-      toys.push({
+      return x;
+    }
+
+    function sparkle(x, y, g, n) {
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        api.emit({
+          x,
+          y,
+          vx: Math.cos(a) * g.size * 0.6,
+          vy: Math.sin(a) * g.size * 0.6,
+          text: '✨',
+          size: g.size * 0.07,
+          life: 0.9,
+        });
+      }
+    }
+
+    /** Puts a toy on the floor. A fresh find drops from the sky; a toy from the bag just appears. */
+    function placeToy(def, x, t, stay, fresh) {
+      const g = geom();
+      const toy = {
         def,
         x,
-        h: g.size * 1.2,
+        h: fresh ? g.size * 1.2 : 0,
         vx: 0,
         vh: 0,
         seed: Math.random() * 10,
         bornAt: t,
-        until: t + rnd(240000, 420000),
-      });
+        until: t + stay,
+        storing: 0,
+      };
+      toys.push(toy);
+      if (fresh ? RARITY[def.rarity].color : true) {
+        sparkle(x, g.floor - toySize(g), g, fresh ? 12 : 8);
+      }
+      return toy;
+    }
+
+    /** A brand-new find: rolls a rarity, adds it to the bag and shows it off. */
+    function find(t) {
+      const g = geom();
+      const def = rollToy(Math.random);
+      const count = (bag.get(def.id) || 0) + 1;
+      bag.set(def.id, count);
+      saveBag();
+      if (toys.filter((o) => !o.storing).length < MAX_OUT) {
+        placeToy(def, freeX(g), t, rnd(40000, 80000), true);
+      }
       const rarity = RARITY[def.rarity];
-      if (!seen.has(def.id)) {
-        seen.add(def.id);
-        api.onDiscover([...seen]);
+      if (count === 1) {
         say(
-          `New find! ${def.emoji} ${def.name} (${rarity.label}) - ${seen.size}/${TOYS.length} found`,
+          `New find! ${def.emoji} ${def.name} (${rarity.label}) - ${bag.size}/${TOYS.length} in the bag`,
           rarity.color || '#ffffff',
           5000,
         );
-      } else if (def.rarity === 'rare' || def.rarity === 'legendary') {
-        say(
-          `A ${rarity.label.toLowerCase()} ${def.name} appeared! ${def.emoji}`,
-          rarity.color,
-          4000,
-        );
+      } else {
+        say(`Found another ${def.emoji} ${def.name} (x${count})`, rarity.color || '#ffffff', 3500);
       }
-      if (rarity.color) {
-        for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI * 2;
-          api.emit({
-            x,
-            y: g.floor - ts,
-            vx: Math.cos(a) * g.size * 0.6,
-            vy: Math.sin(a) * g.size * 0.6,
-            text: '✨',
-            size: g.size * 0.07,
-            life: 0.9,
-          });
+    }
+
+    function isOut(id) {
+      return toys.some((o) => o.def.id === id && !o.storing);
+    }
+
+    /** Sends a toy flying back into the bag. */
+    function store(toy, t) {
+      if (!toy.storing) {
+        toy.storing = t;
+        if (use && use.toy === toy) {
+          use = null;
         }
       }
     }
 
-    function removeToy(toy) {
+    function takeOut(id) {
+      const def = TOYS.find((d) => d.id === id);
+      if (!def || !bag.has(id) || isOut(id) || !api.main()) {
+        return false;
+      }
       const g = geom();
-      toys = toys.filter((o) => o !== toy);
-      api.emit({
-        x: toy.x,
-        y: toyY(toy, g),
-        vy: -20,
-        text: '💨',
-        size: toySize(g) * 0.7,
-        life: 0.8,
-      });
+      const out = toys.filter((o) => !o.storing);
+      if (out.length >= MAX_OUT) {
+        store(out[0], api.now());
+      }
+      const x = clamp(
+        g.cx + (Math.random() < 0.5 ? -1 : 1) * g.size * 0.7,
+        g.size * 0.2,
+        api.view().w - g.size * 0.2,
+      );
+      placeToy(def, x, api.now(), 5 * 60000, false);
+      return true;
+    }
+
+    function putAway(id) {
+      toys.filter((o) => o.def.id === id).forEach((o) => store(o, api.now()));
+    }
+
+    function putAllAway() {
+      toys.forEach((o) => store(o, api.now()));
+    }
+
+    function toyPos(toy, g, t) {
+      const y = toyY(toy, g);
+      if (!toy.storing) {
+        return { x: toy.x, y, k: Math.min(1, (t - toy.bornAt) / 300) };
+      }
+      const u = Math.min(1, (t - toy.storing) / STORE_MS);
+      const to = bagSpot();
+      const e = u * u;
+      return {
+        x: toy.x + (to.x - toy.x) * e,
+        y: y + (to.y - y) * e - Math.sin(u * Math.PI) * g.size * 0.4,
+        k: 1 - u * 0.85,
+      };
     }
 
     function stepToys(g, t, dt) {
       const w = api.view().w;
       const ts = toySize(g);
+      toys = toys.filter((toy) => !toy.storing || t - toy.storing < STORE_MS);
       for (const toy of toys) {
+        if (toy.storing) {
+          continue;
+        }
         if (toy.h > 0 || toy.vh !== 0) {
           toy.vh -= g.size * 6 * dt;
           toy.h += toy.vh * dt;
@@ -250,9 +332,9 @@
           });
         }
       }
-      const expired = toys.find((toy) => t > toy.until && (!use || use.toy !== toy));
-      if (expired) {
-        removeToy(expired);
+      const done = toys.find((toy) => !toy.storing && t > toy.until && (!use || use.toy !== toy));
+      if (done) {
+        store(done, t);
       }
     }
 
@@ -264,12 +346,33 @@
 
     // -- Toy use (an idle hobby) ------------------------------------------------
 
+    /** Something to play with: a toy on the floor, or (with toys on) one in the bag. */
+    function canPlay() {
+      return toys.some((o) => !o.storing) || (api.config().toys && bag.size > 0);
+    }
+
+    /**
+     * Starts the toy hobby with the nearest toy on the floor. If the floor is
+     * empty the pet pulls a random toy out of the bag, out of nowhere, and it
+     * goes back in a few seconds after playtime.
+     */
     function startToy(until) {
-      if (toys.length === 0) {
+      if (!canPlay()) {
         return false;
       }
       const g = geom();
-      const toy = toys.reduce((a, b) => (Math.abs(b.x - g.cx) < Math.abs(a.x - g.cx) ? b : a));
+      let floor = toys.filter((o) => !o.storing);
+      if (floor.length === 0) {
+        const ids = [...bag.keys()];
+        const def = TOYS.find((d) => d.id === ids[Math.floor(Math.random() * ids.length)]);
+        const x = clamp(
+          g.cx + (Math.random() < 0.5 ? -1 : 1) * g.size * 0.8,
+          g.size * 0.2,
+          api.view().w - g.size * 0.2,
+        );
+        floor = [placeToy(def, x, api.now(), until - api.now() + 3000, false)];
+      }
+      const toy = floor.reduce((a, b) => (Math.abs(b.x - g.cx) < Math.abs(a.x - g.cx) ? b : a));
       use = { toy, until, since: 0, lastKick: 0, fxAt: 0, rideTo: toy.x };
       return true;
     }
@@ -1017,19 +1120,18 @@
       }
       const g = geom();
       const cfg = api.config();
-      if (cfg.toys && t > nextSpawn) {
-        nextSpawn = t + rnd(50000, 110000);
-        if (toys.length < MAX_TOYS) {
-          spawnToy(t);
-        }
+      if (cfg.toys && t > nextFind) {
+        nextFind = t + rnd(120000, 240000);
+        find(t);
       }
-      if (!cfg.toys && toys.length > 0) {
-        toys = [];
-        use = null;
+      // Turning toys off tidies everything away; the bag keeps them.
+      if (toysWereOn && !cfg.toys) {
+        putAllAway();
       }
+      toysWereOn = cfg.toys;
       stepToys(g, t, dt);
       if (use) {
-        if (!toys.includes(use.toy) || t > use.until || !api.playing()) {
+        if (!toys.includes(use.toy) || use.toy.storing || t > use.until || !api.playing()) {
           use = null;
         } else {
           updateUse(g, t);
@@ -1067,10 +1169,9 @@
         }
       }
       for (const toy of toys) {
-        const y = toyY(toy, g);
-        const pop = Math.min(1, (t - toy.bornAt) / 300);
+        const at = toyPos(toy, g, t);
         const glow = RARITY[toy.def.rarity].color;
-        if (glow) {
+        if (glow && !toy.storing) {
           const pulse = 0.25 + 0.15 * Math.sin(t / 300 + toy.seed);
           ctx.globalAlpha = pulse;
           ctx.fillStyle = glow;
@@ -1080,9 +1181,9 @@
           ctx.globalAlpha = 1;
         }
         ctx.save();
-        ctx.translate(toy.x, y);
-        ctx.scale(pop, pop);
-        if (toy.def.use === 'play' && toy.h > 0) {
+        ctx.translate(at.x, at.y);
+        ctx.scale(at.k, at.k);
+        if (toy.def.use === 'play' && toy.h > 0 && !toy.storing) {
           ctx.rotate(toy.x / (ts * 0.4));
         }
         ctx.font = `${Math.round(ts)}px sans-serif`;
@@ -1134,9 +1235,13 @@
       const g = geom();
       const ts = toySize(g);
       for (const toy of toys) {
-        if (Math.abs(x - toy.x) < ts / 2 && Math.abs(y - toyY(toy, g)) < ts / 2) {
+        if (!toy.storing && Math.abs(x - toy.x) < ts / 2 && Math.abs(y - toyY(toy, g)) < ts / 2) {
           const r = RARITY[toy.def.rarity];
-          return { title: `${toy.def.emoji} ${toy.def.name}`, sub: `${r.label} - click to poke` };
+          const n = bag.get(toy.def.id) || 0;
+          return {
+            title: `${toy.def.emoji} ${toy.def.name}`,
+            sub: `${r.label}${n > 1 ? ` - x${n} in the bag` : ''} - click to poke`,
+          };
         }
       }
       if (api.config().machines) {
@@ -1165,7 +1270,9 @@
       }
       const g = geom();
       const ts = toySize(g);
-      const toy = toys.find((o) => Math.abs(x - o.x) < ts / 2 && Math.abs(y - toyY(o, g)) < ts / 2);
+      const toy = toys.find(
+        (o) => !o.storing && Math.abs(x - o.x) < ts / 2 && Math.abs(y - toyY(o, g)) < ts / 2,
+      );
       if (!toy) {
         return false;
       }
@@ -1185,13 +1292,37 @@
       startToy,
       stopToy,
       startCritter,
-      hasToys: () => toys.length > 0,
+      canPlay,
       toyLabel: () => (use ? `${USE_LABEL[use.toy.def.use]} ${use.toy.def.name}` : ''),
       critter: () => (critter ? { x: critter.x, y: critter.y } : null),
       machineCount: () => machines.filter((m) => !m.leavingAt).length,
       machineSide: () => machineLayout.side,
-      setSeen: (ids) => ids.forEach((id) => seen.add(id)),
-      seenCount: () => seen.size,
+      /** Restores the saved inventory. */
+      setBag: (saved) => {
+        for (const [id, n] of Object.entries(saved || {})) {
+          if (TOYS.some((d) => d.id === id) && n > 0) {
+            bag.set(id, n);
+          }
+        }
+        if (bag.size > 0) {
+          nextFind = api.now() + rnd(60000, 120000);
+        }
+      },
+      /** Every toy in catalogue order, with how many are in the bag and whether one is out. */
+      bagList: () =>
+        TOYS.map((d) => ({
+          id: d.id,
+          emoji: d.emoji,
+          name: d.name,
+          rarity: RARITY[d.rarity].label,
+          color: RARITY[d.rarity].color,
+          count: bag.get(d.id) || 0,
+          out: isOut(d.id),
+        })),
+      takeOut,
+      putAway,
+      putAllAway,
+      foundCount: () => bag.size,
       toyTotal: TOYS.length,
       /** Where the toy hobby wants the pet's centre to go, or null. */
       target: () => target,
@@ -1199,8 +1330,8 @@
       pose: () => pose,
       /** Pixels to raise (or, negative, sink) the pet, e.g. sitting on a couch. */
       lift: () => lift,
-      /** Spawn a toy now (used by tests). */
-      spawn: () => spawnToy(api.now()),
+      /** Make a new find right now (used by tests). */
+      find: () => find(api.now()),
     };
   }
 

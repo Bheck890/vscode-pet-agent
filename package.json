@@ -170,6 +170,14 @@
           ],
           "description": "How varied the pet's animations are."
         },
+        "peon-pet.disabledActions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Animations and idle hobbies you never want to see, e.g. `running.zoomies`, `sleeping.belly`, `idle.butterfly`. Easiest to set from the ⚙️ button in the pet panel."
+        },
         "peon-pet.toys": {
           "type": "boolean",
           "default": true,

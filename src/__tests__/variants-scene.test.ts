@@ -17,13 +17,20 @@ interface VariantsApi {
   IDLE: Variant[];
   pick(
     state: string,
-    opts: { classic: boolean; species: string; lastId?: string; rand?: () => number },
+    opts: {
+      classic: boolean;
+      species: string;
+      lastId?: string;
+      off?: string[];
+      rand?: () => number;
+    },
   ): Variant | null;
   pickIdle(opts: {
     species: string;
     wander: boolean;
     toys: boolean;
     lastId?: string;
+    off?: string[];
     rand?: () => number;
   }): Variant | null;
 }
@@ -34,9 +41,15 @@ interface SceneApi {
   hover(x: number, y: number): { title: string; sub: string } | null;
   machineCount(): number;
   machineSide(): number;
-  spawn(): void;
-  seenCount(): number;
+  find(): void;
+  foundCount(): number;
   toyTotal: number;
+  setBag(bag: Record<string, number>): void;
+  bagList(): Array<{ id: string; count: number; out: boolean }>;
+  takeOut(id: string): boolean;
+  putAway(id: string): void;
+  canPlay(): boolean;
+  startToy(until: number): boolean;
 }
 
 const media = path.join(process.cwd(), 'media');
@@ -103,6 +116,23 @@ describe('animation variants', () => {
     }
   });
 
+  it('never picks an action that was switched off', () => {
+    const off = ['running.zoomies', 'running.circles', 'idle.butterfly', 'idle.circles'];
+    for (let i = 0; i < 100; i++) {
+      expect(['zoomies', 'circles']).not.toContain(
+        V.pick('running', { classic: false, species: 'dog', off })?.id,
+      );
+      expect(['butterfly', 'circles']).not.toContain(
+        V.pickIdle({ species: 'dog', wander: true, toys: true, off })?.id,
+      );
+    }
+  });
+
+  it('falls back to the classic look when every variant is switched off', () => {
+    const off = V.VARIANTS['done'].map((v) => `done.${v.id}`);
+    expect(V.pick('done', { classic: false, species: 'cat', off })?.id).toBe('classic');
+  });
+
   it('keeps bird-only variants and hobbies to birds', () => {
     const ids = (species: string) => {
       const seen = new Set<string>();
@@ -131,7 +161,7 @@ describe('scene', () => {
   const pet = { x: 0, y: 30, wx: 0, scale: 6 };
 
   function makeScene(config: Record<string, unknown>) {
-    const discovered: string[][] = [];
+    const saved: Array<Record<string, number>> = [];
     const ctx = new Proxy(
       {},
       { get: (_t, key) => (key === 'measureText' ? () => ({ width: 10 }) : () => undefined) },
@@ -145,9 +175,9 @@ describe('scene', () => {
       emit: () => undefined,
       config: () => config,
       playing: () => false,
-      onDiscover: (seen: string[]) => discovered.push(seen),
+      onBag: (bag: Record<string, number>) => saved.push(bag),
     });
-    return { scene, discovered };
+    return { scene, saved };
   }
 
   it('has toys in every rarity', () => {
@@ -156,12 +186,38 @@ describe('scene', () => {
     }
   });
 
-  it('records a discovery the first time a toy turns up', () => {
-    const { scene, discovered } = makeScene({ toys: true, machines: true });
-    scene.spawn();
-    expect(discovered).toHaveLength(1);
-    expect(scene.seenCount()).toBe(1);
+  it('puts every find straight into the bag and saves it', () => {
+    const { scene, saved } = makeScene({ toys: true, machines: true });
+    scene.find();
+    scene.find();
+    expect(saved).toHaveLength(2);
+    const total = Object.values(saved[1]).reduce((a, b) => a + b, 0);
+    expect(total).toBe(2);
+    expect(scene.foundCount()).toBe(Object.keys(saved[1]).length);
     expect(scene.toyTotal).toBe(PetScene.TOYS.length);
+  });
+
+  it('restores the bag, ignoring unknown toys, and takes toys out and back', () => {
+    const { scene } = makeScene({ toys: false, machines: true });
+    scene.setBag({ yarn: 3, dragon: 1 });
+    expect(scene.foundCount()).toBe(1);
+    expect(scene.bagList().find((t) => t.id === 'yarn')).toMatchObject({ count: 3, out: false });
+    expect(scene.takeOut('crown')).toBe(false);
+    expect(scene.takeOut('yarn')).toBe(true);
+    expect(scene.bagList().find((t) => t.id === 'yarn')?.out).toBe(true);
+    scene.putAway('yarn');
+    expect(scene.bagList().find((t) => t.id === 'yarn')?.out).toBe(false);
+  });
+
+  it('pulls a toy out of the bag to play with only when toys are on', () => {
+    const off = makeScene({ toys: false, machines: true }).scene;
+    off.setBag({ yarn: 1 });
+    expect(off.canPlay()).toBe(false);
+
+    const on = makeScene({ toys: true, machines: true }).scene;
+    on.setBag({ yarn: 1 });
+    expect(on.startToy(Date.now() + 5000)).toBe(true);
+    expect(on.bagList().find((t) => t.id === 'yarn')?.out).toBe(true);
   });
 
   it('puts a machine next to the pet for each job, washing machines for tests in classic', () => {

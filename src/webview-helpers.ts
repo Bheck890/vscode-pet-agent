@@ -5,11 +5,11 @@ import { PetConfig } from './pet-config';
 import { StateWatcher, PeonEvent, SessionUpdate } from './state-watcher';
 import { ClaudeWatcher, ClaudeUpdate } from './claude-watcher';
 
-/** Persisted across reloads: where the pet was dragged, and which toys it has found. */
+/** Persisted across reloads: where the pet was dragged, and its bag of toys (id -> count). */
 export interface WebviewState {
   petX?: number;
   petY?: number;
-  seen?: string[];
+  bag?: Record<string, number>;
 }
 
 function escapeHtml(value: string): string {
@@ -103,7 +103,12 @@ export function attachWatchers(
   peon: StateWatcher,
   claude: ClaudeWatcher,
 ): vscode.Disposable {
-  const onEvent = (e: PeonEvent) => webview.postMessage({ command: 'peon-event', ...e });
+  // peon-ping reports every agent on the machine; only this workspace's move this pet.
+  const onEvent = (e: PeonEvent) => {
+    if (claude.ownsDir(e.cwd)) {
+      void webview.postMessage({ command: 'peon-event', ...e });
+    }
+  };
   const onSession = (e: SessionUpdate) => webview.postMessage({ command: 'session-update', ...e });
   const onClaude = (e: ClaudeUpdate) => webview.postMessage({ command: 'claude-update', ...e });
 

@@ -13,14 +13,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Animation variants for every state, picked at random each time (`peon-pet.variety`, default `random`; `classic` keeps one look per state). Includes napping sideways, rolling over, belly-up and in a box, a hamster wheel, surfing the web, a chalkboard, a trophy, backflips and more.
 - Idle hobbies: chasing butterflies, bird watching, digging, dancing, yoga, reading, coffee and toy play. Birds fly around the panel. A napping pet sometimes gets up by itself.
-- Toys and furniture with common, uncommon, rare and legendary rarities (`peon-pet.toys`). Finds are remembered as a collection.
+- Toys and furniture with common, uncommon, rare and legendary rarities (`peon-pet.toys`). Finds go into a saved 🎒 bag; the pet pulls toys out to play with and puts them back. A bag panel shows the collection and lets you take toys out or put them away.
+- ⚙️ quick settings panel for the main switches, plus a per-action list to turn off any animation or hobby (`peon-pet.disabledActions`).
+- Depth: the pet can move towards the back of the panel and forward again. New "running in circles" variant and hobby.
 - A `testing` state, and a machine (washing machine, oven, microwave, computer, engine, server rack) for each running test, build or background shell job (`peon-pet.machines`). Background jobs end on Claude Code's task notification.
 - Other recently busy Claude sessions appear as mini pets (`peon-pet.backgroundPets`).
 
 ### Changed
 
 - Once the same kind of tool call happens twice in a row (e.g. two web searches or two writes), the pet keeps doing it through any thinking until a different action, an error, a question or the end of the turn. A single action is held for 8 seconds of thinking instead of flicking straight to "thinking".
-- Mini pets line up along the bottom of the panel.
+- Mini pets line up along the bottom of the panel, beside the main pet when there's no room above or below it, and in front of it when there's no room at all.
+- Zoomies are shorter and slower, staying near the pet's spot.
+- Other sessions are named after the folder they were started in, not wherever their shell has moved to.
+
+### Fixed
+
+- One VS Code window's agent could take over the pet in another window. Each pet now only follows sessions started in its own window's workspace and no longer falls back to the most recent session anywhere. Git Bash style paths (`/d/...`) now match Windows workspace folders, and peon-ping events are filtered by workspace too.
 - Time-based states (permission prompt guess, abandoned turn) now reach the pet even when no new transcript line arrived.
 
 ---

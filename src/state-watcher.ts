@@ -27,6 +27,8 @@ const MAX_SESSIONS = 10;
 export interface PeonEvent {
   anim: string;
   event: string;
+  /** Folder of the session that raised the event, if peon-ping recorded one. */
+  cwd: string | null;
 }
 
 /** Fired on every poll cycle with the current session list. */
@@ -219,7 +221,11 @@ export class StateWatcher implements vscode.Disposable {
     const anim = EVENT_TO_ANIM[entry.event];
     if (anim) {
       for (const l of this.eventListeners) {
-        l({ anim, event: entry.event });
+        l({
+          anim,
+          event: entry.event,
+          cwd: entry.cwd ?? this.sessionCwds.get(entry.session_id) ?? null,
+        });
       }
     }
   }

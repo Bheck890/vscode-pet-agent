@@ -1,5 +1,5 @@
 import { funnyName } from '../pet-names';
-import { DEFAULT_NAMES, readPetConfig, sizeFromSetting } from '../pet-config';
+import { DEFAULT_NAMES, panelSetting, readPetConfig, sizeFromSetting } from '../pet-config';
 
 describe('sizeFromSetting', () => {
   it('maps small/medium/large and falls back to 200', () => {
@@ -27,6 +27,7 @@ const DEFAULTS = {
   toys: true,
   machines: true,
   backgroundPets: true,
+  disabledActions: [],
   size: 200,
 };
 
@@ -65,6 +66,7 @@ describe('readPetConfig', () => {
       toys: false,
       machines: false,
       backgroundPets: false,
+      disabledActions: ['running.zoomies', 'idle.butterfly'],
       size: 'large',
     };
     expect(readPetConfig((k) => values[k])).toEqual({
@@ -83,8 +85,34 @@ describe('readPetConfig', () => {
       toys: false,
       machines: false,
       backgroundPets: false,
+      disabledActions: ['running.zoomies', 'idle.butterfly'],
       size: 250,
     });
+  });
+});
+
+describe('panelSetting', () => {
+  it('maps the settings panel switches to settings', () => {
+    expect(panelSetting('toys', false)).toEqual(['toys', false]);
+    expect(panelSetting('variety', true)).toEqual(['variety', 'random']);
+    expect(panelSetting('variety', false)).toEqual(['variety', 'classic']);
+  });
+
+  it('accepts a list of switched-off actions', () => {
+    expect(panelSetting('disabledActions', ['running.zoomies'])).toEqual([
+      'disabledActions',
+      ['running.zoomies'],
+    ]);
+    expect(panelSetting('disabledActions', ['<script>'])).toBeNull();
+    expect(
+      readPetConfig((k) => (k === 'disabledActions' ? 'zoomies' : undefined)).disabledActions,
+    ).toEqual([]);
+  });
+
+  it('rejects anything else', () => {
+    expect(panelSetting('species', true)).toBeNull();
+    expect(panelSetting('toys', 'yes')).toBeNull();
+    expect(panelSetting(undefined, true)).toBeNull();
   });
 });
 

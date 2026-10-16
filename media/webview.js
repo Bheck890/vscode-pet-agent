@@ -169,8 +169,8 @@
   let config = null;
   let viewW = 300;
   let viewH = 300;
-  /** Persisted by VS Code across reloads: where the pet was dragged, toys found. */
-  /** @type {{petX?: number, petY?: number, seen?: string[]}} */
+  /** Persisted by VS Code across reloads: where the pet was dragged, the toy bag. */
+  /** @type {{petX?: number, petY?: number, bag?: Record<string, number>}} */
   let saved = {};
   /** @type {any} */
   let main = null;
@@ -392,6 +392,9 @@
         wxTarget: 0,
         wy: 0,
         wyTarget: 0,
+        wz: 0,
+        wzTarget: 0,
+        roamAngle: 0,
         walking: 0,
         wanderNext: t + 5000,
         roamDir: 1,
@@ -427,6 +430,7 @@
         classic: classic(),
         species: config.species,
         lastId: p.lastVariant[state],
+        off: config.disabledActions,
       });
       p.lastVariant[state] = v ? v.id : '';
       p.variant = { state, def: v ? Object.assign({}, STATES[state], v) : STATES[state] };
@@ -521,9 +525,31 @@
     return p.scale * Art.SIZE;
   }
 
+  /**
+   * Depth: wz runs from 0 (front, the pet's normal spot) to 1 (far back).
+   * Further back the pet is drawn smaller and higher up the panel.
+   */
+  const DEPTH_SHRINK = 0.4;
+  const DEPTH_RISE = 0.45;
+
+  function depthK(p) {
+    return 1 - DEPTH_SHRINK * p.wz;
+  }
+
+  /** The square the sprite is drawn in this frame, allowing for flight and depth. */
+  function spriteBox(p) {
+    const size = petPx(p);
+    const s = size * depthK(p);
+    return {
+      x: p.x + p.wx + (size - s) / 2,
+      y: p.y + p.wy + size - p.wz * size * DEPTH_RISE - s,
+      s,
+    };
+  }
+
   function center(p) {
-    const s = petPx(p);
-    return { x: p.x + p.wx + s / 2, y: p.y + p.wy + s / 2 };
+    const b = spriteBox(p);
+    return { x: b.x + b.s / 2, y: b.y + b.s / 2 };
   }
 
   // -- Care -------------------------------------------------------------------
@@ -665,8 +691,9 @@
         ? Variants.pickIdle({
             species: config.species,
             wander: config.wander,
-            toys: config.toys && scene.hasToys(),
+            toys: scene.canPlay(),
             lastId: p.hobbyLast,
+            off: config.disabledActions,
           })
         : null;
     if (hobby) {
@@ -687,12 +714,24 @@
   }
 
   /** Speeds in pet-widths per second for variants and hobbies that move around. */
-  const ROAM_SPEED = { pace: 0.6, zoomies: 3, fly: 1.5, chase: 1.6 };
+  const ROAM_SPEED = { pace: 0.6, zoomies: 1.5, fly: 1.5, chase: 1.6, circle: 1.8 };
+  /** Roams that move the pet back and forth in depth. */
+  const DEPTH_ROAMS = new Set(['zoomies', 'circle']);
 
   /** Picks the next spot for a roaming pet once it reaches the last one. */
-  function roam(p, def, t, size) {
-    const arrived = Math.abs(p.wxTarget - p.wx) <= 1 && Math.abs(p.wyTarget - p.wy) <= 1;
+  function roam(p, def, t, dt, size) {
+    const arrived =
+      Math.abs(p.wxTarget - p.wx) <= 1 &&
+      Math.abs(p.wyTarget - p.wy) <= 1 &&
+      Math.abs(p.wzTarget - p.wz) < 0.02;
     switch (def.roam) {
+      case 'circle': {
+        // Laps around its spot, going round the back and coming forward again.
+        p.roamAngle += dt * 1.6;
+        p.wxTarget = Math.cos(p.roamAngle) * Math.min(size * 0.9, viewW * 0.3);
+        p.wzTarget = 0.35 * (1 - Math.sin(p.roamAngle));
+        break;
+      }
       case 'chase': {
         const c = scene.critter();
         if (c) {
@@ -707,8 +746,10 @@
         }
         break;
       case 'zoomies':
+        // Short dashes near home, darting to the back and front.
         if (arrived) {
-          p.wxTarget = p.roamDir > 0 ? viewW - size - p.x : -p.x;
+          p.wxTarget = p.roamDir * size * (0.5 + Math.random() * 0.5);
+          p.wzTarget = Math.random() * 0.7;
           p.roamDir = -p.roamDir;
         }
         break;
@@ -741,6 +782,10 @@
     if (def.roam !== 'fly') {
       p.wyTarget = 0;
     }
+    const resting = state === 'idle' || state === 'sleeping';
+    if (!DEPTH_ROAMS.has(def.roam) && (!resting || steer !== null)) {
+      p.wzTarget = 0;
+    }
     if (careSteer !== null) {
       p.wxTarget = careSteer - (p.x + size / 2);
       p.fidget = null;
@@ -749,10 +794,12 @@
     } else if (toySteer !== null) {
       p.wxTarget = toySteer - (p.x + size / 2);
     } else if (def.roam && !dragging && !reacting) {
-      roam(p, def, t, size);
+      roam(p, def, t, dt, size);
     } else if (state === 'idle' && !reacting && !dragging) {
       if (config.wander && !hobby && !p.walking && t > p.wanderNext) {
         p.wxTarget = (Math.random() - 0.5) * viewW * 0.8;
+        // Sometimes stroll off towards the back of the panel, or come forward again.
+        p.wzTarget = Math.random() < 0.35 ? Math.random() * 0.8 : 0;
         p.wanderNext = t + 7000 + Math.random() * 7000;
       }
       if (!p.walking && t > p.fidgetNext && (!p.fidget || t > p.fidget.until)) {
@@ -767,6 +814,7 @@
     if (!config.wander && !play.tool()) {
       p.wxTarget = 0;
       p.wyTarget = 0;
+      p.wzTarget = 0;
     }
     p.wxTarget = Math.max(-p.x, Math.min(viewW - size - p.x, p.wxTarget));
     p.wyTarget = Math.max(-(p.y - 6), Math.min(0, p.wyTarget));
@@ -788,6 +836,11 @@
     }
     const dy = p.wyTarget - p.wy;
     p.wy += Math.sign(dy) * Math.min(Math.abs(dy), size * 1.2 * dt);
+    const dz = p.wzTarget - p.wz;
+    p.wz += Math.sign(dz) * Math.min(Math.abs(dz), (def.roam === 'circle' ? 1.2 : 0.5) * dt);
+    if (p.wz > 0.02 && Math.abs(diff) <= 1 && Math.abs(dz) > 0.01) {
+      p.walking = p.walking || p.roamDir;
+    }
   }
 
   /** Click = pet it (hearts), double-click = trick (spin jump). Clicking wakes it up. */
@@ -1706,7 +1759,9 @@
     const m = motionFor(ps.motion, ps.mt, p);
     const lift = (def.lift || 0) + (p === main ? scene.lift() / s : 0);
     const x0 = p.x + p.wx;
-    const floor = p.y + size - s;
+    const dk = depthK(p);
+    const back = p.wz * size * DEPTH_RISE;
+    const floor = p.y + size - s - back;
     const hide = [];
     if (HEAD_PROPS.has(def.prop)) {
       hide.push('head');
@@ -1738,24 +1793,24 @@
     ctx.ellipse(
       x0 + size / 2,
       floor,
-      size * 0.32 * k * air,
-      size * 0.05 * k * air,
+      size * 0.32 * k * air * dk,
+      size * 0.05 * k * air * dk,
       0,
       0,
       Math.PI * 2,
     );
     ctx.fill();
     if (def.scene) {
-      scene.scenery(def.scene, 'back', x0 + size / 2, floor, size, s, t);
+      scene.scenery(def.scene, 'back', x0 + size / 2, floor, size * dk, s * dk, t);
     }
 
     ctx.save();
     ctx.translate(
-      Math.round(x0 + size / 2 + m.dx * s),
-      Math.round(p.y + p.wy + size + (m.dy - lift) * s),
+      Math.round(x0 + size / 2 + m.dx * s * dk),
+      Math.round(p.y + p.wy + size - back + (m.dy - lift) * s * dk),
     );
     ctx.rotate(m.rot);
-    ctx.scale(m.sx * k, m.sy * k);
+    ctx.scale(m.sx * k * dk, m.sy * k * dk);
     const sprite = petSprite({
       color,
       tint,
@@ -1799,7 +1854,7 @@
     }
     ctx.restore();
     if (def.scene) {
-      scene.scenery(def.scene, 'front', x0 + size / 2, floor, size, s, t);
+      scene.scenery(def.scene, 'front', x0 + size / 2, floor, size * dk, s * dk, t);
     }
 
     if (p === main) {
@@ -1822,7 +1877,8 @@
   function drawLabels(p, def, k) {
     const size = petPx(p);
     const cx = center(p).x;
-    const y = p.y + p.wy + size + 4;
+    const b = spriteBox(p);
+    const y = b.y + b.s + 4;
     const isMain = p === main;
     const maxW = Math.min(viewW - 8, Math.max(size + 30, isMain ? 220 : 110));
     // Keep the text inside the panel when the pet stands near an edge.
@@ -1917,20 +1973,42 @@
     const mpx = petPx(list[0]);
     const cellW = Math.max(mpx + 30, 100);
     const cellH = mpx + 34;
-    const cols = Math.max(1, Math.floor(viewW / cellW));
-    const rows = Math.ceil(n / cols);
-    const below = main.y + petPx(main) + 40;
+    const size = petPx(main);
+    // The band to use: [left, right) across, starting at `top`.
+    let left = 0;
+    let right = viewW;
+    let cols = Math.max(1, Math.floor(viewW / cellW));
+    let rows = Math.ceil(n / cols);
     let top = viewH - rows * cellH - 4;
+    const below = main.y + size + 40;
+    let front = false;
     if (top < below) {
-      top = below + rows * cellH > viewH ? Math.max(24, main.y - rows * cellH - 8) : below;
+      const above = main.y - rows * cellH - 8;
+      const roomRight = viewW - (main.x + size);
+      const side = Math.max(roomRight, main.x);
+      if (below + rows * cellH <= viewH) {
+        top = below;
+      } else if (above >= 24) {
+        top = above;
+      } else if (side >= cellW) {
+        // No room above or below: stack them beside the pet instead of on it.
+        [left, right] = roomRight >= main.x ? [main.x + size, viewW] : [0, main.x];
+        cols = Math.max(1, Math.floor(side / cellW));
+        rows = Math.ceil(n / cols);
+        top = Math.max(24, viewH - rows * cellH - 4);
+      } else {
+        // Nowhere free: keep them along the bottom, drawn in front of the pet.
+        front = true;
+      }
     }
     list.forEach((m, i) => {
       const row = Math.floor(i / cols);
       const col = i % cols;
       const inRow = Math.min(cols, n - row * cols);
-      const startX = (viewW - inRow * cellW) / 2;
+      const startX = left + (right - left - inRow * cellW) / 2;
       m.tx = startX + col * cellW + (cellW - mpx) / 2;
       m.ty = top + row * cellH;
+      m.front = front;
     });
   }
 
@@ -1975,6 +2053,7 @@
       m.variant = null;
     });
     resizeCanvas();
+    syncSwitches();
     if (pendingClaude) {
       applyClaude(pendingClaude);
       pendingClaude = null;
@@ -2098,10 +2177,15 @@
 
     play.update(t, dt);
     scene.update(t, dt);
+    if (t - bagDrawnAt > 500) {
+      renderBag();
+    }
     updateCareUi(t);
     drawDots(t);
     scene.drawBack(t);
-    const drawOrder = [...minis.values(), main].sort((a, b) => a.y - b.y);
+    // Further back means drawn first, so nearer pets overlap it.
+    const bottom = (p) => spriteBox(p).y + spriteBox(p).s + (p.front ? viewH : 0);
+    const drawOrder = [...minis.values(), main].sort((a, b) => bottom(a) - bottom(b));
     drawOrder.forEach((p) => drawPet(p, t));
     play.draw(t);
     scene.drawFront(t);
@@ -2120,9 +2204,7 @@
     switch (msg.command) {
       case 'init':
         saved = msg.state && typeof msg.state === 'object' ? msg.state : {};
-        if (Array.isArray(saved.seen)) {
-          scene.setSeen(saved.seen);
-        }
+        scene.setBag(saved.bag);
         applyConfig(msg.config);
         break;
       case 'reinit':
@@ -2156,10 +2238,8 @@
 
   // -- Tooltip ----------------------------------------------------------------
   function hit(p, x, y) {
-    const s = petPx(p);
-    const px = p.x + p.wx;
-    const py = p.y + p.wy;
-    return x >= px && x <= px + s && y >= py && y <= py + s;
+    const b = spriteBox(p);
+    return x >= b.x && x <= b.x + b.s && y >= b.y && y <= b.y + b.s;
   }
 
   function tooltipHtml(x, y) {
@@ -2189,9 +2269,7 @@
           ? `<br><span class="dim">${helpers} helper${helpers > 1 ? 's' : ''} working</span>`
           : '') +
         (jobs ? `<br><span class="dim">${jobs} job${jobs > 1 ? 's' : ''} running</span>` : '') +
-        (config.toys
-          ? `<br><span class="dim">🧸 ${scene.seenCount()}/${scene.toyTotal} toys found</span>`
-          : '')
+        `<br><span class="dim">🎒 ${scene.foundCount()}/${scene.toyTotal} toys in the bag</span>`
       );
     }
     const thing = scene.hover(x, y);
@@ -2305,11 +2383,139 @@
       !dragging &&
       !!main.fidget &&
       main.fidget.kind === 'toy',
-    onDiscover: (seen) => {
-      saved.seen = seen;
+    onBag: (bag) => {
+      saved.bag = bag;
       persist();
+      renderBag();
     },
   });
+
+  // -- Bag and settings panels --------------------------------------------------
+  const bagToggle = /** @type {HTMLButtonElement} */ (document.getElementById('bag-toggle'));
+  const bagPanel = /** @type {HTMLDivElement} */ (document.getElementById('bag-panel'));
+  const bagGrid = /** @type {HTMLDivElement} */ (document.getElementById('bag-grid'));
+  const bagTitle = /** @type {HTMLSpanElement} */ (document.getElementById('bag-title'));
+  const bagStoreAll = /** @type {HTMLButtonElement} */ (document.getElementById('bag-store-all'));
+  const settingsToggle = /** @type {HTMLButtonElement} */ (
+    document.getElementById('settings-toggle')
+  );
+  const settingsPanel = /** @type {HTMLDivElement} */ (document.getElementById('settings-panel'));
+  const switches = /** @type {HTMLInputElement[]} */ (
+    Array.from(document.querySelectorAll('[data-setting]'))
+  );
+  const actionList = /** @type {HTMLDivElement} */ (document.getElementById('action-list'));
+
+  /** Groups of switchable actions for the settings panel, in display order. */
+  const ACTION_GROUPS = [
+    ['idle', 'Idle hobbies', Variants.IDLE],
+    ...Object.entries(Variants.VARIANTS).map(([state, list]) => [state, STATES[state].label, list]),
+  ];
+
+  /** One checkbox per variant and hobby; ticked means it can happen. */
+  function renderActions() {
+    const off = new Set(config.disabledActions || []);
+    actionList.innerHTML = ACTION_GROUPS.map(
+      ([group, title, list]) =>
+        `<div class="group">${escapeHtml(title)}</div>` +
+        list
+          .map((v) => {
+            const id = Variants.actionId(group, v);
+            const name = v.id === 'classic' ? 'classic look' : v.label;
+            const only = v.species ? ` (${v.species.join(', ')}s)` : '';
+            return (
+              `<label><input type="checkbox" data-action="${escapeHtml(id)}"` +
+              `${off.has(id) ? '' : ' checked'} /> ${escapeHtml(name + only)}</label>`
+            );
+          })
+          .join(''),
+    ).join('');
+  }
+  let bagDrawnAt = 0;
+
+  /** Opens one corner panel (or closes it if already open) and closes the others. */
+  function togglePanel(panel) {
+    const open = panel.hidden;
+    for (const other of [carePanel, bagPanel, settingsPanel]) {
+      other.hidden = other !== panel || !open;
+    }
+    if (carePanel.hidden) {
+      play.setTool(null);
+    }
+    if (!bagPanel.hidden) {
+      renderBag();
+    }
+    updateCareUi(now());
+  }
+
+  function renderBag() {
+    if (bagPanel.hidden) {
+      return;
+    }
+    bagDrawnAt = now();
+    bagTitle.textContent = `🎒 Bag - ${scene.foundCount()}/${scene.toyTotal} found`;
+    bagGrid.innerHTML = scene
+      .bagList()
+      .map((toy) =>
+        toy.count === 0
+          ? '<span class="toy unknown" title="Not found yet">❔</span>'
+          : `<button class="toy${toy.out ? ' out' : ''}" data-toy="${escapeHtml(toy.id)}"` +
+            ` style="border-bottom-color:${toy.color || 'rgba(127,127,127,0.35)'}"` +
+            ` title="${escapeHtml(`${toy.name} (${toy.rarity})${toy.out ? ' - out' : ''}`)}">` +
+            `${toy.emoji}${toy.count > 1 ? `<span class="count">x${toy.count}</span>` : ''}</button>`,
+      )
+      .join('');
+  }
+
+  function syncSwitches() {
+    for (const input of switches) {
+      const key = input.dataset.setting || '';
+      input.checked = key === 'variety' ? config.variety !== 'classic' : config[key] !== false;
+    }
+    renderActions();
+  }
+
+  bagToggle.addEventListener('click', () => togglePanel(bagPanel));
+  settingsToggle.addEventListener('click', () => togglePanel(settingsPanel));
+  bagStoreAll.addEventListener('click', () => {
+    scene.putAllAway();
+    renderBag();
+  });
+  bagGrid.addEventListener('click', (e) => {
+    const el = /** @type {HTMLElement} */ (e.target).closest('[data-toy]');
+    const id = el && /** @type {HTMLElement} */ (el).dataset.toy;
+    if (!id) {
+      return;
+    }
+    if (scene.bagList().some((toy) => toy.id === id && toy.out)) {
+      scene.putAway(id);
+    } else {
+      scene.takeOut(id);
+    }
+    renderBag();
+  });
+  actionList.addEventListener('change', (e) => {
+    const input = /** @type {HTMLInputElement} */ (e.target);
+    const id = input.dataset.action;
+    if (!id) {
+      return;
+    }
+    const off = new Set(config.disabledActions || []);
+    if (input.checked) {
+      off.delete(id);
+    } else {
+      off.add(id);
+    }
+    vscodeApi.postMessage({ command: 'setting', key: 'disabledActions', value: [...off] });
+  });
+  switches.forEach((input) =>
+    input.addEventListener('change', () =>
+      vscodeApi.postMessage({
+        command: 'setting',
+        key: input.dataset.setting,
+        value: input.checked,
+      }),
+    ),
+  );
 
   function updateCareUi(t) {
     const busy = isBusy();
@@ -2331,13 +2537,10 @@
   }
 
   careToggle.addEventListener('click', () => {
-    carePanel.hidden = !carePanel.hidden;
-    if (carePanel.hidden) {
-      play.setTool(null);
-    } else if (main && !isBusy()) {
+    togglePanel(carePanel);
+    if (!carePanel.hidden && main && !isBusy()) {
       showNote(`Pick a tool, or hold and stroke ${main.name} 💖`, 4000);
     }
-    updateCareUi(now());
   });
 
   careButtons.forEach((b) =>
@@ -2398,6 +2601,8 @@
       main.wxTarget = 0;
       main.wy = 0;
       main.wyTarget = 0;
+      main.wz = 0;
+      main.wzTarget = 0;
       canvas.style.cursor = 'grabbing';
       tooltip.style.display = 'none';
     }

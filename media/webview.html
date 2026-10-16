@@ -10,7 +10,35 @@
   <body>
     <canvas id="c"></canvas>
     <div id="tooltip"></div>
-    <button id="care-toggle" title="Pet care">🐾</button>
+    <button id="care-toggle" class="corner" title="Pet care">🐾</button>
+    <button id="bag-toggle" class="corner" title="Toy bag">🎒</button>
+    <button id="settings-toggle" class="corner" title="Pet settings">⚙️</button>
+    <div id="bag-panel" class="panel" hidden>
+      <div class="panel-head">
+        <span id="bag-title">🎒 Bag</span>
+        <button id="bag-store-all">Put all away</button>
+      </div>
+      <div id="bag-grid"></div>
+      <div class="panel-note">Click a toy to take it out, click again to put it away.</div>
+    </div>
+    <div id="settings-panel" class="panel" hidden>
+      <label
+        ><input type="checkbox" data-setting="variety" /> 🎲 Random animations and hobbies</label
+      >
+      <label><input type="checkbox" data-setting="wander" /> 🚶 Wander around</label>
+      <label><input type="checkbox" data-setting="toys" /> 🧸 New toys turn up</label>
+      <label
+        ><input type="checkbox" data-setting="machines" /> 🧺 Machines for tests and jobs</label
+      >
+      <label
+        ><input type="checkbox" data-setting="backgroundPets" /> 🐾 Pets for other sessions</label
+      >
+      <label><input type="checkbox" data-setting="stateColors" /> 🌈 State colours</label>
+      <details>
+        <summary>🎭 Actions (untick the ones you don't like)</summary>
+        <div id="action-list"></div>
+      </details>
+    </div>
     <div id="care-panel" hidden>
       <div class="care-bars">
         <div class="care-bar" title="Fullness">

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { PetConfig } from './pet-config';
+import { PetConfig, panelSetting } from './pet-config';
 import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
 import { CareStore, isCareAction } from './pet-care';
@@ -30,12 +30,13 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       return false;
     }
     const state = value as Record<string, unknown>;
-    const coord = (v: unknown) => v === undefined || (typeof v === 'number' && Number.isFinite(v));
-    const seen = state['seen'];
+    const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+    const bag = state['bag'];
     return (
-      coord(state['petX']) &&
-      coord(state['petY']) &&
-      (seen === undefined || (Array.isArray(seen) && seen.every((s) => typeof s === 'string')))
+      (state['petX'] === undefined || num(state['petX'])) &&
+      (state['petY'] === undefined || num(state['petY'])) &&
+      (bag === undefined ||
+        (typeof bag === 'object' && bag !== null && Object.values(bag).every(num)))
     );
   }
 
@@ -45,6 +46,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
     private readonly claude: ClaudeWatcher,
     private readonly getConfig: () => PetConfig,
     private readonly care: CareStore,
+    private readonly saveSetting: (key: string, value: unknown) => Thenable<void>,
   ) {}
 
   resolveWebviewView(
@@ -73,6 +75,11 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
         // The webview only sends this when the agent is not working.
         const result = this.care.act(message['action']);
         webviewView.webview.postMessage({ command: 'care-update', ...result });
+      } else if (message['command'] === 'setting') {
+        const change = panelSetting(message['key'], message['value']);
+        if (change) {
+          void this.saveSetting(...change);
+        }
       } else if (
         message['command'] === 'save-state' &&
         PeonViewProvider.isWebviewState(message['state'])

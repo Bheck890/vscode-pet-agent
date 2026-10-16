@@ -277,6 +277,7 @@ export function activate(context: vscode.ExtensionContext): void {
     claude,
     getConfig,
     new CareStore(context.globalState),
+    save,
   );
   const careTimer = setInterval(() => viewProvider.sendCare(), 60_000);
   context.subscriptions.push(

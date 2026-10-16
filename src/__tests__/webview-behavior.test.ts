@@ -61,14 +61,16 @@ function runWebviewScript() {
 
   const vscodeApi = { postMessage: jest.fn(), setState: jest.fn() };
 
-  const fakeEl = (care?: string) => {
+  const fakeEl = (data: Record<string, string> = {}) => {
     const listeners: ListenerMap = {};
     return {
       hidden: true,
       disabled: false,
+      checked: false,
       textContent: '',
+      innerHTML: '',
       style: {} as Record<string, string>,
-      dataset: { care },
+      dataset: data,
       listeners,
       addEventListener: listenerTarget(listeners),
     };
@@ -81,10 +83,21 @@ function runWebviewScript() {
     'bar-fullness',
     'bar-fun',
     'bar-clean',
+    'bag-toggle',
+    'bag-panel',
+    'bag-grid',
+    'bag-title',
+    'bag-store-all',
+    'settings-toggle',
+    'settings-panel',
+    'action-list',
   ]) {
     elements[id] = fakeEl();
   }
-  const careButtons = ['feed', 'treat', 'play', 'bath'].map((a) => fakeEl(a));
+  const careButtons = ['feed', 'treat', 'play', 'bath'].map((care) => fakeEl({ care }));
+  const switches = ['variety', 'wander', 'toys', 'machines', 'backgroundPets', 'stateColors'].map(
+    (setting) => fakeEl({ setting }),
+  );
 
   const windowObj: Record<string, unknown> = {
     addEventListener: listenerTarget(windowListeners),
@@ -97,7 +110,7 @@ function runWebviewScript() {
       body: { clientWidth: 600, clientHeight: 600 },
       getElementById: (id: string) =>
         id === 'c' ? canvas : id === 'tooltip' ? tooltip : (elements[id] ?? null),
-      querySelectorAll: () => careButtons,
+      querySelectorAll: (sel: string) => (sel === '[data-care]' ? careButtons : switches),
       createElement: () => makeCanvas(),
       addEventListener: listenerTarget(documentListeners),
     },
@@ -149,6 +162,7 @@ function runWebviewScript() {
     click,
     pressCare,
     elements,
+    switches,
     tooltip,
     vscodeApi,
     canvasListeners,
@@ -555,15 +569,84 @@ describe('webview behavior', () => {
           sessions: [],
         });
         runFrames(80000, 50);
-        // A toy turned up and the find was saved with the webview state.
+        // A toy turned up and went into the bag, which is saved with the webview state.
         expect(vscodeApi.setState).toHaveBeenCalledWith(
-          expect.objectContaining({ seen: expect.arrayContaining([expect.any(String)]) }),
+          expect.objectContaining({ bag: expect.any(Object) }),
         );
       } finally {
         jest.useRealTimers();
       }
     },
   );
+
+  it('shows the bag with found toys and lets you take one out and put it away', () => {
+    const { send, elements } = runWebviewScript();
+    send({
+      command: 'init',
+      config: CONFIG,
+      state: { petX: 0, petY: 30, bag: { yarn: 2, crown: 1 } },
+    });
+    elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
+    expect(elements['bag-panel'].hidden).toBe(false);
+    expect(elements['bag-title'].textContent).toContain('2/24 found');
+    expect(elements['bag-grid'].innerHTML).toContain('data-toy="yarn"');
+    expect(elements['bag-grid'].innerHTML).toContain('x2');
+
+    const clickToy = (toy: string) =>
+      elements['bag-grid'].listeners['click'].forEach((l) =>
+        l({ target: { closest: () => ({ dataset: { toy } }) } }),
+      );
+    clickToy('crown');
+    expect(elements['bag-grid'].innerHTML).toMatch(/class="toy out" data-toy="crown"/);
+    clickToy('crown');
+    expect(elements['bag-grid'].innerHTML).not.toMatch(/class="toy out" data-toy="crown"/);
+  });
+
+  it('opening one corner panel closes the others', () => {
+    const { elements } = runWebviewScript();
+    elements['care-toggle'].listeners['click'].forEach((l) => l({}));
+    elements['settings-toggle'].listeners['click'].forEach((l) => l({}));
+    expect(elements['settings-panel'].hidden).toBe(false);
+    expect(elements['care-panel'].hidden).toBe(true);
+  });
+
+  it('settings switches reflect the config and send changes to the extension', () => {
+    const { send, switches, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: { ...CONFIG, toys: false }, state: null });
+    const variety = switches.find((s) => s.dataset.setting === 'variety')!;
+    const toys = switches.find((s) => s.dataset.setting === 'toys')!;
+    expect(variety.checked).toBe(false);
+    expect(toys.checked).toBe(false);
+    toys.checked = true;
+    toys.listeners['change'].forEach((l) => l({}));
+    expect(vscodeApi.postMessage).toHaveBeenCalledWith({
+      command: 'setting',
+      key: 'toys',
+      value: true,
+    });
+  });
+
+  it('lists every action with a tick and sends the ones you untick', () => {
+    const { send, elements, vscodeApi } = runWebviewScript();
+    send({
+      command: 'init',
+      config: { ...CONFIG, disabledActions: ['sleeping.belly'] },
+      state: null,
+    });
+    const list = elements['action-list'];
+    expect(list.innerHTML).toContain('data-action="running.zoomies" checked');
+    expect(list.innerHTML).toContain('data-action="idle.circles" checked');
+    expect(list.innerHTML).toMatch(/data-action="sleeping.belly"\s*\/>/);
+
+    list.listeners['change'].forEach((l) =>
+      l({ target: { dataset: { action: 'running.zoomies' }, checked: false } }),
+    );
+    expect(vscodeApi.postMessage).toHaveBeenCalledWith({
+      command: 'setting',
+      key: 'disabledActions',
+      value: ['sleeping.belly', 'running.zoomies'],
+    });
+  });
 
   it('puts the care tool away when the agent starts working', () => {
     jest.useFakeTimers();

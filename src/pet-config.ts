@@ -77,7 +77,32 @@ export interface PetConfig {
   machines: boolean;
   /** Other busy Claude sessions show as small pets along the bottom. */
   backgroundPets: boolean;
+  /** Animations and hobbies switched off, as `state.variant` / `idle.hobby` ids. */
+  disabledActions: string[];
   size: number;
+}
+
+/** Settings the webview's settings panel can switch. `variety` maps on/off to random/classic. */
+const PANEL_SWITCHES = ['variety', 'wander', 'toys', 'machines', 'backgroundPets', 'stateColors'];
+
+/** A list of action ids like `running.zoomies`, or null if it isn't one. */
+function actionIds(v: unknown): string[] | null {
+  return Array.isArray(v) &&
+    v.every((id) => typeof id === 'string' && /^[a-z]+\.[A-Za-z]+$/.test(id))
+    ? (v as string[])
+    : null;
+}
+
+/** Validates a change made in the webview's settings panel and returns the setting to save, or null. */
+export function panelSetting(key: unknown, on: unknown): [string, unknown] | null {
+  if (key === 'disabledActions') {
+    const ids = actionIds(on);
+    return ids ? [key, ids] : null;
+  }
+  if (typeof key !== 'string' || !PANEL_SWITCHES.includes(key) || typeof on !== 'boolean') {
+    return null;
+  }
+  return [key, key === 'variety' ? (on ? 'random' : 'classic') : on];
 }
 
 export function isSpecies(v: unknown): v is Species {
@@ -125,6 +150,7 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     toys: get('toys') !== false,
     machines: get('machines') !== false,
     backgroundPets: get('backgroundPets') !== false,
+    disabledActions: actionIds(get('disabledActions')) ?? [],
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };
 }

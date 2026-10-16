@@ -64,7 +64,7 @@ describe('ClaudeWatcher', () => {
         },
       }),
     );
-    const u = snapshot([]);
+    const u = snapshot(['/work/my-app']);
     expect(u?.main).toMatchObject({ sessionId: 'sess-1', state: 'testing', project: 'my-app' });
     expect(u?.main?.jobs).toEqual([
       { id: 't1', kind: 'test', label: 'npm test', background: false },
@@ -97,7 +97,7 @@ describe('ClaudeWatcher', () => {
         },
       }),
     );
-    const u = snapshot([]);
+    const u = snapshot(['/work/app']);
     expect(u?.subagents).toHaveLength(1);
     expect(u?.subagents[0]).toMatchObject({
       id: 'abc',
@@ -127,6 +127,39 @@ describe('ClaudeWatcher', () => {
     expect(u?.background[0]).toMatchObject({ id: 'other', project: 'other-app', state: 'reading' });
   });
 
+  it('names a session after the folder it started in, not where its shell wandered', () => {
+    writeSession(
+      'p1',
+      'sess-1',
+      '/work/2LMC',
+      line({ type: 'user', cwd: '/tmp/oc-mcp', message: { content: 'keep going' } }),
+    );
+    const u = snapshot(['/work/2LMC']);
+    expect(u?.main).toMatchObject({ sessionId: 'sess-1', project: '2LMC' });
+  });
+
+  it("never takes over another window's session, even with none of its own", () => {
+    writeSession('p2', 'other', 'D:\\Code\\Other', '');
+    const u = snapshot(['C:\\Code\\Mine']);
+    expect(u?.main).toBeNull();
+    expect(u?.background.map((b) => b.id)).toEqual(['other']);
+  });
+
+  it('does not count a session whose shell only wandered into this workspace', () => {
+    writeSession(
+      'p2',
+      'other',
+      '/work/other',
+      line({ type: 'user', cwd: '/work/mine', message: { content: 'look over there' } }),
+    );
+    expect(snapshot(['/work/mine'])?.main).toBeNull();
+  });
+
+  it('matches Git Bash style paths to the Windows workspace folder', () => {
+    writeSession('p1', 'mine', '/d/Code/App', '');
+    expect(snapshot(['D:\\Code\\App'])?.main?.sessionId).toBe('mine');
+  });
+
   it('only replays the tail of a huge transcript and skips the cut-off line', () => {
     const filler = line({ type: 'user', message: { content: 'x'.repeat(300 * 1024) } });
     writeSession(
@@ -135,6 +168,6 @@ describe('ClaudeWatcher', () => {
       '/work/app',
       filler + line({ type: 'assistant', message: { stop_reason: 'end_turn', content: [] } }),
     );
-    expect(snapshot([])?.main?.state).toBe('done');
+    expect(snapshot(['/work/app'])?.main?.state).toBe('done');
   });
 });

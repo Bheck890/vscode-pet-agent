@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { buildSessionStates, SessionState } from './session-tracker';
 import { funnyName } from './pet-names';
+import { inFolders } from './workspace';
 import {
   AgentActivity,
   Job,
@@ -87,6 +88,8 @@ interface Tracked {
 interface TrackedSession extends Tracked {
   id: string;
   dir: string;
+  /** The folder the session started in. The shell may wander off later (e.g. into a temp dir). */
+  root: string | null;
 }
 
 interface TrackedSubagent extends Tracked {
@@ -96,10 +99,6 @@ interface TrackedSubagent extends Tracked {
   agentType: string;
   task: string;
   doneAt: number | null;
-}
-
-function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
 
 function safeReaddir(dir: string): fs.Dirent[] {
@@ -115,6 +114,24 @@ function safeStat(file: string): fs.Stats | null {
     return fs.statSync(file);
   } catch {
     return null;
+  }
+}
+
+/** The `cwd` on the first transcript lines, i.e. where the session was started. */
+function firstCwd(file: string): string | null {
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(64 * 1024);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    const m = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(buf.toString('utf8', 0, n));
+    return m ? (JSON.parse(`"${m[1]}"`) as string) : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) {
+      fs.closeSync(fd);
+    }
   }
 }
 
@@ -230,6 +247,7 @@ export class ClaudeWatcher implements vscode.Disposable {
           const s: TrackedSession = {
             id,
             dir,
+            root: firstCwd(file),
             file,
             offset: Math.max(0, st.size - INITIAL_TAIL_BYTES),
             midLine: st.size > INITIAL_TAIL_BYTES,
@@ -324,14 +342,20 @@ export class ClaudeWatcher implements vscode.Disposable {
     return Math.max(t.act.lastAt, t.mtime);
   }
 
+  /** True if `dir` is inside a folder open in this VS Code window. */
+  ownsDir(dir: string | null | undefined): boolean {
+    return inFolders(dir, this.workspaceFolders());
+  }
+
+  /**
+   * The session this window's pet acts out: the most recent one started in
+   * this window's workspace. Sessions from other windows never take over, even
+   * when this window has none, so each pet stays in its own lane. Where the
+   * session started counts, not where its shell has wandered since.
+   */
   private pickMain(): TrackedSession | null {
-    const folders = this.workspaceFolders().map(normalizePath);
-    const inWorkspace = (s: TrackedSession) => {
-      const cwd = s.act.cwd ? normalizePath(s.act.cwd) : '';
-      return cwd !== '' && folders.some((f) => cwd === f || cwd.startsWith(f + '/'));
-    };
     const all = [...this.sessions.values()].sort((a, b) => this.lastActive(b) - this.lastActive(a));
-    return all.find(inWorkspace) ?? all[0] ?? null;
+    return all.find((s) => this.ownsDir(s.root ?? s.act.cwd)) ?? null;
   }
 
   private snapshot(now: number): ClaudeUpdate {
@@ -353,7 +377,11 @@ export class ClaudeWatcher implements vscode.Disposable {
       .filter((s) => s !== main && now - this.lastActive(s) < WARM_MS)
       .sort((a, b) => this.lastActive(b) - this.lastActive(a))
       .slice(0, MAX_BACKGROUND)
-      .map((s) => ({ id: s.id, project: projectName(s.act.cwd), ...currentState(s.act, now) }));
+      .map((s) => ({
+        id: s.id,
+        project: projectName(s.root ?? s.act.cwd),
+        ...currentState(s.act, now),
+      }));
 
     const entries: [string, number][] = [...this.sessions.values()].map((s) => [
       s.id,
@@ -368,7 +396,7 @@ export class ClaudeWatcher implements vscode.Disposable {
       main: main
         ? {
             sessionId: main.id,
-            project: projectName(main.act.cwd),
+            project: projectName(main.root ?? main.act.cwd),
             ...currentState(main.act, now),
           }
         : null,

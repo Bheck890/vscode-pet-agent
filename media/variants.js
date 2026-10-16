@@ -7,7 +7,7 @@
 //   label   text under the pet        prop    pixel prop from pets.js
 //   motion  body motion (motionFor)   eyes / mouth / bubble / emojis / wag
 //   fx      ambient particles         scene   scenery drawn by scene.js
-//   roam    'pace' | 'zoomies' | 'fly' | 'chase'  moves the pet around
+//   roam    'pace' | 'zoomies' | 'fly' | 'chase' | 'circle'  moves the pet around
 //   lift    raise the pet (art px)    paws    'typing' draws tapping paws
 //   species only for these species    weight  relative pick chance (1)
 (function (root) {
@@ -151,6 +151,7 @@
         fx: 'sparks',
       },
       { id: 'zoomies', label: 'doing zoomies', roam: 'zoomies', fx: 'dust' },
+      { id: 'circles', label: 'running in circles', roam: 'circle', fx: 'dust' },
       {
         id: 'flyLaps',
         label: 'flying laps',
@@ -368,6 +369,18 @@
       fx: 'sparkle',
     },
     {
+      id: 'circles',
+      label: 'running in circles',
+      dur: [4000, 7000],
+      roam: 'circle',
+      motion: 'run',
+      eyes: 'happy',
+      mouth: 'open',
+      wag: 10,
+      fx: 'dust',
+      moves: true,
+    },
+    {
       id: 'roll',
       label: 'rolling around',
       dur: [1800, 1800],
@@ -406,38 +419,46 @@
     return list[list.length - 1];
   }
 
+  /** The id used to switch an action off: `state.variant` or `idle.hobby`. */
+  function actionId(group, v) {
+    return `${group}.${v.id}`;
+  }
+
   /**
    * Picks the look for a state. Classic mode always gets the first variant;
-   * random mode avoids repeating the previous one.
+   * random mode skips switched-off actions and avoids repeating the previous
+   * one. With everything switched off it falls back to the classic look.
    * @param {string} state
-   * @param {{classic: boolean, species: string, lastId?: string, rand?: () => number}} opts
+   * @param {{classic: boolean, species: string, lastId?: string, off?: string[], rand?: () => number}} opts
    */
   function pick(state, opts) {
     const list = (VARIANTS[state] || []).filter((v) => allowed(v, opts.species));
     if (list.length === 0) {
       return null;
     }
-    if (opts.classic) {
+    const on = list.filter((v) => !(opts.off || []).includes(actionId(state, v)));
+    if (opts.classic || on.length === 0) {
       return list[0];
     }
-    const fresh = list.filter((v) => v.id !== opts.lastId);
-    return weighted(fresh.length > 0 ? fresh : list, opts.rand || Math.random);
+    const fresh = on.filter((v) => v.id !== opts.lastId);
+    return weighted(fresh.length > 0 ? fresh : on, opts.rand || Math.random);
   }
 
   /**
    * Picks an idle hobby, or null if nothing fits.
-   * @param {{species: string, wander: boolean, toys: boolean, lastId?: string, rand?: () => number}} opts
+   * @param {{species: string, wander: boolean, toys: boolean, lastId?: string, off?: string[], rand?: () => number}} opts
    */
   function pickIdle(opts) {
     const list = IDLE.filter(
       (a) =>
         allowed(a, opts.species) &&
         a.id !== opts.lastId &&
+        !(opts.off || []).includes(actionId('idle', a)) &&
         (opts.wander || !a.moves) &&
         (a.needs !== 'toy' || opts.toys),
     );
     return list.length > 0 ? weighted(list, opts.rand || Math.random) : null;
   }
 
-  root.PetVariants = { VARIANTS, IDLE, pick, pickIdle };
+  root.PetVariants = { VARIANTS, IDLE, pick, pickIdle, actionId };
 })(this);

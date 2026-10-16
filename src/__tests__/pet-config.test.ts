@@ -27,6 +27,7 @@ const DEFAULTS = {
   toys: true,
   machines: true,
   backgroundPets: true,
+  otherRepoPets: true,
   disabledActions: [],
   size: 200,
 };
@@ -66,6 +67,7 @@ describe('readPetConfig', () => {
       toys: false,
       machines: false,
       backgroundPets: false,
+      otherRepoPets: false,
       disabledActions: ['running.zoomies', 'idle.butterfly'],
       size: 'large',
     };
@@ -85,6 +87,7 @@ describe('readPetConfig', () => {
       toys: false,
       machines: false,
       backgroundPets: false,
+      otherRepoPets: false,
       disabledActions: ['running.zoomies', 'idle.butterfly'],
       size: 250,
     });

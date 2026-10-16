@@ -108,12 +108,14 @@ describe('ClaudeWatcher', () => {
     expect(u?.subagents[0].name).toMatch(/^(Detective|Scout|Sniffer|Tracker|Sleuth) /);
   });
 
-  it('reports other recently busy sessions as background agents', () => {
-    writeSession('p1', 'mine', '/work/mine', '');
+  it('reports a second busy session in this workspace as a background agent', () => {
+    const dir = writeSession('p1', 'older', '/work/mine/tools', '');
+    const earlier = new Date(Date.now() - 30_000);
+    fs.utimesSync(path.join(dir, 'older.jsonl'), earlier, earlier);
     writeSession(
       'p2',
-      'other',
-      '/work/other-app',
+      'newer',
+      '/work/mine',
       line({
         type: 'assistant',
         message: {
@@ -122,9 +124,9 @@ describe('ClaudeWatcher', () => {
       }),
     );
     const u = snapshot(['/work/mine']);
-    expect(u?.main?.sessionId).toBe('mine');
+    expect(u?.main?.sessionId).toBe('newer');
     expect(u?.background).toHaveLength(1);
-    expect(u?.background[0]).toMatchObject({ id: 'other', project: 'other-app', state: 'reading' });
+    expect(u?.background[0]).toMatchObject({ id: 'older', project: 'tools', local: true });
   });
 
   it('names a session after the folder it started in, not where its shell wandered', () => {
@@ -142,7 +144,8 @@ describe('ClaudeWatcher', () => {
     writeSession('p2', 'other', 'D:\\Code\\Other', '');
     const u = snapshot(['C:\\Code\\Mine']);
     expect(u?.main).toBeNull();
-    expect(u?.background.map((b) => b.id)).toEqual(['other']);
+    // It is still reported, marked as another repo, for the opt-in other-repo minis.
+    expect(u?.background).toMatchObject([{ id: 'other', project: 'Other', local: false }]);
   });
 
   it('does not count a session whose shell only wandered into this workspace', () => {

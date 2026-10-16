@@ -53,10 +53,15 @@ export interface SubagentUpdate {
   jobs: Job[];
 }
 
-/** Another Claude session that was busy recently, shown as a small pet along the bottom. */
+/**
+ * Another recently busy Claude session, shown as a mini pet: one in this
+ * workspace (`local`, e.g. a second chat) or, if the user opts in, one in
+ * another repo. Either way it never drives this window's main pet.
+ */
 export interface BackgroundUpdate {
   id: string;
   project: string | null;
+  local: boolean;
   state: PetState;
   detail: string;
   seq: number;
@@ -375,11 +380,16 @@ export class ClaudeWatcher implements vscode.Disposable {
 
     const background = [...this.sessions.values()]
       .filter((s) => s !== main && now - this.lastActive(s) < WARM_MS)
-      .sort((a, b) => this.lastActive(b) - this.lastActive(a))
+      .map((s) => ({ s, local: this.ownsDir(s.root ?? s.act.cwd) }))
+      // This repo's sessions first, so other repos never crowd them out.
+      .sort(
+        (a, b) => Number(b.local) - Number(a.local) || this.lastActive(b.s) - this.lastActive(a.s),
+      )
       .slice(0, MAX_BACKGROUND)
-      .map((s) => ({
+      .map(({ s, local }) => ({
         id: s.id,
         project: projectName(s.root ?? s.act.cwd),
+        local,
         ...currentState(s.act, now),
       }));
 

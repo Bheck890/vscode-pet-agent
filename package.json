@@ -54,8 +54,22 @@
       {
         "command": "peon-pet.customize",
         "title": "Peon Pet: Customize Pet"
+      },
+      {
+        "command": "peon-pet.refresh",
+        "title": "Peon Pet: Refresh Pet",
+        "icon": "$(refresh)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "peon-pet.refresh",
+          "when": "view == peonPetView",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Peon Pet",
       "properties": {
@@ -191,7 +205,12 @@
         "peon-pet.backgroundPets": {
           "type": "boolean",
           "default": true,
-          "description": "Show other busy Claude sessions as small pets along the bottom of the panel."
+          "description": "Show other busy Claude sessions in this repo (e.g. a second chat) as small pets along the bottom of the panel."
+        },
+        "peon-pet.otherRepoPets": {
+          "type": "boolean",
+          "default": true,
+          "description": "When no agents are running in this repo, show busy Claude sessions from your other repos (other VS Code windows) as small pets, labelled with their repo. They step aside as soon as an agent starts here, and never take over this window's pet."
         },
         "peon-pet.size": {
           "type": "string",

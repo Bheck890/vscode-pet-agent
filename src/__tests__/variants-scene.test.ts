@@ -50,6 +50,7 @@ interface SceneApi {
   putAway(id: string): void;
   canPlay(): boolean;
   startToy(until: number): boolean;
+  grab(x: number, y: number): boolean;
 }
 
 const media = path.join(process.cwd(), 'media');
@@ -206,6 +207,19 @@ describe('scene', () => {
     expect(scene.takeOut('yarn')).toBe(true);
     expect(scene.bagList().find((t) => t.id === 'yarn')?.out).toBe(true);
     scene.putAway('yarn');
+    expect(scene.bagList().find((t) => t.id === 'yarn')?.out).toBe(false);
+  });
+
+  it('clicking a toy on the floor puts it back in the bag', () => {
+    const { scene } = makeScene({ toys: false, machines: true });
+    scene.setBag({ yarn: 1 });
+    scene.takeOut('yarn');
+    // Toys rest on the pet's floor line; find this one by sweeping across it.
+    let hit = false;
+    for (let x = 0; x <= 600 && !hit; x += 5) {
+      hit = scene.grab(x, 187);
+    }
+    expect(hit).toBe(true);
     expect(scene.bagList().find((t) => t.id === 'yarn')?.out).toBe(false);
   });
 

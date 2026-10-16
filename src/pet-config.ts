@@ -77,13 +77,23 @@ export interface PetConfig {
   machines: boolean;
   /** Other busy Claude sessions show as small pets along the bottom. */
   backgroundPets: boolean;
+  /** When no agents are running in this repo, show busy sessions from other repos instead. */
+  otherRepoPets: boolean;
   /** Animations and hobbies switched off, as `state.variant` / `idle.hobby` ids. */
   disabledActions: string[];
   size: number;
 }
 
 /** Settings the webview's settings panel can switch. `variety` maps on/off to random/classic. */
-const PANEL_SWITCHES = ['variety', 'wander', 'toys', 'machines', 'backgroundPets', 'stateColors'];
+const PANEL_SWITCHES = [
+  'variety',
+  'wander',
+  'toys',
+  'machines',
+  'backgroundPets',
+  'otherRepoPets',
+  'stateColors',
+];
 
 /** A list of action ids like `running.zoomies`, or null if it isn't one. */
 function actionIds(v: unknown): string[] | null {
@@ -150,6 +160,7 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     toys: get('toys') !== false,
     machines: get('machines') !== false,
     backgroundPets: get('backgroundPets') !== false,
+    otherRepoPets: get('otherRepoPets') !== false,
     disabledActions: actionIds(get('disabledActions')) ?? [],
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };

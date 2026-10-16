@@ -3,6 +3,7 @@ import { PetConfig, panelSetting } from './pet-config';
 import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
 import { CareStore, isCareAction } from './pet-care';
+import { BagStore } from './bag-store';
 import {
   WebviewState,
   getNonce,
@@ -46,6 +47,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
     private readonly claude: ClaudeWatcher,
     private readonly getConfig: () => PetConfig,
     private readonly care: CareStore,
+    private readonly bag: BagStore,
     private readonly saveSetting: (key: string, value: unknown) => Thenable<void>,
   ) {}
 
@@ -69,7 +71,8 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       }
       const message = msg as Record<string, unknown>;
       if (message['command'] === 'ready') {
-        sendInit(webviewView.webview, this.getConfig(), this.savedState, this.claude.latest());
+        const state = { ...this.savedState, bag: this.bag.get() };
+        sendInit(webviewView.webview, this.getConfig(), state, this.claude.latest());
         this.sendCare();
       } else if (message['command'] === 'care' && isCareAction(message['action'])) {
         // The webview only sends this when the agent is not working.
@@ -84,7 +87,12 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
         message['command'] === 'save-state' &&
         PeonViewProvider.isWebviewState(message['state'])
       ) {
-        this.savedState = message['state'];
+        // Position stays with this view; the bag goes to extension storage.
+        const { bag, ...position } = message['state'];
+        this.savedState = position;
+        if (bag) {
+          this.bag.save(bag);
+        }
       }
     });
 
@@ -102,6 +110,13 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
   /** Pushes current (decayed) care stats to the view, if it is open. */
   sendCare(): void {
     this.view?.webview.postMessage({ command: 'care-update', stats: this.care.get() });
+  }
+
+  /** Rebuilds the pet view from scratch; it keeps its position, bag and care stats. */
+  refresh(): void {
+    if (this.view) {
+      this.view.webview.html = buildHtml(this.view.webview, this.mediaPath, getNonce());
+    }
   }
 
   /** Call when a pet setting changes to redraw with the new look. */

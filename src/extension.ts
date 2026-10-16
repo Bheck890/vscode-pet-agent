@@ -14,6 +14,7 @@ import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
 import { PeonViewProvider } from './PeonViewProvider';
 import { CareStore } from './pet-care';
+import { BagStore } from './bag-store';
 
 const SPECIES_ICONS: Record<string, string> = { cat: '🐱', dog: '🐶', bird: '🐦', fox: '🦊' };
 const ACCESSORY_ICONS: Record<string, string> = {
@@ -152,8 +153,13 @@ async function customizePet(): Promise<void> {
         },
         {
           id: 'backgroundPets',
-          label: '🐾 Pets for other sessions',
+          label: '🐾 Pets for other sessions in this repo',
           description: c.backgroundPets ? 'on' : 'off',
+        },
+        {
+          id: 'otherRepoPets',
+          label: "🗺️ Other repos' agents when this repo has none",
+          description: c.otherRepoPets ? 'on' : 'off',
         },
         { id: 'random', label: '🎲 Randomize look' },
         { id: 'reset', label: '🔄 Reset look to defaults' },
@@ -228,6 +234,7 @@ async function customizePet(): Promise<void> {
       case 'toys':
       case 'machines':
       case 'backgroundPets':
+      case 'otherRepoPets':
         await save(menu.id, !c[menu.id]);
         break;
       case 'random':
@@ -277,6 +284,7 @@ export function activate(context: vscode.ExtensionContext): void {
     claude,
     getConfig,
     new CareStore(context.globalState),
+    new BagStore(context.globalState),
     save,
   );
   const careTimer = setInterval(() => viewProvider.sendCare(), 60_000);
@@ -285,6 +293,7 @@ export function activate(context: vscode.ExtensionContext): void {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.commands.registerCommand('peon-pet.customize', customizePet),
+    vscode.commands.registerCommand('peon-pet.refresh', () => viewProvider.refresh()),
     new vscode.Disposable(() => clearInterval(careTimer)),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('peon-pet')) {

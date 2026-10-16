@@ -1144,13 +1144,43 @@
       machineLayout = layoutMachines(g);
     }
 
+    /** A toy the pet is sitting, napping or riding on is drawn under it; the rest in front. */
+    function under(toy) {
+      return !!use && !!use.since && use.toy === toy && ON_TOP.has(toy.def.use);
+    }
+
+    function drawToy(toy, g, t) {
+      const ts = toySize(g);
+      const at = toyPos(toy, g, t);
+      const glow = RARITY[toy.def.rarity].color;
+      if (glow && !toy.storing) {
+        const pulse = 0.25 + 0.15 * Math.sin(t / 300 + toy.seed);
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.ellipse(toy.x, g.floor + g.s, ts * 0.55, ts * 0.14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.save();
+      ctx.translate(at.x, at.y);
+      ctx.scale(at.k, at.k);
+      if (toy.def.use === 'play' && toy.h > 0 && !toy.storing) {
+        ctx.rotate(toy.x / (ts * 0.4));
+      }
+      ctx.font = `${Math.round(ts)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(toy.def.emoji, 0, 0);
+      ctx.restore();
+    }
+
     function drawBack(t) {
       const p = api.main();
       if (!p) {
         return;
       }
       const g = geom();
-      const ts = toySize(g);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       if (api.config().machines) {
@@ -1169,31 +1199,9 @@
         }
       }
       for (const toy of toys) {
-        const at = toyPos(toy, g, t);
-        const glow = RARITY[toy.def.rarity].color;
-        if (glow && !toy.storing) {
-          const pulse = 0.25 + 0.15 * Math.sin(t / 300 + toy.seed);
-          ctx.globalAlpha = pulse;
-          ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.ellipse(toy.x, g.floor + g.s, ts * 0.55, ts * 0.14, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
+        if (under(toy)) {
+          drawToy(toy, g, t);
         }
-        ctx.save();
-        ctx.translate(at.x, at.y);
-        ctx.scale(at.k, at.k);
-        if (toy.def.use === 'play' && toy.h > 0 && !toy.storing) {
-          ctx.rotate(toy.x / (ts * 0.4));
-        }
-        ctx.font = `${Math.round(ts)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(toy.def.emoji, 0, 0);
-        ctx.restore();
-      }
-      if (critter) {
-        drawCritter(g, t);
       }
     }
 
@@ -1203,6 +1211,14 @@
         return;
       }
       const g = geom();
+      for (const toy of toys) {
+        if (!under(toy)) {
+          drawToy(toy, g, t);
+        }
+      }
+      if (critter) {
+        drawCritter(g, t);
+      }
       if (use && use.since && use.toy.def.use === 'hide') {
         // A big copy in front of the pet so only its head pokes out.
         const big = g.size * 0.62;
@@ -1240,7 +1256,7 @@
           const n = bag.get(toy.def.id) || 0;
           return {
             title: `${toy.def.emoji} ${toy.def.name}`,
-            sub: `${r.label}${n > 1 ? ` - x${n} in the bag` : ''} - click to poke`,
+            sub: `${r.label}${n > 1 ? ` - x${n} in the bag` : ''} - click to put it in the bag`,
           };
         }
       }
@@ -1263,8 +1279,8 @@
       return null;
     }
 
-    /** Clicking a toy pokes it. Returns true when a toy was hit. */
-    function poke(x, y) {
+    /** Clicking a toy on the floor puts it in the bag. Returns true when a toy was hit. */
+    function grab(x, y) {
       if (!api.main()) {
         return false;
       }
@@ -1276,8 +1292,7 @@
       if (!toy) {
         return false;
       }
-      kick(toy, Math.sign(toy.x - x) || 1, g);
-      toy.vx *= 0.4;
+      store(toy, api.now());
       return true;
     }
 
@@ -1288,7 +1303,7 @@
       scenery,
       setJobs,
       hover,
-      poke,
+      grab,
       startToy,
       stopToy,
       startCritter,

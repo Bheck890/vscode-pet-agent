@@ -490,12 +490,67 @@ describe('webview behavior', () => {
       main: { sessionId: 's', state: 'idle', detail: '', seq: 1, project: null, jobs: [] },
       subagents: [],
       background: [
-        { id: 'o', project: 'other-app', state: 'writing', detail: '', seq: 1, jobs: [] },
+        {
+          id: 'o',
+          project: 'other-app',
+          local: true,
+          state: 'writing',
+          detail: '',
+          seq: 1,
+          jobs: [],
+        },
       ],
       sessions: [],
     });
     pressCare('feed');
     expect(elements['care-note'].textContent).toContain('drop kibble');
+  });
+
+  it("shows other repos' agents only when the option is on and this repo has none", () => {
+    const other = {
+      command: 'claude-update',
+      main: { sessionId: 's', state: 'idle', detail: '', seq: 1, project: null, jobs: [] },
+      subagents: [],
+      background: [
+        { id: 'x', project: '2LMC', local: false, state: 'reading', detail: '', seq: 1, jobs: [] },
+      ],
+      sessions: [],
+    };
+    const off = runWebviewScript();
+    off.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    off.send(other);
+    off.hover(96, 126);
+    expect(off.tooltip.innerHTML).not.toContain('2LMC');
+
+    const on = runWebviewScript();
+    on.send({
+      command: 'init',
+      config: { ...CONFIG, otherRepoPets: true },
+      state: { petX: 0, petY: 30 },
+    });
+    on.send(other);
+    on.hover(96, 126);
+    expect(on.tooltip.innerHTML).toContain('2LMC');
+    expect(on.tooltip.innerHTML).toContain('Claude session in another repo');
+    // A helper starting in this repo takes the row back.
+    on.send({
+      ...other,
+      subagents: [
+        {
+          id: 'a',
+          name: 'Scout Bean',
+          agentType: 'Explore',
+          task: 't',
+          state: 'reading',
+          detail: '',
+          seq: 1,
+          jobs: [],
+        },
+      ],
+    });
+    on.hover(96, 126);
+    expect(on.tooltip.innerHTML).toContain('Scout Bean');
+    expect(on.tooltip.innerHTML).not.toContain('2LMC');
   });
 
   it('labels other sessions in the tooltip', () => {
@@ -506,13 +561,21 @@ describe('webview behavior', () => {
       main: { sessionId: 's', state: 'idle', detail: '', seq: 1, project: null, jobs: [] },
       subagents: [],
       background: [
-        { id: 'o', project: '<b>x</b>', state: 'reading', detail: '', seq: 1, jobs: [] },
+        {
+          id: 'o',
+          project: '<b>x</b>',
+          local: true,
+          state: 'reading',
+          detail: '',
+          seq: 1,
+          jobs: [],
+        },
       ],
       sessions: [],
     });
     // Minis start at the main pet's centre before gliding to their slot.
     hover(96, 126);
-    expect(tooltip.innerHTML).toContain('another Claude session');
+    expect(tooltip.innerHTML).toContain('another Claude session in this repo');
     expect(tooltip.innerHTML).toContain('&lt;b&gt;x&lt;/b&gt;');
   });
 

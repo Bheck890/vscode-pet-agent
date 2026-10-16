@@ -75,7 +75,9 @@ Every few minutes your pet finds something new (`peon-pet.toys`). Each find has 
 
 Every find goes into the pet's 🎒 **bag**, and duplicates stack. A new find shows off on the floor for a minute (rarer ones glow and sparkle, and a banner announces them), then flies into the bag. When your pet fancies a play it pulls something out of the bag out of thin air: it chases the yarn, hides in the box, lounges on the couch, naps in the bed, rides the skateboard, jams on the guitar, jumps for the balloon or admires the treasure, then puts it back. The floor never fills up.
 
-Click the 🎒 button in the corner to see the bag: all 24 slots, with ❔ for ones you haven't found yet. Click a toy to take it out, click again to put it away, or **Put all away**. Click a toy on the floor to poke it. The bag is remembered across reloads.
+Click the 🎒 button in the corner to see the bag: all 24 slots, with ❔ for ones you haven't found yet. Click a toy to take it out, click again to put it away, or **Put all away**. Clicking a toy on the floor also puts it in the bag. Toys stand in front of your pet (except one it's sitting, napping or riding on), so they're always clickable.
+
+The bag is kept in VS Code's extension storage (`%APPDATA%\Code\User\globalStorage` on Windows), so it survives reloads and reinstalls and every window shares the same bag. Your settings (including everything in the ⚙️ panel) live in your VS Code user settings, `%APPDATA%\Code\User\settings.json`.
 
 ### Machines for tests and jobs
 
@@ -85,7 +87,9 @@ Every test run, build and background shell command gets a machine next to your p
 
 Every sub-agent the agent starts appears as a mini version of your pet in its own colour, lined up along the bottom of the panel. Each one gets a name that fits its job (explorers become "Detective Noodle" or "Scout Waffles", planners become "Professor Pickles"), with its task shown underneath. Minis act out their own state, celebrate when they finish, then vanish in a puff.
 
-Other Claude Code sessions that were busy in the last couple of minutes join them as minis named after the folder the session was started in (`peon-pet.backgroundPets`). They don't lock pet care, since they aren't working for this window. If there's no room above or below your pet, minis stand beside it; in a very cramped panel they stand in front of it. Drag the panel taller or pick a smaller `peon-pet.size` to give them space.
+A second Claude Code session in the same workspace (say, another chat in this window) that was busy in the last couple of minutes joins them as a mini named after the folder it was started in (`peon-pet.backgroundPets`). It doesn't lock pet care.
+
+The row belongs to this repo's agents. When none are running here, busy sessions from your other repos (other VS Code windows) fill it instead, labelled with their repo name, so you can keep an eye on them. They step aside the moment a helper starts in this repo and come back when it's done. They're only for watching and never take over this window's pet. Turn this off with ⚙️ -> **Other repos' agents when this repo has none** (`peon-pet.otherRepoPets`). If there's no room above or below your pet, minis stand beside it; in a very cramped panel they stand in front of it. Drag the panel taller or pick a smaller `peon-pet.size` to give them space.
 
 ### Quick settings
 
@@ -137,7 +141,7 @@ Run **Peon Pet: Customize Pet** for a menu of everything below. Every change sho
 
 The pet reads two sources. Both are **read-only**: the extension never writes to them and makes no network requests.
 
-1. **Claude Code session logs** (`~/.claude/projects/`). These give the detailed states above plus sub-agent names and tasks. Nothing to install. **Each window stays in its own lane:** the pet only acts out Claude sessions that were started in a folder open in that VS Code window (the most recent one, if there are several). A session from another window never takes over, even when this window has no session of its own; it only shows up as a labelled mini pet (turn those off with ⚙️ -> Pets for other sessions). peon-ping events are filtered the same way.
+1. **Claude Code session logs** (`~/.claude/projects/`). These give the detailed states above plus sub-agent names and tasks. Nothing to install. **Each window stays in its own lane:** the pet only acts out Claude sessions that were started in a folder open in that VS Code window (the most recent one, if there are several). A session from another repo never drives this pet, not even when this window has no session of its own; it can only appear as a labelled mini while no agents are running in this repo. peon-ping events are filtered the same way.
 2. **[peon-ping](https://github.com/PeonPing/peon-ping)** (`~/.claude/hooks/peon-ping/.state.json`), if you have it installed. This covers other agents (Cursor, Codex, OpenCode, Kiro) with coarser states: waking, thinking, waiting, error and done.
 
 Tests, builds and background jobs are recognised from the shell command (`npm test`, `pytest`, `flutter test`, `npm run build`, `npm run dev`...). A background job's machine stays until Claude Code logs its completion notification.
@@ -172,6 +176,9 @@ To update after pulling changes, run the task again and reload the window.
 | Command                   | Description                                                  |
 | ------------------------- | ------------------------------------------------------------ |
 | `Peon Pet: Customize Pet` | Menu for species, colours, pattern, accessory, name and more |
+| `Peon Pet: Refresh Pet`   | Rebuilds the pet view (also the ⟳ button in the Agent Pet panel header) |
+
+If the panel ever says **"Peon Pet was updated"**, the extension was reinstalled but the window is still running the old version: run **Developer: Reload Window**.
 
 ### Settings
 
@@ -192,7 +199,8 @@ To update after pulling changes, run the task again and reload the window.
 | `peon-pet.disabledActions` | `[]` | Animations and hobbies never to play, e.g. `running.zoomies`, `idle.butterfly` |
 | `peon-pet.toys`        | `true`   | New toys and furniture turn up, go into the bag and get played with         |
 | `peon-pet.machines`    | `true`   | A machine for each running test, build or background job                    |
-| `peon-pet.backgroundPets` | `true` | Other busy Claude sessions as small pets along the bottom                  |
+| `peon-pet.backgroundPets` | `true` | Other busy Claude sessions in this repo as small pets                      |
+| `peon-pet.otherRepoPets` | `true` | When no agents are running in this repo, show busy sessions from other repos as small pets |
 | `peon-pet.size`        | `medium` | `small`, `medium` or `large`                                                |
 
 Settings changes apply instantly; no reload needed. All colour settings take any CSS colour, so you can also just ask your AI agent, e.g. *"give my pet a gold crown and blue eyes"*.
@@ -216,6 +224,7 @@ Where things live:
 | `src/transcript-parser.ts`  | Turns transcript lines into pet states (pure, unit-tested)              |
 | `src/state-watcher.ts`      | Polls the peon-ping state file                                          |
 | `src/pet-names.ts`          | Funny sub-agent names                                                   |
+| `src/bag-store.ts`          | The toy bag in extension storage, merged across windows                 |
 | `src/workspace.ts`          | Matches session folders to the window's workspace (Windows/Git Bash paths) |
 | `src/pet-config.ts`         | Settings, defaults and colour presets                                   |
 | `src/pet-care.ts`           | Care stats, decay, reward/refusal rules and persistence                 |

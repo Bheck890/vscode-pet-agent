@@ -4,6 +4,16 @@
 (function () {
   'use strict';
 
+  // After an update, VS Code keeps running the old extension until the window
+  // reloads, and that can serve this script without the files it needs.
+  if (!window.PetArt || !window.PetPlay || !window.PetVariants || !window.PetScene) {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<p class="stale">Peon Pet was updated. Run <b>Developer: Reload Window</b> to finish.</p>',
+    );
+    return;
+  }
+
   const Art = window.PetArt;
   const Variants = window.PetVariants;
 
@@ -2126,18 +2136,23 @@
       live.add(sa.id);
       upsertMini(sa.id, { name: sa.name, task: sa.task, agentType: sa.agentType }, sa, t);
     });
-    if (config.backgroundPets) {
-      (msg.background || []).forEach((b) => {
-        const id = 'bg:' + b.id;
-        live.add(id);
-        const info = {
-          name: b.project || 'another session',
-          agentType: 'session',
-          background: true,
-        };
-        upsertMini(id, info, b, t);
-      });
-    }
+    // The row is for this repo's agents. Other repos' sessions only fill it
+    // while nothing is running here, and step aside when a helper starts.
+    const background = msg.background || [];
+    const localRow = background.filter((b) => b.local && config.backgroundPets);
+    const idleHere = subagents.length === 0 && localRow.length === 0;
+    const otherRow = idleHere && config.otherRepoPets ? background.filter((b) => !b.local) : [];
+    localRow.concat(otherRow).forEach((b) => {
+      const id = 'bg:' + b.id;
+      live.add(id);
+      const info = {
+        name: b.project || 'another session',
+        agentType: 'session',
+        background: true,
+        otherRepo: !b.local,
+      };
+      upsertMini(id, info, b, t);
+    });
     minis.forEach((m, id) => {
       if (!live.has(id) && !m.leavingAt) {
         m.leavingAt = t;
@@ -2243,10 +2258,18 @@
   }
 
   function tooltipHtml(x, y) {
+    const thing = scene.hover(x, y);
+    if (thing) {
+      return `<b>${escapeHtml(thing.title)}</b><br><span class="dim">${escapeHtml(thing.sub)}</span>`;
+    }
     for (const m of minis.values()) {
       if (!m.leavingAt && hit(m, x, y)) {
         const def = lookOf(m, displayState(m), now());
-        const what = m.background ? 'another Claude session' : m.agentType;
+        const what = m.otherRepo
+          ? 'Claude session in another repo'
+          : m.background
+            ? 'another Claude session in this repo'
+            : m.agentType;
         return (
           `<b>${escapeHtml(m.name)}</b> <span class="dim">(${escapeHtml(what)})</span><br>` +
           (m.background ? '' : `${escapeHtml(m.task || 'helping out')}<br>`) +
@@ -2271,10 +2294,6 @@
         (jobs ? `<br><span class="dim">${jobs} job${jobs > 1 ? 's' : ''} running</span>` : '') +
         `<br><span class="dim">🎒 ${scene.foundCount()}/${scene.toyTotal} toys in the bag</span>`
       );
-    }
-    const thing = scene.hover(x, y);
-    if (thing) {
-      return `<b>${escapeHtml(thing.title)}</b><br><span class="dim">${escapeHtml(thing.sub)}</span>`;
     }
     const sessions = allSessions().slice(0, MAX_DOTS);
     for (let i = 0; i < sessions.length; i++) {
@@ -2571,7 +2590,8 @@
       e.preventDefault();
       return;
     }
-    if (!pet && scene.poke(e.offsetX, e.offsetY)) {
+    if (scene.grab(e.offsetX, e.offsetY)) {
+      tooltip.style.display = 'none';
       e.preventDefault();
       return;
     }

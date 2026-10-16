@@ -5,6 +5,7 @@
   'use strict';
 
   const Art = window.PetArt;
+  const Variants = window.PetVariants;
 
   // -- State definitions ------------------------------------------------------
   // oneShot states play for `oneShot` ms, then hand back to the base state.
@@ -17,6 +18,7 @@
       mouth: 'flat',
       prop: 'nightcap',
       motion: 'breathe',
+      fx: 'zzz',
       wag: 0,
     },
     idle: {
@@ -75,7 +77,17 @@
       eyes: 'focus',
       mouth: 'flat',
       motion: 'run',
+      fx: 'sweat',
       wag: 6,
+    },
+    testing: {
+      label: 'running tests',
+      emojis: ['🧪', '⏳', '🔬', '🫧'],
+      color: '#4fe0a0',
+      eyes: 'open',
+      mouth: 'neutral',
+      motion: 'watch',
+      wag: 1.5,
     },
     browsing: {
       label: 'browsing the web',
@@ -105,6 +117,7 @@
       mouth: 'open',
       motion: 'hop',
       bubble: 'shout',
+      fx: 'alert',
       wag: 7,
     },
     error: {
@@ -140,7 +153,6 @@
     annoyed: 'error',
   };
 
-  const IDLE_TO_SLEEP_MS = 30000;
   const MAX_DOTS = 10;
   const DOT_R = 4;
   const DOT_GAP = 4;
@@ -157,8 +169,9 @@
   let config = null;
   let viewW = 300;
   let viewH = 300;
-  /** @type {{petX: number, petY: number} | null} */
-  let savedPos = null;
+  /** Persisted by VS Code across reloads: where the pet was dragged, toys found. */
+  /** @type {{petX?: number, petY?: number, seen?: string[]}} */
+  let saved = {};
   /** @type {any} */
   let main = null;
   /** @type {Map<string, any>} */
@@ -192,6 +205,7 @@
     'reading',
     'writing',
     'running',
+    'testing',
     'browsing',
     'delegating',
     'waiting',
@@ -376,13 +390,23 @@
         fxAt: 0,
         wx: 0,
         wxTarget: 0,
+        wy: 0,
+        wyTarget: 0,
         walking: 0,
         wanderNext: t + 5000,
+        roamDir: 1,
+        roamNext: 0,
         fidget: null,
         fidgetNext: t + 3000,
+        hobbyLast: '',
         reaction: null,
         twitchAt: 0,
         twitchNext: t + 2000 + Math.random() * 4000,
+        napUntil: t + 60000 + Math.random() * 60000,
+        variant: null,
+        lastVariant: {},
+        reported: '',
+        background: false,
       },
       opts,
     );
@@ -390,6 +414,40 @@
 
   function displayState(p) {
     return p.oneShot || p.base;
+  }
+
+  function classic() {
+    return !!config && config.variety === 'classic';
+  }
+
+  /** STATES[state] with the pet's variant on top. A new variant is picked each time the state changes. */
+  function stateDef(p, state) {
+    if (!p.variant || p.variant.state !== state) {
+      const v = Variants.pick(state, {
+        classic: classic(),
+        species: config.species,
+        lastId: p.lastVariant[state],
+      });
+      p.lastVariant[state] = v ? v.id : '';
+      p.variant = { state, def: v ? Object.assign({}, STATES[state], v) : STATES[state] };
+    }
+    return p.variant.def;
+  }
+
+  /** The state's look, plus the idle hobby the pet is busy with, if any. */
+  function lookOf(p, state, t) {
+    const def = stateDef(p, state);
+    const f = p.fidget;
+    if (state !== 'idle' || !f || !f.hobby || t >= f.until) {
+      return def;
+    }
+    const label = (f.hobby.needs === 'toy' && scene.toyLabel()) || f.hobby.label;
+    return Object.assign({}, def, f.hobby, { label });
+  }
+
+  /** How long an idle pet stays awake. With variety on it has hobbies to fill the time. */
+  function sleepAfter() {
+    return classic() ? 30000 : 90000;
   }
 
   function startOneShot(p, state, next) {
@@ -446,9 +504,16 @@
       p.stateSince = t;
       onEnter(p, p.base);
     }
-    if (!p.oneShot && p.base === 'idle' && t - p.lastActivity > IDLE_TO_SLEEP_MS) {
+    if (!p.oneShot && p.base === 'idle' && t - p.lastActivity > sleepAfter()) {
       p.base = 'sleeping';
       p.stateSince = t;
+      p.napUntil = t + 180000 + Math.random() * 120000;
+    }
+    // With variety on, a napping pet gets up on its own now and then.
+    if (p === main && !classic() && !p.oneShot && p.base === 'sleeping' && t > p.napUntil) {
+      p.base = 'idle';
+      p.lastActivity = t;
+      startOneShot(p, 'waking', 'idle');
     }
   }
 
@@ -458,7 +523,7 @@
 
   function center(p) {
     const s = petPx(p);
-    return { x: p.x + p.wx + s / 2, y: p.y + s / 2 };
+    return { x: p.x + p.wx + s / 2, y: p.y + p.wy + s / 2 };
   }
 
   // -- Care -------------------------------------------------------------------
@@ -472,7 +537,7 @@
     if (WORKING.has(displayState(main)) || WORKING.has(upNext)) {
       return true;
     }
-    return [...minis.values()].some((m) => !m.leavingAt);
+    return [...minis.values()].some((m) => !m.leavingAt && !m.background);
   }
 
   function startCareAnim(kind) {
@@ -593,6 +658,70 @@
     ['wag', 1500],
   ];
 
+  /** Starts a hobby (variety on, 60% of the time) or a short classic fidget. */
+  function startFidget(p, t) {
+    const hobby =
+      !classic() && Math.random() < 0.6
+        ? Variants.pickIdle({
+            species: config.species,
+            wander: config.wander,
+            toys: config.toys && scene.hasToys(),
+            lastId: p.hobbyLast,
+          })
+        : null;
+    if (hobby) {
+      const dur = hobby.dur[0] + Math.random() * (hobby.dur[1] - hobby.dur[0]);
+      if (hobby.needs !== 'toy' || scene.startToy(t + dur)) {
+        p.hobbyLast = hobby.id;
+        p.fidget = { kind: hobby.id, start: t, until: t + dur, hobby };
+        p.fidgetNext = t + dur + 2000 + Math.random() * 4000;
+        if (hobby.critter) {
+          scene.startCritter(hobby.critter, t + dur);
+        }
+        return;
+      }
+    }
+    const [kind, dur] = FIDGETS[Math.floor(Math.random() * FIDGETS.length)];
+    p.fidget = { kind, start: t, until: t + dur };
+    p.fidgetNext = t + dur + 3000 + Math.random() * 5000;
+  }
+
+  /** Speeds in pet-widths per second for variants and hobbies that move around. */
+  const ROAM_SPEED = { pace: 0.6, zoomies: 3, fly: 1.5, chase: 1.6 };
+
+  /** Picks the next spot for a roaming pet once it reaches the last one. */
+  function roam(p, def, t, size) {
+    const arrived = Math.abs(p.wxTarget - p.wx) <= 1 && Math.abs(p.wyTarget - p.wy) <= 1;
+    switch (def.roam) {
+      case 'chase': {
+        const c = scene.critter();
+        if (c) {
+          p.wxTarget = c.x - (p.x + size / 2);
+        }
+        break;
+      }
+      case 'pace':
+        if (arrived) {
+          p.wxTarget = p.roamDir * size * 0.6;
+          p.roamDir = -p.roamDir;
+        }
+        break;
+      case 'zoomies':
+        if (arrived) {
+          p.wxTarget = p.roamDir > 0 ? viewW - size - p.x : -p.x;
+          p.roamDir = -p.roamDir;
+        }
+        break;
+      case 'fly':
+        if (arrived || t > p.roamNext) {
+          p.wxTarget = Math.random() * (viewW - size) - p.x;
+          p.wyTarget = -size * 0.3 - Math.random() * Math.max(0, p.y - size * 0.3);
+          p.roamNext = t + 2500;
+        }
+        break;
+    }
+  }
+
   function tickLife(p, t, dt) {
     if (t > p.twitchNext) {
       p.twitchAt = t;
@@ -602,23 +731,32 @@
       return;
     }
     const state = displayState(p);
+    const def = lookOf(p, state, t);
     const size = petPx(p);
     const reacting = (p.reaction && t < p.reaction.until) || (p.care && t < p.care.until);
-    const steer = play.target();
-    if (steer !== null) {
-      p.wxTarget = steer - (p.x + size / 2);
+    const hobby = !!(p.fidget && p.fidget.hobby && t < p.fidget.until);
+    const careSteer = play.target();
+    const toySteer = careSteer === null ? scene.target() : null;
+    const steer = careSteer !== null ? careSteer : toySteer;
+    if (def.roam !== 'fly') {
+      p.wyTarget = 0;
+    }
+    if (careSteer !== null) {
+      p.wxTarget = careSteer - (p.x + size / 2);
       p.fidget = null;
     } else if (play.tool()) {
       p.wxTarget = p.wx;
+    } else if (toySteer !== null) {
+      p.wxTarget = toySteer - (p.x + size / 2);
+    } else if (def.roam && !dragging && !reacting) {
+      roam(p, def, t, size);
     } else if (state === 'idle' && !reacting && !dragging) {
-      if (config.wander && !p.walking && t > p.wanderNext) {
+      if (config.wander && !hobby && !p.walking && t > p.wanderNext) {
         p.wxTarget = (Math.random() - 0.5) * viewW * 0.8;
         p.wanderNext = t + 7000 + Math.random() * 7000;
       }
       if (!p.walking && t > p.fidgetNext && (!p.fidget || t > p.fidget.until)) {
-        const [kind, dur] = FIDGETS[Math.floor(Math.random() * FIDGETS.length)];
-        p.fidget = { kind, start: t, until: t + dur };
-        p.fidgetNext = t + dur + 3000 + Math.random() * 5000;
+        startFidget(p, t);
       }
     } else if (state === 'sleeping') {
       p.wxTarget = p.wx;
@@ -628,10 +766,19 @@
     }
     if (!config.wander && !play.tool()) {
       p.wxTarget = 0;
+      p.wyTarget = 0;
     }
     p.wxTarget = Math.max(-p.x, Math.min(viewW - size - p.x, p.wxTarget));
+    p.wyTarget = Math.max(-(p.y - 6), Math.min(0, p.wyTarget));
     const diff = p.wxTarget - p.wx;
-    const speed = steer !== null ? size * 1.8 : state === 'idle' ? size * 0.7 : size * 2.5;
+    const speed =
+      steer !== null
+        ? size * 1.8
+        : def.roam
+          ? size * ROAM_SPEED[def.roam]
+          : state === 'idle'
+            ? size * 0.7
+            : size * 2.5;
     if (Math.abs(diff) > 1) {
       p.wx += Math.sign(diff) * Math.min(Math.abs(diff), speed * dt);
       p.walking = Math.sign(diff);
@@ -639,6 +786,8 @@
       p.wx = p.wxTarget;
       p.walking = 0;
     }
+    const dy = p.wyTarget - p.wy;
+    p.wy += Math.sign(dy) * Math.min(Math.abs(dy), size * 1.2 * dt);
   }
 
   /** Click = pet it (hearts), double-click = trick (spin jump). Clicking wakes it up. */
@@ -731,50 +880,244 @@
     }
   }
 
-  function ambientFx(p, state, t) {
-    const s = petPx(p);
-    const c = center(p);
-    const every = { sleeping: 1300, running: 380, waiting: 900 }[state];
+  /** Milliseconds between puffs of each ambient effect. */
+  const FX_EVERY = {
+    zzz: 1300,
+    sweat: 380,
+    alert: 900,
+    sparkle: 600,
+    glow: 700,
+    steam: 600,
+    pages: 1600,
+    paws: 700,
+    code: 160,
+    matrix: 90,
+    sparks: 110,
+    dust: 220,
+    splash: 260,
+    notes: 550,
+    shout: 900,
+    clock: 1100,
+    wave: 1000,
+    fume: 260,
+    anger: 650,
+    stars: 380,
+    popcorn: 450,
+    sweatDrop: 1100,
+    dirt: 80,
+    dream: 1500,
+  };
+  const CODE_CHARS = '{}();<>=+*/[]01$#&|!?';
+  const CODE_COLORS = ['#5aa9ff', '#ffd23f', '#b48cff', '#6be675', '#ff9f43'];
+
+  function pickOne(list) {
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  function ambientFx(p, def, t) {
+    const every = def.fx ? FX_EVERY[def.fx] : 0;
     if (!every || t - p.fxAt < every) {
       return;
     }
     p.fxAt = t;
-    if (state === 'sleeping') {
-      emit({
-        x: c.x + s * 0.25,
-        y: p.y + s * 0.3,
-        vx: s * 0.12,
-        vy: -s * 0.22,
-        text: Math.random() < 0.5 ? 'z' : 'Z',
-        font: true,
-        size: s * 0.1,
-        grow: 1.2,
-        life: 2.2,
-        color: fgColor,
-      });
-    } else if (state === 'running') {
-      const side = Math.random() < 0.5 ? -1 : 1;
-      emit({
-        x: c.x + side * s * 0.38,
-        y: p.y + s * 0.92,
-        vx: side * s * 0.3,
-        vy: -s * 0.05,
-        text: '💨',
-        size: s * 0.11,
-        life: 0.6,
-      });
-      emit({
-        x: c.x + side * s * 0.2,
-        y: p.y + s * 0.18,
-        vx: side * s * 0.5,
-        vy: -s * 0.6,
-        g: s * 2.5,
-        size: Math.max(2, p.scale * 0.8),
-        color: '#7fd3ff',
-        life: 0.7,
-      });
-    } else if (state === 'waiting' && p !== main) {
-      emit({ x: c.x, y: p.y, vy: -s * 0.4, text: '❗', size: s * 0.22, life: 0.9 });
+    const s = petPx(p);
+    const c = center(p);
+    const top = p.y + p.wy;
+    const feet = p.y + s * 0.92;
+    const r = Math.random;
+    const side = r() < 0.5 ? -1 : 1;
+    const dir = p.walking || side;
+    const bit = Math.max(2, p.scale * 0.7);
+    const txt = (text, x, y, extra) => emit(Object.assign({ x, y, text, size: s * 0.1 }, extra));
+    switch (def.fx) {
+      case 'zzz':
+        emit({
+          x: c.x + s * 0.25,
+          y: top + s * 0.3,
+          vx: s * 0.12,
+          vy: -s * 0.22,
+          text: r() < 0.5 ? 'z' : 'Z',
+          font: true,
+          size: s * 0.1,
+          grow: 1.2,
+          life: 2.2,
+          color: fgColor,
+        });
+        break;
+      case 'sweat':
+        txt('💨', c.x + side * s * 0.38, feet, { vx: side * s * 0.3, vy: -s * 0.05, life: 0.6 });
+        emit({
+          x: c.x + side * s * 0.2,
+          y: top + s * 0.18,
+          vx: side * s * 0.5,
+          vy: -s * 0.6,
+          g: s * 2.5,
+          size: bit,
+          color: '#7fd3ff',
+          life: 0.7,
+        });
+        break;
+      case 'alert':
+        if (p !== main) {
+          txt('❗', c.x, top, { vy: -s * 0.4, size: s * 0.22, life: 0.9 });
+        }
+        break;
+      case 'sparkle':
+        txt('✨', c.x + (r() - 0.5) * s * 0.8, top + r() * s * 0.6, { vy: -s * 0.15, life: 0.9 });
+        break;
+      case 'glow':
+        txt('✨', c.x + (r() - 0.5) * s * 0.3, top, { vy: -s * 0.2, size: s * 0.08, life: 0.9 });
+        break;
+      case 'steam':
+        txt('〰️', c.x + s * 0.22, top + s * 0.5, { vy: -s * 0.25, size: s * 0.07, life: 1.4 });
+        break;
+      case 'pages':
+        txt('📄', c.x + side * s * 0.2, top + s * 0.7, {
+          vx: side * s * 0.3,
+          vy: -s * 0.3,
+          g: s * 0.6,
+          size: s * 0.08,
+          life: 1.2,
+        });
+        break;
+      case 'paws':
+        txt('🐾', c.x - dir * s * 0.3, feet, { size: s * 0.07, life: 1.6 });
+        break;
+      case 'code':
+        emit({
+          x: c.x + (r() - 0.5) * s * 0.4,
+          y: top + s * 0.75,
+          vx: (r() - 0.5) * s * 0.6,
+          vy: -s * (0.4 + r() * 0.3),
+          g: s * 0.5,
+          text: pickOne(CODE_CHARS),
+          font: true,
+          size: s * 0.08,
+          color: pickOne(CODE_COLORS),
+          life: 1,
+        });
+        break;
+      case 'matrix':
+        emit({
+          x: c.x + (r() - 0.5) * s * 1.2,
+          y: top,
+          vy: s * 0.6,
+          text: r() < 0.5 ? '0' : '1',
+          font: true,
+          size: s * 0.07,
+          color: '#5ae38a',
+          life: 1.4,
+        });
+        break;
+      case 'sparks':
+        for (let i = 0; i < 2; i++) {
+          emit({
+            x: c.x + s * 0.3,
+            y: top + s * 0.6,
+            vx: (r() - 0.3) * s * 1.2,
+            vy: -s * r() * 0.9,
+            g: s * 3,
+            size: bit * 0.7,
+            color: r() < 0.5 ? '#ffd23f' : '#ff9f43',
+            life: 0.5,
+          });
+        }
+        break;
+      case 'dust':
+        txt('💨', c.x - dir * s * 0.35, feet, { vx: -dir * s * 0.3, life: 0.6 });
+        break;
+      case 'splash':
+        emit({
+          x: c.x + (r() - 0.5) * s * 0.9,
+          y: feet,
+          vx: (r() - 0.5) * s * 0.6,
+          vy: -s * (0.5 + r() * 0.4),
+          g: s * 2.5,
+          size: bit,
+          color: '#7fd3ff',
+          life: 0.7,
+        });
+        break;
+      case 'notes':
+        txt(r() < 0.5 ? '🎵' : '🎶', c.x + side * s * 0.4, top + s * 0.3, {
+          vx: side * s * 0.15,
+          vy: -s * 0.3,
+          life: 1.4,
+        });
+        break;
+      case 'shout':
+        emit({
+          x: c.x + s * 0.6,
+          y: top + s * 0.4,
+          vx: s * 0.35,
+          vy: -s * 0.05,
+          text: pickOne(['GO!', 'HUP!', '!!']),
+          font: true,
+          size: s * 0.08,
+          color: '#ffd23f',
+          life: 0.9,
+        });
+        break;
+      case 'clock':
+        txt('⏰', c.x + s * 0.4, top + s * 0.15, { vy: -s * 0.2, life: 1.1 });
+        break;
+      case 'wave':
+        txt('👋', c.x + s * 0.42, top + s * 0.35, { vy: -s * 0.15, size: s * 0.12, life: 0.9 });
+        break;
+      case 'fume':
+        txt('💨', c.x + side * s * 0.3, top + s * 0.15, {
+          vx: side * s * 0.25,
+          vy: -s * 0.35,
+          size: s * 0.09,
+          life: 0.8,
+        });
+        break;
+      case 'anger':
+        txt('💢', c.x + (r() - 0.5) * s * 0.6, top + s * 0.1, {
+          vy: -s * 0.2,
+          size: s * 0.13,
+          life: 0.8,
+        });
+        break;
+      case 'stars':
+        txt('⭐', c.x + (r() - 0.5) * s * 0.9, top + s * 0.2, {
+          vx: (r() - 0.5) * s * 0.6,
+          vy: -s * 0.6,
+          g: s * 1.2,
+          size: s * 0.08,
+          life: 1.1,
+        });
+        break;
+      case 'popcorn':
+        txt('🍿', c.x + s * 0.18, top + s * 0.62, {
+          vx: (r() - 0.5) * s * 0.3,
+          vy: -s * (0.5 + r() * 0.3),
+          g: s * 2.5,
+          size: s * 0.07,
+          life: 0.8,
+        });
+        break;
+      case 'sweatDrop':
+        txt('💦', c.x + side * s * 0.3, top + s * 0.2, { vy: s * 0.1, size: s * 0.09, life: 0.9 });
+        break;
+      case 'dirt':
+        emit({
+          x: c.x + (r() - 0.5) * s * 0.3,
+          y: feet,
+          vx: side * s * (0.6 + r() * 0.6),
+          vy: -s * (0.4 + r() * 0.4),
+          g: s * 3,
+          size: bit,
+          color: r() < 0.5 ? '#8b5a2b' : '#6b4a26',
+          life: 0.7,
+        });
+        break;
+      case 'dream':
+        txt(pickOne(['💭', '☁️', '🌙', '🦋']), c.x + s * 0.35, top + s * 0.1, {
+          vy: -s * 0.15,
+          life: 1.6,
+        });
+        break;
     }
   }
 
@@ -812,9 +1155,127 @@
   }
 
   // -- Drawing ----------------------------------------------------------------
+  /**
+   * Rotates the pet about the middle of its sprite instead of its feet (the
+   * canvas pivot), then lifts it so the lowest corner still touches the floor.
+   */
+  function roll(m, a) {
+    const h = Art.SIZE / 2;
+    const c = Math.cos(a);
+    const sn = Math.sin(a);
+    m.rot = a;
+    m.dx += -h * sn;
+    m.dy += -h * (1 - c) - h * (Math.abs(c) + Math.abs(sn) - 1);
+  }
+
+  function smoothstep(u) {
+    return 0.5 - 0.5 * Math.cos(Math.max(0, Math.min(1, u)) * Math.PI);
+  }
+
   function motionFor(name, tt, p) {
     const m = { dx: 0, dy: 0, sx: 1, sy: 1, rot: 0 };
+    const breath = Math.sin(tt * 1.8);
     switch (name) {
+      case 'sideSleep':
+        roll(m, -Math.PI / 2);
+        m.sx = 1 + 0.035 * breath;
+        break;
+      case 'rollSleep': {
+        // Flips from one side to the other every 8 seconds.
+        const k = Math.floor(tt / 8);
+        const from = -Math.PI / 2 - Math.max(0, k - 1) * Math.PI;
+        const to = -Math.PI / 2 - k * Math.PI;
+        roll(m, k === 0 ? to : from + (to - from) * smoothstep((tt - k * 8) / 1.2));
+        m.sx = 1 + 0.035 * breath;
+        break;
+      }
+      case 'bellyUp':
+        roll(m, Math.PI);
+        m.sy = 1 + 0.03 * breath;
+        break;
+      case 'loaf':
+        m.sx = 1.12 + 0.02 * breath;
+        m.sy = 0.8 - 0.02 * breath;
+        break;
+      case 'levitate':
+        m.dy = -4 - Math.sin(tt * 2) * 1.5;
+        break;
+      case 'sip':
+        m.rot = -Math.max(0, Math.sin(tt * 1.4)) * 0.12;
+        break;
+      case 'sniff':
+        m.dy = 1.5;
+        m.rot = (p.walking || 1) * 0.12 + Math.sin(tt * 9) * 0.02;
+        break;
+      case 'scribble':
+        m.dx = Math.sin(tt * 22) * 0.3;
+        m.rot = Math.sin(tt * 11) * 0.025;
+        break;
+      case 'tinker':
+        m.dy = -Math.abs(Math.sin(tt * 8)) * 0.8;
+        m.rot = Math.sin(tt * 8) * 0.05;
+        break;
+      case 'surf':
+        m.dy = Math.sin(tt * 2.2) * 1.2;
+        m.rot = Math.sin(tt * 2.2 + 1) * 0.1;
+        break;
+      case 'conduct':
+        m.rot = Math.sin(tt * 5) * 0.09;
+        m.dy = -Math.abs(Math.sin(tt * 5));
+        break;
+      case 'bob':
+        m.dy = Math.sin(tt * 3);
+        break;
+      case 'tap': {
+        const up = Math.floor(tt * 4) % 2;
+        m.dy = up ? -0.6 : 0;
+        m.rot = up ? 0.02 : -0.01;
+        break;
+      }
+      case 'wave':
+        m.rot = Math.sin(tt * 6) * 0.1;
+        break;
+      case 'stomp': {
+        const h = Math.abs(Math.sin(tt * 9));
+        m.dy = -h * 2.5;
+        m.dx = Math.sin(tt * 4.5) * 1.5;
+        m.sy = h < 0.15 ? 0.88 : 1;
+        m.sx = h < 0.15 ? 1.08 : 1;
+        break;
+      }
+      case 'flop':
+        roll(m, (Math.PI / 2) * smoothstep(tt * 2.5));
+        break;
+      case 'dance':
+        m.rot = Math.sin(tt * 4) * 0.18;
+        m.dy = -Math.abs(Math.sin(tt * 8)) * 2;
+        m.dx = Math.sin(tt * 4) * 1.5;
+        break;
+      case 'backflip': {
+        const u = (tt % 1.6) / 1.6;
+        roll(m, -smoothstep((u - 0.1) / 0.6) * Math.PI * 2);
+        m.dy -= Math.sin(Math.min(1, u / 0.8) * Math.PI) * 12;
+        break;
+      }
+      case 'roll':
+        roll(m, smoothstep(tt / 1.8) * Math.PI * 2);
+        break;
+      case 'fly':
+        m.dy = Math.sin(tt * 6) * 1.2;
+        m.rot = p.walking * 0.12;
+        break;
+      case 'dig':
+        m.dy = 1.5 + Math.abs(Math.sin(tt * 12)) * 0.6;
+        m.rot = 0.08 + Math.sin(tt * 12) * 0.03;
+        break;
+      case 'watch':
+        m.dy = Math.sin(tt * 1.2) * 0.3;
+        m.rot = Math.sin(tt * 0.6) * 0.03;
+        break;
+      case 'jitter':
+        m.dx = (Math.random() - 0.5) * 0.7;
+        m.dy = Math.sin(tt * 1.5) * 0.3;
+        break;
       case 'breathe':
         m.sy = 1 + 0.035 * Math.sin(tt * 1.8);
         m.sx = 1 - 0.015 * Math.sin(tt * 1.8);
@@ -964,14 +1425,28 @@
       }
     }
 
-    if (p.walking) {
+    if (p.walking && def.roam) {
+      out.look = p.walking;
+    } else if (p.walking) {
       out.motion = 'walk';
       out.mt = t / 1000;
       out.look = p.walking;
       out.wag = 5;
     }
+    if (p.wy < -2) {
+      out.motion = 'fly';
+      out.mt = t / 1000;
+      out.wag = 14;
+    }
+    const critter = def.critter ? scene.critter() : null;
+    if (critter) {
+      out.look = Math.sign(critter.x - center(p).x);
+    }
+    if (p === main && state === 'testing' && !p.walking && scene.machineCount() > 0) {
+      out.look = scene.machineSide();
+    }
 
-    const hint = p === main ? play.pose() : null;
+    const hint = p === main ? play.pose() || scene.pose() : null;
     if (hint) {
       Object.assign(out, hint);
       if (hint.motion) {
@@ -1086,15 +1561,16 @@
   function drawBubble(p, def, tt) {
     const s = petPx(p);
     const px = p.x + p.wx;
+    const top = p.y + p.wy;
     const bx = px + s * 0.88;
-    const by = p.y + s * 0.02;
+    const by = top + s * 0.02;
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#22222a';
     ctx.lineWidth = Math.max(1.5, p.scale * 0.4);
     if (def.bubble === 'thought') {
       const dots = [
-        [px + s * 0.7, p.y + s * 0.22, s * 0.03],
-        [px + s * 0.78, p.y + s * 0.12, s * 0.045],
+        [px + s * 0.7, top + s * 0.22, s * 0.03],
+        [px + s * 0.78, top + s * 0.12, s * 0.045],
       ];
       for (const [x, y, r] of dots) {
         ctx.beginPath();
@@ -1181,17 +1657,43 @@
         return { x: 1, y: 17 + Math.round(Math.sin(tt * 3)) };
       case 'cloud':
         return { x: 9, y: sp.headTop - 13 + Math.round(Math.sin(tt * 2)) };
+      case 'bulb':
+        return { x: 13, y: sp.headTop - 11 + Math.round(Math.sin(tt * 2)) };
+      case 'mug':
+        return { x: 20, y: sp.pawY - 10 };
+      case 'book':
+      case 'scroll':
+        return { x: 9, y: sp.pawY - 8 };
+      case 'keyboard':
+        return { x: 6, y: sp.pawY - 3 };
+      case 'notepad':
+        return { x: 10, y: sp.pawY - 8 };
+      case 'wrench':
+        return { x: 21, y: 18 + Math.round(Math.sin(tt * 8)) };
+      case 'telescope':
+        return { x: 21, y: sp.eyeY - 6 };
+      case 'megaphone':
+        return { x: 22, y: sp.mouthY - 3 };
+      case 'baton':
+        return { x: 22, y: 12 + Math.round(Math.sin(tt * 5) * 2) };
+      case 'sign':
+        return { x: 22, y: 6 + Math.round(Math.sin(tt * 3)) };
+      case 'trophy':
+        return { x: 11, y: sp.headTop - 12 + Math.round(Math.abs(Math.sin(tt * 4)) * -2) };
       default:
         return { x: 0, y: 0 };
     }
   }
+
+  /** Props that sit on (or are held over) the head, so a hat accessory steps aside. */
+  const HEAD_PROPS = new Set(['partyHat', 'nightcap', 'bulb', 'trophy']);
 
   function drawPet(p, t) {
     if (!config) {
       return;
     }
     const state = displayState(p);
-    const def = STATES[state];
+    const def = lookOf(p, state, t);
     const tt = (t - p.stateSince) / 1000;
     const s = p.scale;
     const size = petPx(p);
@@ -1202,9 +1704,11 @@
     const ps = pose(p, def, state, tt, t);
     const frame = ps.wag > 0 ? Math.floor((t / 1000) * ps.wag) % 2 : 0;
     const m = motionFor(ps.motion, ps.mt, p);
+    const lift = (def.lift || 0) + (p === main ? scene.lift() / s : 0);
     const x0 = p.x + p.wx;
+    const floor = p.y + size - s;
     const hide = [];
-    if (def.prop === 'partyHat' || def.prop === 'nightcap') {
+    if (HEAD_PROPS.has(def.prop)) {
       hide.push('head');
     }
     if (def.prop === 'binoculars') {
@@ -1227,14 +1731,29 @@
       drawOrbit(p, def, tt, false);
     }
 
-    // Ground shadow
+    // Ground shadow, shrinking as a flying pet climbs.
+    const air = 1 - Math.min(0.6, -p.wy / (size * 2));
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
     ctx.beginPath();
-    ctx.ellipse(x0 + size / 2, p.y + size - s, size * 0.32 * k, size * 0.05 * k, 0, 0, Math.PI * 2);
+    ctx.ellipse(
+      x0 + size / 2,
+      floor,
+      size * 0.32 * k * air,
+      size * 0.05 * k * air,
+      0,
+      0,
+      Math.PI * 2,
+    );
     ctx.fill();
+    if (def.scene) {
+      scene.scenery(def.scene, 'back', x0 + size / 2, floor, size, s, t);
+    }
 
     ctx.save();
-    ctx.translate(Math.round(x0 + size / 2 + m.dx * s), Math.round(p.y + size + m.dy * s));
+    ctx.translate(
+      Math.round(x0 + size / 2 + m.dx * s),
+      Math.round(p.y + p.wy + size + (m.dy - lift) * s),
+    );
     ctx.rotate(m.rot);
     ctx.scale(m.sx * k, m.sy * k);
     const sprite = petSprite({
@@ -1263,7 +1782,8 @@
     if (def.prop) {
       const at = propPlacement(def.prop, sp, tt);
       if (def.prop !== 'cloud' || Math.floor(tt * 6) % 4 !== 0) {
-        const img = propSprite(def.prop);
+        const lit = def.prop === 'bulb' && Math.floor(tt * 1.5) % 3 !== 0;
+        const img = propSprite(lit ? 'bulbOn' : def.prop);
         const f = artFactor();
         ctx.drawImage(
           img,
@@ -1274,10 +1794,13 @@
         );
       }
     }
-    if (state === 'writing') {
+    if (def.paws === 'typing') {
       drawTypingPaws(p, petPalette(color, tint), tt);
     }
     ctx.restore();
+    if (def.scene) {
+      scene.scenery(def.scene, 'front', x0 + size / 2, floor, size, s, t);
+    }
 
     if (p === main) {
       drawOrbit(p, def, tt, true);
@@ -1287,9 +1810,9 @@
       ctx.font = `${Math.round(size * 0.3)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(e, x0 + size * 0.95, p.y + size * 0.12 + Math.sin(tt * 4) * 2);
+      ctx.fillText(e, x0 + size * 0.95, p.y + p.wy + size * 0.12 + Math.sin(tt * 4) * 2);
     }
-    ambientFx(p, state, t);
+    ambientFx(p, def, t);
     if (p === main) {
       careFx(p, t, size, x0);
     }
@@ -1299,15 +1822,20 @@
   function drawLabels(p, def, k) {
     const size = petPx(p);
     const cx = center(p).x;
-    const y = p.y + size + 4;
+    const y = p.y + p.wy + size + 4;
     const isMain = p === main;
-    const maxW = Math.max(size + 30, isMain ? 220 : 110);
-    ctx.globalAlpha = k;
+    const maxW = Math.min(viewW - 8, Math.max(size + 30, isMain ? 220 : 110));
+    // Keep the text inside the panel when the pet stands near an edge.
+    const put = (text, ty) => {
+      const half = ctx.measureText(text).width / 2;
+      ctx.fillText(text, Math.max(half + 4, Math.min(viewW - half - 4, cx)), ty);
+    };
+    ctx.globalAlpha = k * (p.background ? 0.75 : 1);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillStyle = fgColor;
     ctx.font = `bold ${isMain ? 13 : 10}px sans-serif`;
-    ctx.fillText(clipText(p.name, maxW), cx, y);
+    put(clipText(p.name, maxW), y);
     ctx.globalAlpha = 0.7 * k;
     ctx.font = `${isMain ? 11 : 9}px sans-serif`;
     const low = isMain && displayState(p) === 'idle' ? lowestStat() : null;
@@ -1315,7 +1843,7 @@
       ? (low ? MOOD[low].label + ' ' + MOOD[low].emoji : def.label) +
         (p.detail && def.color ? ' - ' + p.detail : '')
       : p.task || def.label;
-    ctx.fillText(clipText(second, maxW), cx, y + (isMain ? 16 : 12));
+    put(clipText(second, maxW), y + (isMain ? 16 : 12));
     ctx.globalAlpha = 1;
   }
 
@@ -1373,7 +1901,10 @@
     main.y = Math.max(28, viewH * 0.38 - s / 2);
   }
 
-  /** Minis line up in a grid below the main pet, or above it if there is no room. */
+  /**
+   * Minis line up along the bottom of the panel: sub-agents first, then other
+   * sessions. If the main pet is in the way they go just below it, or above it.
+   */
   function layoutMinis() {
     if (!main) {
       return;
@@ -1388,9 +1919,10 @@
     const cellH = mpx + 34;
     const cols = Math.max(1, Math.floor(viewW / cellW));
     const rows = Math.ceil(n / cols);
-    let top = main.y + petPx(main) + 40;
-    if (top + rows * cellH > viewH) {
-      top = Math.max(24, main.y - rows * cellH - 8);
+    const below = main.y + petPx(main) + 40;
+    let top = viewH - rows * cellH - 4;
+    if (top < below) {
+      top = below + rows * cellH > viewH ? Math.max(24, main.y - rows * cellH - 8) : below;
     }
     list.forEach((m, i) => {
       const row = Math.floor(i / cols);
@@ -1426,25 +1958,75 @@
     }
     if (!main) {
       main = makePet({ scale: mainScale(), name: config.name });
-      if (savedPos) {
-        main.x = savedPos.petX;
-        main.y = savedPos.petY;
+      if (typeof saved.petX === 'number' && typeof saved.petY === 'number') {
+        main.x = saved.petX;
+        main.y = saved.petY;
       } else {
         defaultMainPos();
       }
     } else {
       main.scale = mainScale();
       main.name = config.name;
+      main.variant = null;
     }
     const miniScale = Math.max(2, Math.floor(main.scale * 0.45));
     minis.forEach((m) => {
       m.scale = miniScale;
+      m.variant = null;
     });
     resizeCanvas();
     if (pendingClaude) {
       applyClaude(pendingClaude);
       pendingClaude = null;
     }
+  }
+
+  /** Feeds an agent update into a pet. A changed state counts even when seq did not move. */
+  function feed(p, u) {
+    if (u.seq !== p.seq || u.state !== p.reported) {
+      p.seq = u.seq;
+      p.reported = u.state;
+      applyState(p, u.state, u.detail);
+    } else {
+      p.detail = u.detail || p.detail;
+    }
+  }
+
+  /** Creates the mini for a sub-agent or background session on first sight. */
+  function upsertMini(id, info, u, t) {
+    let m = minis.get(id);
+    if (!m) {
+      const c = center(main);
+      const miniScale = Math.max(2, Math.floor(main.scale * 0.45));
+      const half = (miniScale * Art.SIZE) / 2;
+      m = makePet(
+        Object.assign(
+          {
+            id,
+            scale: miniScale,
+            x: c.x - half,
+            y: c.y - half,
+            base: 'idle',
+            hue: 40 + minis.size * 67,
+            spawnAt: t,
+          },
+          info,
+        ),
+      );
+      minis.set(id, m);
+      for (let i = 0; i < 10; i++) {
+        emit({
+          x: c.x,
+          y: c.y,
+          vx: (Math.random() - 0.5) * 160,
+          vy: (Math.random() - 0.5) * 160,
+          text: '✨',
+          size: 12,
+          life: 0.7,
+        });
+      }
+    }
+    feed(m, u);
   }
 
   function applyClaude(msg) {
@@ -1455,53 +2037,28 @@
     }
     if (msg.main) {
       project = msg.main.project || '';
-      if (msg.main.seq !== main.seq) {
-        main.seq = msg.main.seq;
-        applyState(main, msg.main.state, msg.main.detail);
-      } else {
-        main.detail = msg.main.detail || main.detail;
-      }
+      feed(main, msg.main);
     }
 
     const t = now();
     const live = new Set();
-    const miniScale = Math.max(2, Math.floor(main.scale * 0.45));
-    (msg.subagents || []).forEach((sa) => {
+    const subagents = msg.subagents || [];
+    subagents.forEach((sa) => {
       live.add(sa.id);
-      let m = minis.get(sa.id);
-      if (!m) {
-        const c = center(main);
-        const half = (miniScale * Art.SIZE) / 2;
-        m = makePet({
-          id: sa.id,
-          name: sa.name,
-          task: sa.task,
-          agentType: sa.agentType,
-          scale: miniScale,
-          x: c.x - half,
-          y: c.y - half,
-          base: 'idle',
-          hue: 40 + minis.size * 67,
-          spawnAt: t,
-        });
-        minis.set(sa.id, m);
-        for (let i = 0; i < 10; i++) {
-          emit({
-            x: c.x,
-            y: c.y,
-            vx: (Math.random() - 0.5) * 160,
-            vy: (Math.random() - 0.5) * 160,
-            text: '✨',
-            size: 12,
-            life: 0.7,
-          });
-        }
-      }
-      if (sa.seq !== m.seq) {
-        m.seq = sa.seq;
-        applyState(m, sa.state, sa.detail);
-      }
+      upsertMini(sa.id, { name: sa.name, task: sa.task, agentType: sa.agentType }, sa, t);
     });
+    if (config.backgroundPets) {
+      (msg.background || []).forEach((b) => {
+        const id = 'bg:' + b.id;
+        live.add(id);
+        const info = {
+          name: b.project || 'another session',
+          agentType: 'session',
+          background: true,
+        };
+        upsertMini(id, info, b, t);
+      });
+    }
     minis.forEach((m, id) => {
       if (!live.has(id) && !m.leavingAt) {
         m.leavingAt = t;
@@ -1509,6 +2066,9 @@
         emit({ x: c.x, y: c.y, text: '💨', size: petPx(m) * 0.5, life: 0.8, vy: -20 });
       }
     });
+    scene.setJobs(
+      ((msg.main && msg.main.jobs) || []).concat(...subagents.map((sa) => sa.jobs || [])),
+    );
     layoutMinis();
   }
 
@@ -1537,11 +2097,14 @@
     });
 
     play.update(t, dt);
+    scene.update(t, dt);
     updateCareUi(t);
     drawDots(t);
+    scene.drawBack(t);
     const drawOrder = [...minis.values(), main].sort((a, b) => a.y - b.y);
     drawOrder.forEach((p) => drawPet(p, t));
     play.draw(t);
+    scene.drawFront(t);
     stepParticles(dt);
     drawParticles();
   }
@@ -1556,8 +2119,9 @@
     }
     switch (msg.command) {
       case 'init':
-        if (msg.state && typeof msg.state.petX === 'number') {
-          savedPos = msg.state;
+        saved = msg.state && typeof msg.state === 'object' ? msg.state : {};
+        if (Array.isArray(saved.seen)) {
+          scene.setSeen(saved.seen);
         }
         applyConfig(msg.config);
         break;
@@ -1594,23 +2158,26 @@
   function hit(p, x, y) {
     const s = petPx(p);
     const px = p.x + p.wx;
-    return x >= px && x <= px + s && y >= p.y && y <= p.y + s;
+    const py = p.y + p.wy;
+    return x >= px && x <= px + s && y >= py && y <= py + s;
   }
 
   function tooltipHtml(x, y) {
     for (const m of minis.values()) {
       if (!m.leavingAt && hit(m, x, y)) {
-        const def = STATES[displayState(m)];
+        const def = lookOf(m, displayState(m), now());
+        const what = m.background ? 'another Claude session' : m.agentType;
         return (
-          `<b>${escapeHtml(m.name)}</b> <span class="dim">(${escapeHtml(m.agentType)})</span><br>` +
-          `${escapeHtml(m.task || 'helping out')}<br>` +
+          `<b>${escapeHtml(m.name)}</b> <span class="dim">(${escapeHtml(what)})</span><br>` +
+          (m.background ? '' : `${escapeHtml(m.task || 'helping out')}<br>`) +
           `<span class="dim">${escapeHtml(def.label)}${m.detail ? ': ' + escapeHtml(m.detail) : ''}</span>`
         );
       }
     }
     if (main && hit(main, x, y)) {
-      const def = STATES[displayState(main)];
-      const helpers = [...minis.values()].filter((m) => !m.leavingAt).length;
+      const def = lookOf(main, displayState(main), now());
+      const helpers = [...minis.values()].filter((m) => !m.leavingAt && !m.background).length;
+      const jobs = scene.machineCount();
       return (
         `<b>${escapeHtml(main.name)}</b> is ${escapeHtml(def.label)}` +
         (main.detail ? `<br>${escapeHtml(main.detail)}` : '') +
@@ -1620,8 +2187,16 @@
           : '') +
         (helpers
           ? `<br><span class="dim">${helpers} helper${helpers > 1 ? 's' : ''} working</span>`
+          : '') +
+        (jobs ? `<br><span class="dim">${jobs} job${jobs > 1 ? 's' : ''} running</span>` : '') +
+        (config.toys
+          ? `<br><span class="dim">🧸 ${scene.seenCount()}/${scene.toyTotal} toys found</span>`
           : '')
       );
+    }
+    const thing = scene.hover(x, y);
+    if (thing) {
+      return `<b>${escapeHtml(thing.title)}</b><br><span class="dim">${escapeHtml(thing.sub)}</span>`;
     }
     const sessions = allSessions().slice(0, MAX_DOTS);
     for (let i = 0; i < sessions.length; i++) {
@@ -1708,6 +2283,34 @@
     toolChanged: () => updateCareUi(now()),
   });
 
+  /** Saves position and toy collection where VS Code keeps webview state. */
+  function persist() {
+    vscodeApi.setState(saved);
+    vscodeApi.postMessage({ command: 'save-state', state: saved });
+  }
+
+  const scene = window.PetScene.create({
+    ctx,
+    main: () => main,
+    petPx,
+    view: () => ({ w: viewW, h: viewH }),
+    now,
+    emit,
+    config: () => config,
+    playing: () =>
+      !!main &&
+      displayState(main) === 'idle' &&
+      !isBusy() &&
+      !play.tool() &&
+      !dragging &&
+      !!main.fidget &&
+      main.fidget.kind === 'toy',
+    onDiscover: (seen) => {
+      saved.seen = seen;
+      persist();
+    },
+  });
+
   function updateCareUi(t) {
     const busy = isBusy();
     careButtons.forEach((b) => {
@@ -1765,6 +2368,10 @@
       e.preventDefault();
       return;
     }
+    if (!pet && scene.poke(e.offsetX, e.offsetY)) {
+      e.preventDefault();
+      return;
+    }
     if (!pet) {
       return;
     }
@@ -1789,6 +2396,8 @@
       dragging = true;
       main.wx = 0;
       main.wxTarget = 0;
+      main.wy = 0;
+      main.wyTarget = 0;
       canvas.style.cursor = 'grabbing';
       tooltip.style.display = 'none';
     }
@@ -1808,9 +2417,9 @@
       return;
     }
     if (dragging && main) {
-      const pos = { petX: Math.round(main.x), petY: Math.round(main.y) };
-      vscodeApi.setState(pos);
-      vscodeApi.postMessage({ command: 'save-state', state: pos });
+      saved.petX = Math.round(main.x);
+      saved.petY = Math.round(main.y);
+      persist();
     } else {
       clickPet(press.pet);
     }

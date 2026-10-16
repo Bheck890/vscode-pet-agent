@@ -113,8 +113,11 @@ function runWebviewScript() {
   const media = path.join(process.cwd(), 'media');
   vm.runInNewContext(fs.readFileSync(path.join(media, 'pets.js'), 'utf8'), context);
   vm.runInNewContext(fs.readFileSync(path.join(media, 'play.js'), 'utf8'), context);
-  windowObj['PetArt'] = context['PetArt'];
-  windowObj['PetPlay'] = context['PetPlay'];
+  vm.runInNewContext(fs.readFileSync(path.join(media, 'variants.js'), 'utf8'), context);
+  vm.runInNewContext(fs.readFileSync(path.join(media, 'scene.js'), 'utf8'), context);
+  for (const lib of ['PetArt', 'PetPlay', 'PetVariants', 'PetScene']) {
+    windowObj[lib] = context[lib];
+  }
   vm.runInNewContext(fs.readFileSync(path.join(media, 'webview.js'), 'utf8'), context);
 
   const send = (data: unknown) => windowListeners['message'].forEach((l) => l({ data }));
@@ -153,7 +156,17 @@ function runWebviewScript() {
   };
 }
 
-const CONFIG = { species: 'fox', color: '', name: 'Rusty', stateColors: true, size: 200 };
+const CONFIG = {
+  species: 'fox',
+  color: '',
+  name: 'Rusty',
+  stateColors: true,
+  size: 200,
+  variety: 'classic',
+  toys: false,
+  machines: true,
+  backgroundPets: true,
+};
 
 describe('webview behavior', () => {
   it('signals ready on load', () => {
@@ -395,6 +408,162 @@ describe('webview behavior', () => {
       jest.useRealTimers();
     }
   });
+
+  it('applies a new state even when seq has not moved (held action ending)', () => {
+    jest.useFakeTimers();
+    try {
+      const { send, hover, tooltip, runFrames } = runWebviewScript();
+      send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      send(working('browsing'));
+      runFrames(1000);
+      hover(50, 80);
+      expect(tooltip.innerHTML).toContain('browsing the web');
+      send(working('thinking'));
+      hover(50, 80);
+      expect(tooltip.innerHTML).toContain('thinking');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('shows a machine for each running test and dings it away when done', () => {
+    jest.useFakeTimers();
+    try {
+      const { send, runFrames, hover, tooltip } = runWebviewScript();
+      send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      const job = { id: 'j1', kind: 'test', label: 'npm test', background: false };
+      send({
+        command: 'claude-update',
+        main: {
+          sessionId: 's',
+          state: 'testing',
+          detail: 'npm test',
+          seq: 1,
+          project: null,
+          jobs: [job],
+        },
+        subagents: [],
+        background: [],
+        sessions: [],
+      });
+      runFrames(1000);
+      hover(50, 80);
+      expect(tooltip.innerHTML).toContain('running tests');
+      expect(tooltip.innerHTML).toContain('1 job running');
+      hover(200, 200);
+      expect(tooltip.innerHTML).toContain('washing machine');
+
+      send({
+        command: 'claude-update',
+        main: { sessionId: 's', state: 'thinking', detail: '', seq: 2, project: null, jobs: [] },
+        subagents: [],
+        background: [],
+        sessions: [],
+      });
+      runFrames(1000);
+      hover(200, 200);
+      expect(tooltip.style.display).toBe('none');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('shows other sessions as small pets that do not lock care', () => {
+    const { send, pressCare, elements } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send({
+      command: 'claude-update',
+      main: { sessionId: 's', state: 'idle', detail: '', seq: 1, project: null, jobs: [] },
+      subagents: [],
+      background: [
+        { id: 'o', project: 'other-app', state: 'writing', detail: '', seq: 1, jobs: [] },
+      ],
+      sessions: [],
+    });
+    pressCare('feed');
+    expect(elements['care-note'].textContent).toContain('drop kibble');
+  });
+
+  it('labels other sessions in the tooltip', () => {
+    const { send, hover, tooltip } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send({
+      command: 'claude-update',
+      main: { sessionId: 's', state: 'idle', detail: '', seq: 1, project: null, jobs: [] },
+      subagents: [],
+      background: [
+        { id: 'o', project: '<b>x</b>', state: 'reading', detail: '', seq: 1, jobs: [] },
+      ],
+      sessions: [],
+    });
+    // Minis start at the main pet's centre before gliding to their slot.
+    hover(96, 126);
+    expect(tooltip.innerHTML).toContain('another Claude session');
+    expect(tooltip.innerHTML).toContain('&lt;b&gt;x&lt;/b&gt;');
+  });
+
+  it.each(['cat', 'dog', 'bird', 'fox'])(
+    'plays every state, random variants, hobbies and toys as a %s without errors',
+    (species) => {
+      jest.useFakeTimers();
+      try {
+        const { send, runFrames, vscodeApi } = runWebviewScript();
+        const config = { ...CONFIG, species, variety: 'random', toys: true, wander: true };
+        send({ command: 'init', config, state: { petX: 0, petY: 300 } });
+        const states = [
+          'thinking',
+          'reading',
+          'writing',
+          'running',
+          'testing',
+          'browsing',
+          'delegating',
+          'waiting',
+          'error',
+          'done',
+          'sleeping',
+        ];
+        let seq = 1;
+        for (let round = 0; round < 6; round++) {
+          for (const state of states) {
+            send({
+              command: 'claude-update',
+              main: { sessionId: 's', state, detail: 'x', seq: seq++, project: null, jobs: [] },
+              subagents: [
+                {
+                  id: 'a',
+                  name: 'Scout',
+                  agentType: 'Explore',
+                  task: 't',
+                  state,
+                  detail: '',
+                  seq,
+                  jobs: [],
+                },
+              ],
+              background: [{ id: 'b', project: 'p', state, detail: '', seq, jobs: [] }],
+              sessions: [],
+            });
+            runFrames(400, 40);
+          }
+        }
+        send({
+          command: 'claude-update',
+          main: { sessionId: 's', state: 'idle', detail: '', seq: seq++, project: null, jobs: [] },
+          subagents: [],
+          background: [],
+          sessions: [],
+        });
+        runFrames(80000, 50);
+        // A toy turned up and the find was saved with the webview state.
+        expect(vscodeApi.setState).toHaveBeenCalledWith(
+          expect.objectContaining({ seen: expect.arrayContaining([expect.any(String)]) }),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    },
+  );
 
   it('puts the care tool away when the agent starts working', () => {
     jest.useFakeTimers();

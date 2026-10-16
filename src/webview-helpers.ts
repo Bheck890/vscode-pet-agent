@@ -5,10 +5,11 @@ import { PetConfig } from './pet-config';
 import { StateWatcher, PeonEvent, SessionUpdate } from './state-watcher';
 import { ClaudeWatcher, ClaudeUpdate } from './claude-watcher';
 
-/** Position of the draggable pet within the webview, persisted across reloads. */
+/** Persisted across reloads: where the pet was dragged, and which toys it has found. */
 export interface WebviewState {
-  petX: number;
-  petY: number;
+  petX?: number;
+  petY?: number;
+  seen?: string[];
 }
 
 function escapeHtml(value: string): string {
@@ -87,6 +88,8 @@ export function buildHtml(webview: vscode.Webview, mediaPath: string, nonce: str
     .replace(/<!--NONCE-->/g, nonce)
     .replace('<!--PETS_URI-->', uri('pets.js'))
     .replace('<!--PLAY_URI-->', uri('play.js'))
+    .replace('<!--VARIANTS_URI-->', uri('variants.js'))
+    .replace('<!--SCENE_URI-->', uri('scene.js'))
     .replace('<!--SCRIPT_URI-->', uri('webview.js'));
 }
 

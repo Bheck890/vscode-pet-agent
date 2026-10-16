@@ -357,6 +357,19 @@
     flat: ['....', 'oooo'],
   };
 
+  /** Shared by the light bulb's off and on props. */
+  const BULB = [
+    '..ooo..',
+    '.oyyyo.',
+    'oyyyyyo',
+    'oyyyyyo',
+    '.oyyyo.',
+    '..oyo..',
+    '..ggg..',
+    '..ggg..',
+    '...g...',
+  ];
+
   /** Props: small pixel grids with their own fixed palettes. */
   const PROPS = {
     partyHat: {
@@ -467,6 +480,162 @@
         '......yy......',
         '.....yy.......',
         '......y.......',
+      ],
+    },
+    bulb: {
+      palette: { o: '#3a3a30', y: '#d8d6c0', g: '#8a8f99' },
+      grid: BULB,
+    },
+    bulbOn: {
+      palette: { o: '#7a5a00', y: '#fff176', g: '#8a8f99' },
+      grid: BULB,
+    },
+    mug: {
+      palette: { o: '#3a2020', b: '#e85d5d', c: '#6b3e1e' },
+      grid: [
+        'oooooo..',
+        'occcco..',
+        'obbbbooo',
+        'obbbbo.o',
+        'obbbbo.o',
+        'obbbbooo',
+        'obbbbo..',
+        '.oooo...',
+      ],
+    },
+    book: {
+      palette: { o: '#3a2a1a', w: '#fbf6e8', g: '#9a8f7a', r: '#c0392b' },
+      grid: [
+        '.ooooo..ooooo.',
+        'owwwwwoowwwwwo',
+        'owggwwoowggwwo',
+        'owwwwwoowwwwwo',
+        'owgggwoowggwwo',
+        'owwwwwoowwwwwo',
+        'oooooooooooooo',
+        '.rrrrrrrrrrrr.',
+      ],
+    },
+    scroll: {
+      palette: { o: '#5a3a1a', y: '#c48a4a', w: '#f6e7c1', g: '#8a7a5a' },
+      grid: [
+        '.oo........oo.',
+        'oyyooooooooyyo',
+        'oyywwwwwwwwyyo',
+        'oyywggwgggwyyo',
+        'oyywwwwwwwwyyo',
+        'oyywgggwggwyyo',
+        'oyyooooooooyyo',
+        '.oo........oo.',
+      ],
+    },
+    keyboard: {
+      palette: { o: '#1c1f26', k: '#3a3f4b', w: '#cfd5e0', c: '#6be6ff' },
+      grid: [
+        'oooooooooooooooooooo',
+        'okwkwkwkwkwkwkwkwkco',
+        'okkwkwkwkwkwkwkwkwko',
+        'okwkwkwkwkwkwkwkwkko',
+        'okkkwwwwwwwwwwwkkkko',
+        'oooooooooooooooooooo',
+      ],
+    },
+    notepad: {
+      palette: { o: '#2b2b33', w: '#ffffff', g: '#9ab0d0', y: '#ffd23f', k: '#4a4a4a' },
+      grid: [
+        'oooooooo...o',
+        'owwwwwwo..oy',
+        'owggggwo.oyo',
+        'owwwwwwooyo.',
+        'owggggwoyo..',
+        'owwwwwwkk...',
+        'owgggwwo....',
+        'owwwwwwo....',
+        'oooooooo....',
+      ],
+    },
+    wrench: {
+      palette: { o: '#2b2b33', g: '#a8b0bc' },
+      grid: [
+        'oo.o.......',
+        'ogogo......',
+        'oggggoooooo',
+        'oggggggggggo',
+        'oggggoooooo.',
+        'ogogo......',
+        'oo.o.......',
+      ],
+    },
+    telescope: {
+      palette: { o: '#1c1f26', b: '#c9a227', g: '#7fd3ff', l: '#5a4a2a' },
+      grid: [
+        '..........oo',
+        '........oogo',
+        '......oobbo.',
+        '....oobbbo..',
+        '..oobbbo....',
+        '.obbbo......',
+        '..olo.......',
+        '.ol.lo......',
+        'ol...lo.....',
+      ],
+    },
+    megaphone: {
+      palette: { o: '#2b2b33', r: '#ff4f7b', w: '#ffffff' },
+      grid: [
+        '......ooo',
+        '....oorro',
+        'oooorrrro',
+        'owwrrrrro',
+        'oooorrrro',
+        '....oorro',
+        '......ooo',
+      ],
+    },
+    baton: {
+      palette: { o: '#3a2a1a', w: '#ffffff' },
+      grid: [
+        '........w',
+        '.......w.',
+        '......w..',
+        '.....w...',
+        '....w....',
+        '...o.....',
+        '..oo.....',
+        '.oo......',
+        'oo.......',
+      ],
+    },
+    sign: {
+      palette: { o: '#5a3a1a', w: '#fbf6e8', k: '#e63946', b: '#8b5a2b' },
+      grid: [
+        'ooooooooooo',
+        'owwwwwwwwwo',
+        'owwwkkkwwwo',
+        'owwkwwwkwwo',
+        'owwwwwkwwwo',
+        'owwwwkwwwwo',
+        'owwwwwwwwwo',
+        'owwwwkwwwwo',
+        'ooooobooooo',
+        '.....b.....',
+        '.....b.....',
+        '.....b.....',
+      ],
+    },
+    trophy: {
+      palette: { o: '#7a5a00', y: '#ffd23f', w: '#ffffff', Y: '#b8860b' },
+      grid: [
+        'oooooooooo',
+        'oyywyyyyyo',
+        'oyywyyyyyo',
+        '.oyyyyyyo.',
+        '..oyyyyo..',
+        '...oyyo...',
+        '....yy....',
+        '....yy....',
+        '..oYYYYo..',
+        '..oooooo..',
       ],
     },
   };

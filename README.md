@@ -12,7 +12,7 @@ A pixel-art pet (fox, cat, dog or bird) that lives in your VS Code sidebar and a
 
 ### Your pet acts out the agent
 
-Each state has its own pose, expression, prop and a ring of emojis orbiting the pet.
+Each state has its own pose, expression, prop and a ring of emojis orbiting the pet. The table shows the classic look; with variety on (the default) each state has several more, see below.
 
 | Agent is...                  | Pet does                                              | Orbiting emojis |
 | ---------------------------- | ----------------------------------------------------- | --------------- |
@@ -20,25 +20,66 @@ Each state has its own pose, expression, prop and a ring of emojis orbiting the 
 | Reading / searching files    | Holds a magnifying glass, eyes look down              | 🔍 📖 📄 👀     |
 | Editing files                | Types on a laptop, tongue out in concentration        | ✏️ 📝 ⌨️ 💾     |
 | Running commands             | Runs in place, sweat drops and dust puffs             | ⚙️ 🔧 ⚡ 💻     |
+| Running tests                | Sits by a machine and watches it work                 | 🧪 ⏳ 🔬 🫧     |
 | Browsing the web / MCP tools | Looks through binoculars                              | 🌐 🔗 📡 🛰️     |
 | Starting sub-agents          | Holds a clipboard while mini pets spawn               | 📋 📣 👥 🧩     |
 | Waiting for you              | Hops, with a flashing `!` / `?` speech bubble         | ❓ ❗ 🙋 ⏳     |
 | A tool call failed           | Storm cloud overhead, shakes, angry eyes              | 💢 💥 ⚠️ 🐛     |
 | Finished the task            | Party hat, jumps, confetti                            | 🎉 ⭐ 🏆 ✅     |
-| Idle for 30 seconds          | Nightcap, snot bubble, floating Zzz                   |                 |
+| Idle for a while             | Nightcap, snot bubble, floating Zzz                   |                 |
 
 The pet also blinks, wags its tail (or flaps its wings), twitches its ears, and wakes up with a stretch and a yawn when work starts.
+
+Once the agent does the same kind of thing twice in a row (two web searches, two file writes...), the pet keeps doing it, however long the agent thinks in between, until something different happens: another kind of tool call, an error, a question for you, or the end of the turn. A single action is held for 8 seconds of thinking, so it doesn't flicker back and forth.
+
+### Never the same twice
+
+With `peon-pet.variety` set to `random` (the default), every state picks one of several animations each time it starts, and never the same one twice in a row. Set it to `classic` to always get the looks in the table above.
+
+| State      | Variants                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------ |
+| Napping    | nightcap, sideways, rolling over from side to side, belly-up, as a loaf, in a cardboard box, in a bed, on a perch (birds) |
+| Thinking   | thought bubble, light bulb idea, pacing, over coffee, levitating meditation, maths on a chalkboard |
+| Reading    | magnifying glass, a book, sniffing out clues, buried in a stack of books, ancient scrolls  |
+| Writing    | laptop, mechanical keyboard with flying code, scribbling on a notepad, hacker mode         |
+| Running    | running in place, hamster wheel, tinkering with a wrench, zoomies across the panel, flying laps (birds) |
+| Testing    | watching the machine, eating popcorn, nervously, pacing, fingers crossed                   |
+| Browsing   | binoculars, telescope, surfing the web on a surfboard, satellite dish, scouting from the sky (birds) |
+| Delegating | clipboard, megaphone, conducting the team with a baton                                     |
+| Waiting    | `!` / `?` bubble, holding up a sign, tapping its foot, waving at you                       |
+| Error      | storm cloud, fuming, throwing a tantrum, flopping over                                     |
+| Done       | party hat, raising a trophy, victory dance, backflip                                       |
 
 ### It has a life of its own
 
 - **Idle fidgets.** When nothing is happening it looks around, twitches its ears, yawns, hops, grooms, wags, or chases its tail.
-- **Wandering.** It strolls around the panel when idle, and runs back to its spot the moment the agent starts working. Turn this off with `peon-pet.wander`.
+- **Hobbies.** With variety on it also gets up to things on its own: chasing a butterfly, bird watching, digging, dancing, daydreaming, reading, having a coffee, yoga, rolling around, and playing with its toys. Birds fly around the panel. It stays up for 90 seconds instead of 30 before napping, and now and then gets up from a nap by itself.
+- **Wandering.** It strolls around the panel when idle, and runs back to its spot the moment the agent starts working. Turn this off with `peon-pet.wander` (this also keeps it from flying or running off after toys).
 - **Follows your mouse.** Its pupils track your cursor across the panel.
 - **Pet it.** Click for hearts 💖, double-click for a spin-jump trick ⭐. Clicking a napping pet wakes it up. Mini pets like attention too.
 
-### Sub-agents become mini pets
+### Toys and furniture
 
-Every sub-agent the agent starts appears as a mini version of your pet in its own colour. Each one gets a name that fits its job (explorers become "Detective Noodle" or "Scout Waffles", planners become "Professor Pickles"), with its task shown underneath. Minis act out their own state, celebrate when they finish, then vanish in a puff.
+Every minute or two something new turns up on the floor (`peon-pet.toys`). Each find has a rarity:
+
+| Rarity    | Chance | Examples                                                      |
+| --------- | ------ | ------------------------------------------------------------- |
+| Common    | 62%    | 🧶 yarn, 📦 box, 🦴 bone, 🧸 teddy, 🥏 frisbee, 🪴 plant, 🎈 balloon |
+| Uncommon  | 25%    | 🪑 chair, 🛋️ couch, 🛏️ bed, 🎸 guitar, 🥁 drum, 🛹 skateboard, 🪁 kite, 🏀 basketball |
+| Rare      | 10%    | 🚀 rocket, 🕹️ arcade stick, ⛺ tent, 🛸 tiny UFO, 🏰 castle     |
+| Legendary | 3%     | 👑 golden crown, 💎 giant diamond, 🦄 unicorn plush, 🌈 pocket rainbow |
+
+Rarer finds glow and sparkle, and a banner announces new ones. Your pet plays with them when idle: it chases the yarn, hides in the box, lounges on the couch, naps in the bed, rides the skateboard, jams on the guitar, jumps for the balloon and admires the treasure. Click a toy to poke it, hover it to see its rarity. Toys wander off after a few minutes, so there is always something new. Your collection is remembered; hover your pet to see how many of the 24 you have found.
+
+### Machines for tests and jobs
+
+Every test run, build and background shell command gets a machine next to your pet: a washing machine, oven, microwave, computer, engine or server rack, each with its own animation (spinning socks, glowing oven window, scrolling test output, turning gears, blinking lights). More jobs, more machines; sub-agents' tests count too. When a job finishes its machine dings 🔔 and goes away. While tests run the pet waits beside them, watching. In `classic` variety tests always get a washing machine, builds an engine and dev servers a server rack. Hover a machine to see its command and how long it has been running. Turn them off with `peon-pet.machines`.
+
+### Sub-agents and other sessions become mini pets
+
+Every sub-agent the agent starts appears as a mini version of your pet in its own colour, lined up along the bottom of the panel. Each one gets a name that fits its job (explorers become "Detective Noodle" or "Scout Waffles", planners become "Professor Pickles"), with its task shown underneath. Minis act out their own state, celebrate when they finish, then vanish in a puff.
+
+Other Claude Code sessions that were busy in the last couple of minutes join them as minis named after their project (`peon-pet.backgroundPets`). They don't lock pet care, since they aren't working for this window.
 
 ### Take care of it
 
@@ -56,7 +97,7 @@ Click a tool again to put it away. While care mode is open you can't drag your p
 
 Your pet has opinions: it won't eat when it's full, won't take treats when stuffed, and is too hungry to play when starving. Playing makes it a little hungry and messy. When a stat is low you'll see it: dirt smudges on its fur, and "hungry", "bored" or "needs a bath" under its name with little 🍖 / 🥺 / 🪰 hints.
 
-**No treats on the clock.** While the agent is working, or any helper pets are out, care is locked: the buttons grey out, any tool in hand is put away, and clicking the pet just gets a 🛠️ "busy working" bubble. Care unlocks as soon as the task is done.
+**No treats on the clock.** While the agent is working, or any of its helper pets are out, care is locked: the buttons grey out, any tool in hand is put away, and clicking the pet just gets a 🛠️ "busy working" bubble. Care unlocks as soon as the task is done.
 
 ### Make it yours
 
@@ -88,6 +129,8 @@ The pet reads two sources. Both are **read-only**: the extension never writes to
 
 1. **Claude Code session logs** (`~/.claude/projects/`). These give the detailed states above plus sub-agent names and tasks. Nothing to install. If you have several sessions running, the pet follows the most recent one inside the folder you have open in VS Code.
 2. **[peon-ping](https://github.com/PeonPing/peon-ping)** (`~/.claude/hooks/peon-ping/.state.json`), if you have it installed. This covers other agents (Cursor, Codex, OpenCode, Kiro) with coarser states: waking, thinking, waiting, error and done.
+
+Tests, builds and background jobs are recognised from the shell command (`npm test`, `pytest`, `flutter test`, `npm run build`, `npm run dev`...). A background job's machine stays until Claude Code logs its completion notification.
 
 **Limitation:** Claude Code doesn't log when it is showing you a permission prompt. If a file edit (or another non-shell tool call) has no result after 5 seconds, the pet assumes it is waiting for your OK. Long-running shell commands, web fetches and sub-agents are excluded from that guess.
 
@@ -135,6 +178,10 @@ To update after pulling changes, run the task again and reload the window.
 | `peon-pet.stateColors` | `true`   | Tint the pet and its aura with a colour per agent state                     |
 | `peon-pet.wander`      | `true`   | Wander around the panel and fidget when idle                                |
 | `peon-pet.artStyle`    | `smooth` | `smooth` rounds the pixel art off with Scale2x upscaling; `pixel` keeps it crisp |
+| `peon-pet.variety`     | `random` | `random` picks a different animation each time and adds idle hobbies; `classic` always uses the same one |
+| `peon-pet.toys`        | `true`   | Toys and furniture of varying rarity turn up and get played with            |
+| `peon-pet.machines`    | `true`   | A machine for each running test, build or background job                    |
+| `peon-pet.backgroundPets` | `true` | Other busy Claude sessions as small pets along the bottom                  |
 | `peon-pet.size`        | `medium` | `small`, `medium` or `large`                                                |
 
 Settings changes apply instantly; no reload needed. All colour settings take any CSS colour, so you can also just ask your AI agent, e.g. *"give my pet a gold crown and blue eyes"*.
@@ -162,6 +209,8 @@ Where things live:
 | `src/pet-care.ts`           | Care stats, decay, reward/refusal rules and persistence                 |
 | `media/play.js`             | Hands-on care: kibble, treats, fetch physics, bath scrubbing, stroking  |
 | `media/pets.js`             | All pixel art: species, expressions, props, palettes                    |
+| `media/variants.js`         | Animation variants per state and idle hobbies (pure data + pickers)     |
+| `media/scene.js`            | Toys with rarity, machines for jobs, critters, variant scenery          |
 | `media/webview.js`          | Canvas renderer, animations, emoji orbits, particles, mini-pet layout   |
 
 ### Editing the art

@@ -157,6 +157,34 @@
           ],
           "description": "How the pet is drawn."
         },
+        "peon-pet.variety": {
+          "type": "string",
+          "default": "random",
+          "enum": [
+            "random",
+            "classic"
+          ],
+          "enumDescriptions": [
+            "Mix it up: napping sideways or belly-up, hamster wheels, surfing the web, toys, idle hobbies...",
+            "Always the same animation for each activity"
+          ],
+          "description": "How varied the pet's animations are."
+        },
+        "peon-pet.toys": {
+          "type": "boolean",
+          "default": true,
+          "description": "Toys and furniture turn up around the pet, from common yarn balls to legendary finds. Your pet plays with them when idle."
+        },
+        "peon-pet.machines": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a machine (washing machine, oven, computer, engine...) for each test run, build or background job, with the pet waiting beside it."
+        },
+        "peon-pet.backgroundPets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show other busy Claude sessions as small pets along the bottom of the panel."
+        },
         "peon-pet.size": {
           "type": "string",
           "enum": [

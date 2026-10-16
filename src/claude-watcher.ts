@@ -6,6 +6,7 @@ import { buildSessionStates, SessionState } from './session-tracker';
 import { funnyName } from './pet-names';
 import {
   AgentActivity,
+  Job,
   PetState,
   applyLine,
   createActivity,
@@ -29,6 +30,7 @@ const HOT_MS = 30 * 1000;
 const WARM_MS = 2 * 60 * 1000;
 const MAX_SESSIONS = 10;
 const MAX_SUBAGENTS = 8;
+const MAX_BACKGROUND = 4;
 
 export interface MainPetUpdate {
   sessionId: string;
@@ -36,6 +38,7 @@ export interface MainPetUpdate {
   detail: string;
   seq: number;
   project: string | null;
+  jobs: Job[];
 }
 
 export interface SubagentUpdate {
@@ -46,12 +49,28 @@ export interface SubagentUpdate {
   state: PetState;
   detail: string;
   seq: number;
+  jobs: Job[];
+}
+
+/** Another Claude session that was busy recently, shown as a small pet along the bottom. */
+export interface BackgroundUpdate {
+  id: string;
+  project: string | null;
+  state: PetState;
+  detail: string;
+  seq: number;
+  jobs: Job[];
 }
 
 export interface ClaudeUpdate {
   main: MainPetUpdate | null;
   subagents: SubagentUpdate[];
+  background: BackgroundUpdate[];
   sessions: SessionState[];
+}
+
+function projectName(cwd: string | null): string | null {
+  return cwd ? path.basename(cwd.replace(/\\/g, '/')) : null;
 }
 
 type Listener = (u: ClaudeUpdate) => void;
@@ -330,6 +349,12 @@ export class ClaudeWatcher implements vscode.Disposable {
           }))
       : [];
 
+    const background = [...this.sessions.values()]
+      .filter((s) => s !== main && now - this.lastActive(s) < WARM_MS)
+      .sort((a, b) => this.lastActive(b) - this.lastActive(a))
+      .slice(0, MAX_BACKGROUND)
+      .map((s) => ({ id: s.id, project: projectName(s.act.cwd), ...currentState(s.act, now) }));
+
     const entries: [string, number][] = [...this.sessions.values()].map((s) => [
       s.id,
       this.lastActive(s),
@@ -343,11 +368,12 @@ export class ClaudeWatcher implements vscode.Disposable {
       main: main
         ? {
             sessionId: main.id,
-            project: main.act.cwd ? path.basename(main.act.cwd.replace(/\\/g, '/')) : null,
+            project: projectName(main.act.cwd),
             ...currentState(main.act, now),
           }
         : null,
       subagents,
+      background,
       sessions,
     };
   }

@@ -1,9 +1,11 @@
 import {
+  LINGER_MS,
   PERMISSION_GUESS_MS,
   STALE_MS,
   applyLine,
   createActivity,
   currentState,
+  jobKind,
   toolDetail,
   toolState,
 } from '../transcript-parser';
@@ -55,6 +57,25 @@ describe('toolState', () => {
   it('treats MCP tools as browsing and unknown tools as running', () => {
     expect(toolState('mcp__github__get_issue')).toBe('browsing');
     expect(toolState('SomethingNew')).toBe('running');
+  });
+});
+
+describe('jobKind', () => {
+  it.each([
+    ['npm test', 'test'],
+    ['npm run test:unit -- --watch=false', 'test'],
+    ['flutter test test/code_quality', 'test'],
+    ['npx jest src', 'test'],
+    ['python -m pytest -q', 'test'],
+    ['go test ./...', 'test'],
+    ['npm run build', 'build'],
+    ['npm run compile', 'build'],
+    ['cargo build --release', 'build'],
+    ['npm run dev', 'server'],
+    ['git status', 'job'],
+    ['ls src/__tests__', 'job'],
+  ])('%s -> %s', (command, kind) => {
+    expect(jobKind(command)).toBe(kind);
   });
 });
 
@@ -136,7 +157,7 @@ describe('applyLine / currentState', () => {
 
   it('does not treat a long shell command as a permission prompt', () => {
     const act = createActivity();
-    applyLine(act, toolUse('t1', 'Bash', { command: 'npm test' }));
+    applyLine(act, toolUse('t1', 'Bash', { command: 'npm run lint' }));
     expect(currentState(act, T0 + 60_000).state).toBe('running');
   });
 
@@ -151,6 +172,127 @@ describe('applyLine / currentState', () => {
     applyLine(act, endTurn());
     expect(currentState(act, T0 + 1000).state).toBe('done');
     expect(currentState(act, T0 + STALE_MS + 1).state).toBe('idle');
+  });
+
+  it('runs tests as their own state with a job while they run', () => {
+    const act = createActivity();
+    applyLine(act, toolUse('t1', 'Bash', { command: 'npm test' }));
+    expect(act.state).toBe('testing');
+    expect(currentState(act, T0).jobs).toEqual([
+      { id: 't1', kind: 'test', label: 'npm test', background: false },
+    ]);
+    applyLine(act, toolResult('t1', false, 100));
+    expect(currentState(act, T0 + 100).jobs).toEqual([]);
+  });
+
+  it('keeps a background job until its task notification arrives', () => {
+    const act = createActivity();
+    applyLine(
+      act,
+      toolUse('bg1', 'Bash', { command: 'npm run watch', run_in_background: true }, 0),
+    );
+    applyLine(act, toolResult('bg1', false, 50));
+    applyLine(act, endTurn(100));
+    expect(currentState(act, T0 + 200).jobs).toMatchObject([
+      { id: 'bg1', kind: 'server', background: true },
+    ]);
+
+    applyLine(act, {
+      type: 'queue-operation',
+      operation: 'enqueue',
+      timestamp: at(300),
+      content: '<task-notification>\n<tool-use-id>bg1</tool-use-id>\n<status>completed</status>',
+    });
+    expect(currentState(act, T0 + 300).jobs).toEqual([]);
+  });
+
+  it('also ends a background job from the replayed user notification', () => {
+    const act = createActivity();
+    applyLine(act, toolUse('bg2', 'Bash', { command: 'npx jest', run_in_background: true }));
+    applyLine(act, toolResult('bg2'));
+    applyLine(act, {
+      type: 'user',
+      timestamp: at(10),
+      message: {
+        content: '<task-notification><tool-use-id>bg2</tool-use-id><status>failed</status>',
+      },
+    });
+    expect(act.jobs.size).toBe(0);
+    expect(act.state).toBe('thinking');
+  });
+
+  it('holds a single action briefly through the think after it', () => {
+    const act = createActivity();
+    applyLine(act, prompt('research it'));
+    applyLine(act, toolUse('w1', 'WebSearch', { query: 'pets' }, 100));
+    applyLine(act, toolResult('w1', false, 1000));
+    expect(act.state).toBe('thinking');
+    expect(currentState(act, T0 + 2000)).toMatchObject({
+      state: 'browsing',
+      detail: 'Search pets',
+    });
+    expect(currentState(act, T0 + 1000 + LINGER_MS + 1).state).toBe('thinking');
+  });
+
+  it('keeps doing an action done twice in a row until something different happens', () => {
+    const act = createActivity();
+    applyLine(act, prompt('build the page'));
+    for (let i = 0; i < 5; i++) {
+      applyLine(act, toolUse(`w${i}`, 'Write', { file_path: `/x/f${i}.ts` }, i * 100));
+      applyLine(act, toolResult(`w${i}`, false, i * 100 + 50));
+    }
+    // A long think after the run of writes still shows typing.
+    applyLine(act, {
+      type: 'assistant',
+      timestamp: at(1000),
+      message: { content: [{ type: 'thinking', thinking: '...' }] },
+    });
+    expect(currentState(act, T0 + 60_000)).toMatchObject({
+      state: 'writing',
+      detail: 'Write f4.ts',
+    });
+
+    // A different action takes over, and on its own only gets the short hold.
+    applyLine(act, toolUse('r1', 'Read', { file_path: '/x/a.ts' }, 61_000));
+    applyLine(act, toolResult('r1', false, 61_100));
+    expect(currentState(act, T0 + 62_000).state).toBe('reading');
+    expect(currentState(act, T0 + 61_100 + LINGER_MS + 1).state).toBe('thinking');
+  });
+
+  it('does not count alternating actions as a run', () => {
+    const act = createActivity();
+    applyLine(act, toolUse('a', 'Read', { file_path: '/x/a.ts' }, 0));
+    applyLine(act, toolResult('a', false, 10));
+    applyLine(act, toolUse('b', 'Edit', { file_path: '/x/a.ts' }, 20));
+    applyLine(act, toolResult('b', false, 30));
+    expect(currentState(act, T0 + 30 + LINGER_MS + 1).state).toBe('thinking');
+  });
+
+  it('stops holding a run when the turn ends or goes quiet', () => {
+    const act = createActivity();
+    for (const id of ['g1', 'g2']) {
+      applyLine(act, toolUse(id, 'Grep', { pattern: 'x' }));
+      applyLine(act, toolResult(id));
+    }
+    expect(currentState(act, T0 + 60_000).state).toBe('reading');
+    expect(currentState(act, T0 + STALE_MS + 1).state).toBe('idle');
+
+    applyLine(act, endTurn(100));
+    expect(currentState(act, T0 + 200).state).toBe('done');
+    applyLine(act, prompt('again', 300));
+    expect(currentState(act, T0 + 400).state).toBe('thinking');
+  });
+
+  it('does not hold an action after an error or a new prompt', () => {
+    const act = createActivity();
+    applyLine(act, toolUse('e1', 'Edit', { file_path: '/x/a.ts' }));
+    applyLine(act, toolResult('e1', false, 10));
+    applyLine(act, prompt('actually, stop', 20));
+    expect(currentState(act, T0 + 30).state).toBe('thinking');
+
+    applyLine(act, toolUse('e2', 'Edit', { file_path: '/x/a.ts' }, 40));
+    applyLine(act, toolResult('e2', true, 50));
+    expect(currentState(act, T0 + 60).state).toBe('error');
   });
 
   it('survives junk lines', () => {

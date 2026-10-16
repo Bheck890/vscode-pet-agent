@@ -57,6 +57,8 @@ describe('webview-helpers', () => {
 <link rel="stylesheet" href="<!--CSS_URI-->">
 <script nonce="<!--NONCE-->" src="<!--PETS_URI-->"></script>
 <script nonce="<!--NONCE-->" src="<!--PLAY_URI-->"></script>
+<script nonce="<!--NONCE-->" src="<!--VARIANTS_URI-->"></script>
+<script nonce="<!--NONCE-->" src="<!--SCENE_URI-->"></script>
 <script nonce="<!--NONCE-->" src="<!--SCRIPT_URI-->"></script>` as unknown as ReturnType<
         typeof fs.readFileSync
       >,
@@ -76,7 +78,9 @@ describe('webview-helpers', () => {
     expect(html).toContain(`webview:${path.join('/ext/media', 'pets.js')}`);
     expect(html).toContain(`webview:${path.join('/ext/media', 'webview.js')}`);
     expect(html).toContain(`webview:${path.join('/ext/media', 'play.js')}`);
-    expect(html.match(/nonce="abc123"/g)).toHaveLength(3);
+    expect(html).toContain(`webview:${path.join('/ext/media', 'variants.js')}`);
+    expect(html).toContain(`webview:${path.join('/ext/media', 'scene.js')}`);
+    expect(html.match(/nonce="abc123"/g)).toHaveLength(5);
     expect(html).not.toContain('<!--');
   });
 

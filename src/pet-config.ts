@@ -69,6 +69,14 @@ export interface PetConfig {
   wander: boolean;
   /** 'smooth' rounds the pixel art off; 'pixel' keeps the crisp blocks. */
   artStyle: 'smooth' | 'pixel';
+  /** 'random' picks a different animation each time; 'classic' always uses the first one. */
+  variety: 'random' | 'classic';
+  /** Toys and furniture of varying rarity turn up around the pet. */
+  toys: boolean;
+  /** A machine (washer, oven, computer...) appears for each test run or background job. */
+  machines: boolean;
+  /** Other busy Claude sessions show as small pets along the bottom. */
+  backgroundPets: boolean;
   size: number;
 }
 
@@ -113,6 +121,10 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     stateColors: get('stateColors') !== false,
     wander: get('wander') !== false,
     artStyle: get('artStyle') === 'pixel' ? 'pixel' : 'smooth',
+    variety: get('variety') === 'classic' ? 'classic' : 'random',
+    toys: get('toys') !== false,
+    machines: get('machines') !== false,
+    backgroundPets: get('backgroundPets') !== false,
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };
 }

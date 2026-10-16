@@ -30,11 +30,12 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       return false;
     }
     const state = value as Record<string, unknown>;
+    const coord = (v: unknown) => v === undefined || (typeof v === 'number' && Number.isFinite(v));
+    const seen = state['seen'];
     return (
-      typeof state['petX'] === 'number' &&
-      Number.isFinite(state['petX']) &&
-      typeof state['petY'] === 'number' &&
-      Number.isFinite(state['petY'])
+      coord(state['petX']) &&
+      coord(state['petY']) &&
+      (seen === undefined || (Array.isArray(seen) && seen.every((s) => typeof s === 'string')))
     );
   }
 

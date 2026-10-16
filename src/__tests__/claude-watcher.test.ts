@@ -65,7 +65,10 @@ describe('ClaudeWatcher', () => {
       }),
     );
     const u = snapshot([]);
-    expect(u?.main).toMatchObject({ sessionId: 'sess-1', state: 'running', project: 'my-app' });
+    expect(u?.main).toMatchObject({ sessionId: 'sess-1', state: 'testing', project: 'my-app' });
+    expect(u?.main?.jobs).toEqual([
+      { id: 't1', kind: 'test', label: 'npm test', background: false },
+    ]);
     expect(u?.sessions[0]).toMatchObject({ id: 'sess-1', hot: true, cwd: '/work/my-app' });
   });
 
@@ -103,6 +106,25 @@ describe('ClaudeWatcher', () => {
       state: 'reading',
     });
     expect(u?.subagents[0].name).toMatch(/^(Detective|Scout|Sniffer|Tracker|Sleuth) /);
+  });
+
+  it('reports other recently busy sessions as background agents', () => {
+    writeSession('p1', 'mine', '/work/mine', '');
+    writeSession(
+      'p2',
+      'other',
+      '/work/other-app',
+      line({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'tool_use', id: 'r', name: 'Read', input: { file_path: '/a.ts' } }],
+        },
+      }),
+    );
+    const u = snapshot(['/work/mine']);
+    expect(u?.main?.sessionId).toBe('mine');
+    expect(u?.background).toHaveLength(1);
+    expect(u?.background[0]).toMatchObject({ id: 'other', project: 'other-app', state: 'reading' });
   });
 
   it('only replays the tail of a huge transcript and skips the cut-off line', () => {

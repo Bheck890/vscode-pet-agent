@@ -9,11 +9,22 @@ export type PetState =
   | 'reading'
   | 'writing'
   | 'running'
+  | 'testing'
   | 'browsing'
   | 'delegating'
   | 'waiting'
   | 'error'
   | 'done';
+
+export type JobKind = 'test' | 'build' | 'server' | 'job';
+
+/** A test run, build or background shell. The webview draws a machine for each one. */
+export interface Job {
+  id: string;
+  kind: JobKind;
+  label: string;
+  background: boolean;
+}
 
 /** Live activity of one agent (main session or sub-agent), built from its transcript. */
 export interface AgentActivity {
@@ -28,12 +39,34 @@ export interface AgentActivity {
   pending: Map<string, string>;
   /** True once the agent's turn ended (`stop_reason: end_turn`). */
   finished: boolean;
+  /** Running tests, builds and background shells, keyed by tool_use id. */
+  jobs: Map<string, Job>;
+  /** The action that just finished, shown instead of 'thinking' until `until`. */
+  linger: { state: PetState; detail: string; until: number } | null;
+  /** How many tool calls in a row had the same state. */
+  streak: { state: PetState; count: number };
 }
 
 /** A pending non-shell tool call this old is most likely sitting on a permission prompt. */
 export const PERMISSION_GUESS_MS = 5000;
 /** A turn with no new lines for this long was probably abandoned. */
 export const STALE_MS = 2 * 60 * 1000;
+/**
+ * The gap between two tool calls is usually a few seconds of thinking. Holding
+ * a single action through it avoids a flicker. Once the same action has
+ * happened twice in a row it is held until something different happens.
+ */
+export const LINGER_MS = 8000;
+const STREAK = 2;
+
+const LINGERING = new Set<PetState>([
+  'reading',
+  'writing',
+  'running',
+  'testing',
+  'browsing',
+  'delegating',
+]);
 
 const TOOL_STATES: Record<string, PetState> = {
   Read: 'reading',
@@ -70,6 +103,26 @@ const LONG_RUNNING = new Set([
   'WebSearch',
 ]);
 
+const SHELLS = new Set(['Bash', 'PowerShell']);
+
+const TEST_RE =
+  /\b(?:(?:npm|pnpm|yarn|bun)(?:\s+run)?|go|cargo|flutter|dart|dotnet|mvn|gradlew?|mix|deno|swift|make)\s+test\b|\b(?:jest|vitest|pytest|mocha|karma|playwright|cypress|rspec|phpunit|ctest|tox|unittest)\b/i;
+const BUILD_RE =
+  /\b(?:(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:build|compile|package)|(?:cargo|go|flutter|dotnet|vite|next)\s+build|gradlew?\s+(?:build|assemble)|mvn\s+(?:package|install|compile)|webpack|tsc|make|msbuild)\b/i;
+const SERVER_RE =
+  /\b(?:(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:dev|start|serve|watch)|serve|http-server|vite|uvicorn|watch)\b/i;
+
+/** What sort of machine a shell command deserves. */
+export function jobKind(command: string): JobKind {
+  if (TEST_RE.test(command)) {
+    return 'test';
+  }
+  if (BUILD_RE.test(command)) {
+    return 'build';
+  }
+  return SERVER_RE.test(command) ? 'server' : 'job';
+}
+
 export function createActivity(): AgentActivity {
   return {
     state: 'idle',
@@ -79,6 +132,9 @@ export function createActivity(): AgentActivity {
     cwd: null,
     pending: new Map(),
     finished: false,
+    jobs: new Map(),
+    linger: null,
+    streak: { state: 'idle', count: 0 },
   };
 }
 
@@ -134,6 +190,60 @@ function set(act: AgentActivity, state: PetState, detail: string): void {
   act.seq++;
 }
 
+/** Foreground jobs end with their turn; background ones run until their notification. */
+function clearForeground(act: AgentActivity): void {
+  act.pending.clear();
+  for (const [id, job] of act.jobs) {
+    if (!job.background) {
+      act.jobs.delete(id);
+    }
+  }
+}
+
+/** Something other than the held action happened, so stop holding it. */
+function breakStreak(act: AgentActivity): void {
+  act.linger = null;
+  act.streak = { state: 'idle', count: 0 };
+}
+
+function newTurn(act: AgentActivity): void {
+  act.finished = false;
+  breakStreak(act);
+  clearForeground(act);
+  set(act, 'thinking', '');
+}
+
+/** `<task-notification>` text names the tool_use id of the background job it ends. */
+function endJobs(act: AgentActivity, text: string): void {
+  if (/<status>running<\/status>/.test(text)) {
+    return;
+  }
+  for (const m of text.matchAll(/<tool-use-id>([^<]+)<\/tool-use-id>/g)) {
+    act.jobs.delete(m[1]);
+  }
+}
+
+function startTool(act: AgentActivity, block: Record<string, unknown>): void {
+  const name = str(block['name']);
+  const id = str(block['id']);
+  const input = (block['input'] ?? {}) as Record<string, unknown>;
+  act.pending.set(id, name);
+  let state = toolState(name);
+  if (SHELLS.has(name)) {
+    const kind = jobKind(str(input['command']));
+    const background = input['run_in_background'] === true;
+    if (kind === 'test') {
+      state = 'testing';
+    }
+    if (background || kind === 'test' || kind === 'build') {
+      act.jobs.set(id, { id, kind, label: toolDetail(name, input), background });
+    }
+  }
+  const same = act.streak.state === state;
+  act.streak = { state, count: same ? act.streak.count + 1 : 1 };
+  set(act, state, toolDetail(name, input));
+}
+
 /** Applies one parsed transcript line to the activity. Unknown shapes are ignored. */
 export function applyLine(act: AgentActivity, line: unknown): void {
   if (!line || typeof line !== 'object') {
@@ -156,6 +266,11 @@ export function applyLine(act: AgentActivity, line: unknown): void {
     set(act, 'thinking', 'compacting memory');
     return;
   }
+  // Background jobs finishing are enqueued here first, then replayed as a user message.
+  if (type === 'queue-operation') {
+    endJobs(act, str(d['content']));
+    return;
+  }
   if (type !== 'user' && type !== 'assistant') {
     return;
   }
@@ -166,10 +281,10 @@ export function applyLine(act: AgentActivity, line: unknown): void {
   if (type === 'user') {
     if (typeof content === 'string') {
       // Slash-command plumbing and hook output arrive as tagged strings, not prompts.
-      if (!content.startsWith('<')) {
-        act.finished = false;
-        act.pending.clear();
-        set(act, 'thinking', '');
+      if (content.startsWith('<task-notification>')) {
+        endJobs(act, content);
+      } else if (!content.startsWith('<')) {
+        newTurn(act);
       }
       return;
     }
@@ -178,21 +293,30 @@ export function applyLine(act: AgentActivity, line: unknown): void {
     }
     for (const block of content as Record<string, unknown>[]) {
       if (block?.['type'] === 'tool_result') {
-        act.pending.delete(str(block['tool_use_id']));
+        const id = str(block['tool_use_id']);
+        act.pending.delete(id);
+        if (!act.jobs.get(id)?.background) {
+          act.jobs.delete(id);
+        }
         if (block['is_error'] === true) {
+          breakStreak(act);
           set(act, 'error', 'a tool call failed');
         } else if (act.pending.size === 0) {
+          if (LINGERING.has(act.state)) {
+            const from = Number.isNaN(ts) ? act.lastAt : ts;
+            const until = act.streak.count >= STREAK ? Infinity : from + LINGER_MS;
+            act.linger = { state: act.state, detail: act.detail, until };
+          }
           set(act, 'thinking', '');
         }
       } else if (block?.['type'] === 'text') {
         if (str(block['text']).startsWith('[Request interrupted')) {
-          act.pending.clear();
+          clearForeground(act);
+          breakStreak(act);
           act.finished = true;
           set(act, 'idle', 'interrupted');
         } else {
-          act.finished = false;
-          act.pending.clear();
-          set(act, 'thinking', '');
+          newTurn(act);
         }
       }
     }
@@ -204,43 +328,47 @@ export function applyLine(act: AgentActivity, line: unknown): void {
       if (block?.['type'] === 'thinking') {
         set(act, 'thinking', '');
       } else if (block?.['type'] === 'tool_use') {
-        const name = str(block['name']);
-        act.pending.set(str(block['id']), name);
-        set(act, toolState(name), toolDetail(name, block['input']));
+        startTool(act, block);
       } else if (block?.['type'] === 'text' && msg['stop_reason'] !== 'end_turn') {
         set(act, 'thinking', '');
       }
     }
   }
   if (msg['stop_reason'] === 'end_turn') {
-    act.pending.clear();
+    clearForeground(act);
+    breakStreak(act);
     act.finished = true;
     set(act, 'done', 'all done!');
   }
 }
 
 /**
- * The state to show right now. Adds two time-based guesses on top of the
- * transcript: a stalled non-shell tool call means a permission prompt, and a
- * long silence means the turn was abandoned.
+ * The state to show right now. Adds time-based guesses on top of the
+ * transcript: a stalled non-shell tool call means a permission prompt, a long
+ * silence means the turn was abandoned, and thinking between tool calls keeps
+ * showing the last action (see LINGER_MS).
  */
 export function currentState(
   act: AgentActivity,
   now: number,
-): { state: PetState; detail: string; seq: number } {
+): { state: PetState; detail: string; seq: number; jobs: Job[] } {
+  const jobs = [...act.jobs.values()];
   const silent = now - act.lastAt;
   if (act.pending.size > 0) {
     const names = [...act.pending.values()];
     const asking = names.find((n) => toolState(n) === 'waiting');
     if (asking) {
-      return { state: 'waiting', detail: 'has a question for you', seq: act.seq };
+      return { state: 'waiting', detail: 'has a question for you', seq: act.seq, jobs };
     }
     if (silent > PERMISSION_GUESS_MS && names.some((n) => !LONG_RUNNING.has(n))) {
-      return { state: 'waiting', detail: 'needs your OK?', seq: act.seq };
+      return { state: 'waiting', detail: 'needs your OK?', seq: act.seq, jobs };
     }
   }
   if (silent > STALE_MS && act.state !== 'waiting') {
-    return { state: 'idle', detail: '', seq: act.seq };
+    return { state: 'idle', detail: '', seq: act.seq, jobs };
   }
-  return { state: act.state, detail: act.detail, seq: act.seq };
+  if (act.state === 'thinking' && act.linger && now < act.linger.until) {
+    return { state: act.linger.state, detail: act.linger.detail, seq: act.seq, jobs };
+  }
+  return { state: act.state, detail: act.detail, seq: act.seq, jobs };
 }

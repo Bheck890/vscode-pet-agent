@@ -9,6 +9,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Animation variants for every state, picked at random each time (`peon-pet.variety`, default `random`; `classic` keeps one look per state). Includes napping sideways, rolling over, belly-up and in a box, a hamster wheel, surfing the web, a chalkboard, a trophy, backflips and more.
+- Idle hobbies: chasing butterflies, bird watching, digging, dancing, yoga, reading, coffee and toy play. Birds fly around the panel. A napping pet sometimes gets up by itself.
+- Toys and furniture with common, uncommon, rare and legendary rarities (`peon-pet.toys`). Finds are remembered as a collection.
+- A `testing` state, and a machine (washing machine, oven, microwave, computer, engine, server rack) for each running test, build or background shell job (`peon-pet.machines`). Background jobs end on Claude Code's task notification.
+- Other recently busy Claude sessions appear as mini pets (`peon-pet.backgroundPets`).
+
+### Changed
+
+- Once the same kind of tool call happens twice in a row (e.g. two web searches or two writes), the pet keeps doing it through any thinking until a different action, an error, a question or the end of the turn. A single action is held for 8 seconds of thinking instead of flicking straight to "thinking".
+- Mini pets line up along the bottom of the panel.
+- Time-based states (permission prompt guess, abandoned turn) now reach the pet even when no new transcript line arrived.
+
 ---
 
 ## [0.2.0] — 2026-03-11 · [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=smcqueen.vscode-peon-pet)

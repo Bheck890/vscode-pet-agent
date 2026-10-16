@@ -139,6 +139,22 @@ async function customizePet(): Promise<void> {
         { id: 'wander', label: '🚶 Wander when idle', description: c.wander ? 'on' : 'off' },
         { id: 'stateColors', label: '🌈 State colours', description: c.stateColors ? 'on' : 'off' },
         { id: 'artStyle', label: '✏️ Art style', description: c.artStyle },
+        {
+          id: 'variety',
+          label: '🎬 Animation variety',
+          description: c.variety === 'random' ? 'random (mix it up)' : 'classic (always the same)',
+        },
+        { id: 'toys', label: '🧸 Toys & furniture', description: c.toys ? 'on' : 'off' },
+        {
+          id: 'machines',
+          label: '🧺 Machines for tests & jobs',
+          description: c.machines ? 'on' : 'off',
+        },
+        {
+          id: 'backgroundPets',
+          label: '🐾 Pets for other sessions',
+          description: c.backgroundPets ? 'on' : 'off',
+        },
         { id: 'random', label: '🎲 Randomize look' },
         { id: 'reset', label: '🔄 Reset look to defaults' },
       ],
@@ -205,6 +221,14 @@ async function customizePet(): Promise<void> {
         break;
       case 'artStyle':
         await save('artStyle', c.artStyle === 'smooth' ? 'pixel' : 'smooth');
+        break;
+      case 'variety':
+        await save('variety', c.variety === 'random' ? 'classic' : 'random');
+        break;
+      case 'toys':
+      case 'machines':
+      case 'backgroundPets':
+        await save(menu.id, !c[menu.id]);
         break;
       case 'random':
         await save('color', pick(COLOR_PRESETS).color);

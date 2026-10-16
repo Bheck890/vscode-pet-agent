@@ -23,6 +23,10 @@ const DEFAULTS = {
   stateColors: true,
   wander: true,
   artStyle: 'smooth',
+  variety: 'random',
+  toys: true,
+  machines: true,
+  backgroundPets: true,
   size: 200,
 };
 
@@ -57,6 +61,10 @@ describe('readPetConfig', () => {
       stateColors: false,
       wander: false,
       artStyle: 'pixel',
+      variety: 'classic',
+      toys: false,
+      machines: false,
+      backgroundPets: false,
       size: 'large',
     };
     expect(readPetConfig((k) => values[k])).toEqual({
@@ -71,6 +79,10 @@ describe('readPetConfig', () => {
       stateColors: false,
       wander: false,
       artStyle: 'pixel',
+      variety: 'classic',
+      toys: false,
+      machines: false,
+      backgroundPets: false,
       size: 250,
     });
   });

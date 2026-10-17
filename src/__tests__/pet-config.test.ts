@@ -140,4 +140,13 @@ describe('funnyName', () => {
     const second = funnyName('same', 'general-purpose', new Set([first]));
     expect(second).not.toBe(first);
   });
+
+  it('still finds a unique name when every usual one is taken', () => {
+    const taken = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const name = funnyName('crowd', 'Explore', taken);
+      expect(taken.has(name)).toBe(false);
+      taken.add(name);
+    }
+  });
 });

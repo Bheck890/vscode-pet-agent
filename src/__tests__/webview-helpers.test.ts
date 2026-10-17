@@ -101,7 +101,7 @@ describe('webview-helpers', () => {
     expect(showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('failed to load webview template'),
     );
-    expect(html).toContain('Peon Pet failed to load its webview template');
+    expect(html).toContain('Pet Agents failed to load its webview template');
     expect(html).toContain('missing template');
   });
 });

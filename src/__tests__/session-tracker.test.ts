@@ -110,7 +110,7 @@ describe('buildSessionStates', () => {
     expect(states[0].warm).toBe(false);
   });
 
-  it('sorts sessions by recency — most recent first', () => {
+  it('sorts sessions by recency, most recent first', () => {
     const entries: [string, number][] = [
       [id1, now - 10_000],
       [id2, now - 1_000],

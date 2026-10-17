@@ -364,7 +364,8 @@
       let floor = toys.filter((o) => !o.storing);
       if (floor.length === 0) {
         const ids = [...bag.keys()];
-        const def = TOYS.find((d) => d.id === ids[Math.floor(Math.random() * ids.length)]);
+        const id = ids[Math.floor(Math.random() * ids.length)];
+        const def = TOYS.find((d) => d.id === id);
         const x = clamp(
           g.cx + (Math.random() < 0.5 ? -1 : 1) * g.size * 0.8,
           g.size * 0.2,

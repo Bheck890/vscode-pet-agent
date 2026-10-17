@@ -40,13 +40,13 @@ const PATTERN_ICONS: Record<string, string> = {
 };
 
 function getConfig(): PetConfig {
-  const cfg = vscode.workspace.getConfiguration('peon-pet');
+  const cfg = vscode.workspace.getConfiguration('pet-agents');
   return readPetConfig((key) => cfg.get(key));
 }
 
 function save(key: string, value: unknown): Thenable<void> {
   return vscode.workspace
-    .getConfiguration('peon-pet')
+    .getConfiguration('pet-agents')
     .update(key, value, vscode.ConfigurationTarget.Global);
 }
 
@@ -292,11 +292,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerWebviewViewProvider(PeonViewProvider.viewId, viewProvider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
-    vscode.commands.registerCommand('peon-pet.customize', customizePet),
-    vscode.commands.registerCommand('peon-pet.refresh', () => viewProvider.refresh()),
+    vscode.commands.registerCommand('pet-agents.customize', customizePet),
+    vscode.commands.registerCommand('pet-agents.refresh', () => viewProvider.refresh()),
     new vscode.Disposable(() => clearInterval(careTimer)),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('peon-pet')) {
+      if (e.affectsConfiguration('pet-agents')) {
         viewProvider.reinit();
       }
     }),

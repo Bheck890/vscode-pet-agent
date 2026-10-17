@@ -8,7 +8,7 @@ export function isValidSessionId(id: unknown): id is string {
   return UUID_RE.test(id);
 }
 
-/** A minimal map from session ID → last-seen timestamp. */
+/** A minimal map from session ID -> last-seen timestamp. */
 export interface SessionTracker {
   /** Record or refresh a session, defaulting to `Date.now()`. */
   update(sessionId: string, timestamp?: number): void;

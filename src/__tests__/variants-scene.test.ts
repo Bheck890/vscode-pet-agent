@@ -234,6 +234,19 @@ describe('scene', () => {
     expect(on.bagList().find((t) => t.id === 'yarn')?.out).toBe(true);
   });
 
+  it('always pulls a real toy out of a bag with several kinds in it', () => {
+    const bag = { yarn: 2, box: 1, guitar: 1, skateboard: 1, balloon: 1, crown: 1 };
+    for (let i = 0; i < 40; i++) {
+      const { scene } = makeScene({ toys: true, machines: true });
+      scene.setBag(bag);
+      expect(scene.startToy(Date.now() + 5000)).toBe(true);
+      const out = scene.bagList().filter((t) => t.out);
+      expect(out).toHaveLength(1);
+      expect(Object.keys(bag)).toContain(out[0].id);
+      expect(() => scene.update(Date.now() + 100, 0.016)).not.toThrow();
+    }
+  });
+
   it('puts a machine next to the pet for each job, washing machines for tests in classic', () => {
     const { scene } = makeScene({ toys: false, machines: true, variety: 'classic' });
     scene.setJobs([

@@ -46,14 +46,14 @@ export function buildHtml(webview: vscode.Webview, mediaPath: string, nonce: str
     template = fs.readFileSync(path.join(mediaPath, 'webview.html'), 'utf8');
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown error';
-    void vscode.window.showErrorMessage(`Peon Pet: failed to load webview template (${reason}).`);
+    void vscode.window.showErrorMessage(`Pet Agents: failed to load webview template (${reason}).`);
     return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource};" />
-    <title>Peon Pet</title>
+    <title>Pet Agents</title>
     <style>
       body {
         padding: 12px;
@@ -64,7 +64,7 @@ export function buildHtml(webview: vscode.Webview, mediaPath: string, nonce: str
     </style>
   </head>
   <body>
-    <p>Peon Pet failed to load its webview template.</p>
+    <p>Pet Agents failed to load its webview template.</p>
     <pre>${escapeHtml(reason)}</pre>
   </body>
 </html>`;

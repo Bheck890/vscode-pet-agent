@@ -1,25 +1,28 @@
 # Changelog
 
-All notable changes to Peon Pet will be documented here.
+All notable changes to Pet Agents will be documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.3.0] - 2026-10-16
 
 ### Added
 
-- Animation variants for every state, picked at random each time (`peon-pet.variety`, default `random`; `classic` keeps one look per state). Includes napping sideways, rolling over, belly-up and in a box, a hamster wheel, surfing the web, a chalkboard, a trophy, backflips and more.
+- First release as **Pet Agents** on the VS Code Marketplace (`bheck890.pet-agents`). The panel is now called Pet Agents, commands are `Pet Agents: ...` and settings moved from `peon-pet.*` to `pet-agents.*`; set your look again after upgrading from a source build.
+- New marketplace icon and README GIFs and screenshots, all rendered from the pet art by `npm run media` (`scripts/record-media.js`). The Orc Peon icon and demo GIF are gone.
+- Tests for the marketplace manifest, the sidebar view's message handling, every agent state, dragging, peon-ping events, source encoding and more.
+- Animation variants for every state, picked at random each time (`pet-agents.variety`, default `random`; `classic` keeps one look per state). Includes napping sideways, rolling over, belly-up and in a box, a hamster wheel, surfing the web, a chalkboard, a trophy, backflips and more.
 - Idle hobbies: chasing butterflies, bird watching, digging, dancing, yoga, reading, coffee and toy play. Birds fly around the panel. A napping pet sometimes gets up by itself.
-- Toys and furniture with common, uncommon, rare and legendary rarities (`peon-pet.toys`). Finds go into a saved 🎒 bag; the pet pulls toys out to play with and puts them back. A bag panel shows the collection and lets you take toys out or put them away.
+- Toys and furniture with common, uncommon, rare and legendary rarities (`pet-agents.toys`). Finds go into a saved 🎒 bag; the pet pulls toys out to play with and puts them back. A bag panel shows the collection and lets you take toys out or put them away.
 - The bag is stored in VS Code extension storage (globalState), shared by all windows and kept across reinstalls.
-- `Peon Pet: Refresh Pet` command and ⟳ button in the panel header. After an update the panel now says to reload the window instead of going blank.
-- ⚙️ quick settings panel for the main switches, plus a per-action list to turn off any animation or hobby (`peon-pet.disabledActions`).
+- `Pet Agents: Refresh Pet` command and ⟳ button in the panel header. After an update the panel now says to reload the window instead of going blank.
+- ⚙️ quick settings panel for the main switches, plus a per-action list to turn off any animation or hobby (`pet-agents.disabledActions`).
 - Depth: the pet can move towards the back of the panel and forward again. New "running in circles" variant and hobby.
-- A `testing` state, and a machine (washing machine, oven, microwave, computer, engine, server rack) for each running test, build or background shell job (`peon-pet.machines`). Background jobs end on Claude Code's task notification.
-- Other recently busy Claude sessions appear as mini pets (`peon-pet.backgroundPets`).
+- A `testing` state, and a machine (washing machine, oven, microwave, computer, engine, server rack) for each running test, build or background shell job (`pet-agents.machines`). Background jobs end on Claude Code's task notification.
+- Other recently busy Claude sessions appear as mini pets (`pet-agents.backgroundPets`).
 
 ### Changed
 
@@ -31,7 +34,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
-- One VS Code window's agent could take over the pet in another window. Each pet now only follows sessions started in its own window's workspace and no longer falls back to the most recent session anywhere. Mini pets for other sessions show this repo's sessions; agents from other repos fill the row only while none are running here (`peon-pet.otherRepoPets`) and never drive the main pet. Git Bash style paths (`/d/...`) now match Windows workspace folders, and peon-ping events are filtered by workspace too.
+- The pet could stop being drawn after pulling a toy out of a bag holding several kinds of toy: the toy was picked with a fresh random number for each catalogue entry, so often nothing matched.
+- One VS Code window's agent could take over the pet in another window. Each pet now only follows sessions started in its own window's workspace and no longer falls back to the most recent session anywhere. Mini pets for other sessions show this repo's sessions; agents from other repos fill the row only while none are running here (`pet-agents.otherRepoPets`) and never drive the main pet. Git Bash style paths (`/d/...`) now match Windows workspace folders, and peon-ping events are filtered by workspace too.
 - Time-based states (permission prompt guess, abandoned turn) now reach the pet even when no new transcript line arrived.
 
 ---

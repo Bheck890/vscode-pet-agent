@@ -119,7 +119,7 @@ export function isSpecies(v: unknown): v is Species {
   return typeof v === 'string' && (SPECIES as readonly string[]).includes(v);
 }
 
-/** Converts the `peon-pet.size` setting string to a pixel value. */
+/** Converts the `pet-agents.size` setting string to a pixel value. */
 export function sizeFromSetting(setting: string): number {
   switch (setting) {
     case 'small':

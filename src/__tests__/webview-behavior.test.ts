@@ -37,7 +37,7 @@ function fakeContext() {
   });
 }
 
-function runWebviewScript() {
+function runWebviewScript({ libs = true } = {}) {
   let frame: (() => void) | null = null;
   const windowListeners: ListenerMap = {};
   const canvasListeners: ListenerMap = {};
@@ -104,10 +104,18 @@ function runWebviewScript() {
     devicePixelRatio: 1,
   };
 
+  const body = {
+    clientWidth: 600,
+    clientHeight: 600,
+    html: '',
+    insertAdjacentHTML(_where: string, html: string) {
+      body.html += html;
+    },
+  };
   const context: Record<string, unknown> = {
     window: windowObj,
     document: {
-      body: { clientWidth: 600, clientHeight: 600 },
+      body,
       getElementById: (id: string) =>
         id === 'c' ? canvas : id === 'tooltip' ? tooltip : (elements[id] ?? null),
       querySelectorAll: (sel: string) => (sel === '[data-care]' ? careButtons : switches),
@@ -128,8 +136,10 @@ function runWebviewScript() {
   vm.runInNewContext(fs.readFileSync(path.join(media, 'play.js'), 'utf8'), context);
   vm.runInNewContext(fs.readFileSync(path.join(media, 'variants.js'), 'utf8'), context);
   vm.runInNewContext(fs.readFileSync(path.join(media, 'scene.js'), 'utf8'), context);
-  for (const lib of ['PetArt', 'PetPlay', 'PetVariants', 'PetScene']) {
-    windowObj[lib] = context[lib];
+  if (libs) {
+    for (const lib of ['PetArt', 'PetPlay', 'PetVariants', 'PetScene']) {
+      windowObj[lib] = context[lib];
+    }
   }
   vm.runInNewContext(fs.readFileSync(path.join(media, 'webview.js'), 'utf8'), context);
 
@@ -156,6 +166,7 @@ function runWebviewScript() {
   };
 
   return {
+    body,
     runFrames,
     send,
     hover,
@@ -725,5 +736,117 @@ describe('webview behavior', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it.each([
+    ['sleeping', 'napping'],
+    ['idle', 'chilling'],
+    ['waking', 'waking up'],
+    ['thinking', 'thinking'],
+    ['reading', 'reading'],
+    ['writing', 'writing code'],
+    ['running', 'running commands'],
+    ['testing', 'running tests'],
+    ['browsing', 'browsing the web'],
+    ['delegating', 'bossing helpers around'],
+    ['waiting', 'waiting for you'],
+    ['error', 'grumpy'],
+    ['done', 'all done!'],
+  ])('acts out the %s state', (state, label) => {
+    jest.useFakeTimers();
+    try {
+      const { send, hover, tooltip, runFrames } = runWebviewScript();
+      send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      send({
+        command: 'claude-update',
+        main: { sessionId: 's', state, detail: '', seq: 2, project: 'app' },
+        subagents: [],
+        sessions: [],
+      });
+      // A napping pet stretches and yawns before it gets to work.
+      for (let i = 0; i < 50 && state !== 'waking'; i++) {
+        hover(50, 80);
+        if (!tooltip.innerHTML.includes('waking up')) {
+          break;
+        }
+        runFrames(100);
+      }
+      hover(50, 80);
+      expect(tooltip.innerHTML).toContain(`<b>Rusty</b> is ${label}`);
+      expect(tooltip.innerHTML).toContain('in app');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('reacts to peon-ping events and ignores ones it does not know', () => {
+    const { send, hover, tooltip } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send({ command: 'peon-event', anim: 'celebrate' });
+    hover(50, 80);
+    expect(tooltip.innerHTML).toContain('all done!');
+
+    send({ command: 'peon-event', anim: 'moonwalk' });
+    hover(50, 80);
+    expect(tooltip.innerHTML).toContain('all done!');
+  });
+
+  it('dragging the pet moves it and remembers where it was dropped', () => {
+    const { send, canvasListeners, documentListeners, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    vscodeApi.postMessage.mockClear();
+
+    canvasListeners['mousedown'].forEach((l) =>
+      l({ button: 0, offsetX: 50, offsetY: 80, preventDefault: () => undefined }),
+    );
+    documentListeners['mousemove'].forEach((l) => l({ clientX: 90, clientY: 90 }));
+    documentListeners['mousemove'].forEach((l) => l({ clientX: 120, clientY: 100 }));
+    documentListeners['mouseup'].forEach((l) => l({}));
+
+    expect(vscodeApi.setState).toHaveBeenCalledWith(
+      expect.objectContaining({ petX: 70, petY: 50 }),
+    );
+    expect(vscodeApi.postMessage).toHaveBeenCalledWith({
+      command: 'save-state',
+      state: expect.objectContaining({ petX: 70, petY: 50 }),
+    });
+  });
+
+  it('keeps a dragged pet inside the panel', () => {
+    const { send, canvasListeners, documentListeners, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    canvasListeners['mousedown'].forEach((l) =>
+      l({ button: 0, offsetX: 50, offsetY: 80, preventDefault: () => undefined }),
+    );
+    documentListeners['mousemove'].forEach((l) => l({ clientX: 5000, clientY: -5000 }));
+    documentListeners['mouseup'].forEach((l) => l({}));
+
+    // 600px panel, 192px pet: x stops at 408, y at the 24px header.
+    expect(vscodeApi.setState).toHaveBeenCalledWith(
+      expect.objectContaining({ petX: 408, petY: 24 }),
+    );
+  });
+
+  it('renames the pet live when the settings change', () => {
+    const { send, hover, tooltip } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send({ command: 'reinit', config: { ...CONFIG, name: 'Duchess', species: 'cat' } });
+    hover(50, 80);
+    expect(tooltip.innerHTML).toContain('<b>Duchess</b>');
+  });
+
+  it.each([null, 'init', 7, {}, { command: 'explode' }])('ignores the message %p', (data) => {
+    const { send, hover, tooltip } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    expect(() => send(data)).not.toThrow();
+    hover(50, 80);
+    expect(tooltip.innerHTML).toContain('<b>Rusty</b>');
+  });
+
+  it('asks for a window reload instead of crashing when loaded without its helper scripts', () => {
+    const { body, vscodeApi } = runWebviewScript({ libs: false });
+    expect(body.html).toContain('Pet Agents was updated');
+    expect(body.html).toContain('Developer: Reload Window');
+    expect(vscodeApi.postMessage).not.toHaveBeenCalled();
   });
 });

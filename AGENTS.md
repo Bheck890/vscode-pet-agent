@@ -1,147 +1,38 @@
-# vscode-peon-pet — Agent Context
+# Pet Agents -- Agent Context
 
-## What This Project Is
+## What this is
 
-A VS Code / Cursor extension that renders an animated **Orc Peon** sprite in the editor. The orc reacts in real time to AI coding agent events emitted by [peon-ping](https://github.com/PeonPing/peon-ping) — a separate CLI tool that writes events to `~/.claude/hooks/peon-ping/.state.json`.
+A VS Code extension (`bheck890.pet-agents`, display name **Pet Agents**) that draws a recolourable pixel pet (fox, cat, dog, bird) in the Explorer sidebar and acts out what an AI coding agent is doing. Sub-agents appear as mini pets. It also has idle hobbies, collectable toys, machines for test/build jobs, and hands-on care (feed, treat, fetch, bath).
 
-**GitHub repo:** https://github.com/smcqueen2/vscode-peon-pet (currently private)  
-**Installed in:** Cursor at `~/.cursor/extensions/peonpet.vscode-peon-pet-0.1.0/`  
-**Extension ID:** `smcqueen.vscode-peon-pet`  
-**Version:** 0.1.0
+- Repo: https://github.com/Bheck890/vscode-pet-agent (public). Grew out of smcqueen2/vscode-peon-pet; the Orc Peon sprites and character packs are gone.
+- Settings namespace: `pet-agents.*`. Commands: `pet-agents.customize`, `pet-agents.refresh`. View id: `petAgentsView`.
+- Activity sources (read-only, no network): Claude Code transcripts in `~/.claude/projects/`, and peon-ping's `~/.claude/hooks/peon-ping/.state.json`.
 
----
+## Layout
 
-## Current State
+- `src/` extension host (TypeScript, bundled by webpack into `dist/extension.js`)
+  - `extension.ts` activation, commands, Customize Pet menu
+  - `PeonViewProvider.ts` sidebar webview and its message protocol (`ready`, `care`, `setting`, `save-state` in; `init`, `reinit`, `claude-update`, `peon-event`, `session-update`, `care-update` out)
+  - `claude-watcher.ts` + `transcript-parser.ts` Claude Code transcripts -> pet states
+  - `state-watcher.ts` + `session-tracker.ts` peon-ping polling
+  - `pet-config.ts`, `pet-care.ts`, `bag-store.ts`, `pet-names.ts`, `workspace.ts`
+- `media/` webview (plain JS with `// @ts-check`): `pets.js` art, `variants.js` animation variants, `scene.js` toys/machines, `play.js` care, `webview.js` renderer
+- `scripts/record-media.js` renders README GIFs/screenshots (`docs/images/`) and `media/assets/icon.png` in headless Chrome with a fake clock
+- `src/__tests__/` Jest. Webview scripts are loaded with `vm`; `manifest.test.ts` checks package.json against the code and README.
 
-- Extension is **built, installed, and working** in Cursor
-- All source code is clean: ESLint + Prettier passing, TypeScript compiling with no errors
-- Git repo initialised with local identity `smcqueen2 <mcqueen_4@hotmail.co.uk>` (repo-local config, not global)
-- Publisher registered at marketplace.visualstudio.com as `smcqueen`
-- GitHub Actions CI configured (lints, compiles, packages VSIX on every push/PR)
-- Husky pre-commit hook runs lint-staged on every commit
-
----
-
-## Project Structure
-
-```
-vscode-peon-pet/
-├── src/
-│   ├── extension.ts          ← activation entry point; registers commands, providers, config listeners
-│   ├── characters.ts         ← scans built-in + custom character packs; resolves asset paths
-│   ├── state-watcher.ts      ← polls peon-ping state file every 200ms; emits per-listener disposables
-│   ├── session-tracker.ts    ← in-memory session ID → timestamp map; builds SessionState[]
-│   ├── PeonViewProvider.ts   ← WebviewViewProvider for Explorer sidebar
-│   └── webview-helpers.ts    ← shared HTML builder, CSP, asset URI conversion, watcher wiring
-├── media/
-│   ├── webview.html          ← HTML template with CSP/CSS/script placeholders
-│   ├── webview.css           ← webview styles (transparent bg, drag cursor)
-│   ├── webview.js            ← canvas 2D renderer (plain JS, runs inside webview sandbox)
-│   └── assets/
-│       ├── orc-sprite-atlas.png   ← 6×6 animation atlas (AI-generated, 3072×3072)
-│       ├── orc-borders.png        ← decorative border overlay
-│       ├── bg-pixel.png           ← pixel background
-│       └── icon.png               ← extension marketplace icon
-├── dist/
-│   └── extension.js          ← webpack bundle (committed to repo for VSIX)
-├── .github/
-│   ├── workflows/ci.yml      ← lint + format check + compile + package VSIX
-│   └── ISSUE_TEMPLATE/       ← bug_report.md, feature_request.md
-├── eslint.config.js          ← ESLint v9 flat config (TypeScript + prettier)
-├── .prettierrc               ← singleQuote, trailingComma all, semi, printWidth 100
-├── .husky/pre-commit         ← runs lint-staged on staged .ts files
-├── package.json              ← publisher: stephenmcqueen, license: MIT
-├── tsconfig.json
-├── webpack.config.js
-└── CHANGELOG.md / CONTRIBUTING.md / LICENSE / README.md / CODE_OF_CONDUCT.md
-```
-
----
-
-## Key Technical Decisions
-
-### State watcher (per-listener disposables)
-`StateWatcher.onPeonEvent()` and `onSessionUpdate()` each return a `vscode.Disposable` that removes only that specific listener. This means closing one panel never silences another panel's listeners.
-
-### Webview communication flow
-```
-peon-ping writes .state.json
-  → StateWatcher.poll() (every 200ms)
-    → emits PeonEvent / SessionUpdate
-      → attachWatcher() forwards as postMessage to webview
-        → webview.js handles 'peon-event' / 'session-update' messages
-          → canvas animation / dot update
-```
-
-### Animations (6×6 sprite atlas)
-| Row | Animation | Trigger |
-|-----|-----------|---------|
-| 0 | sleeping | idle 30s |
-| 1 | waking | SessionStart |
-| 2 | typing | UserPromptSubmit |
-| 3 | alarmed | PermissionRequest, PreCompact |
-| 4 | celebrate | Stop (task done) |
-| 5 | annoyed | PostToolUseFailure |
-
-### Custom character packs
-Drop a folder into `~/.openpeon/characters/<name>/` with `sprite-atlas.png` + optional `manifest.json`. The `scanCharacters()` function in `characters.ts` picks them up on the next "Change Character" command call.
-
-### Drag-to-reposition
-Mouse events in `webview.js` move the `#pet-container` div. Position is saved via `vscodeApi.setState()` and restored on the `init` message.
-
----
-
-## Settings
-
-| Key | Default | Values |
-|-----|---------|--------|
-| `peon-pet.character` | `orc` | any installed pack ID |
-| `peon-pet.size` | `medium` | `small` (150px) \| `medium` (200px) \| `large` (250px) |
-
----
-
-## Commands
-
-| Command | ID |
-|---------|----|
-| Peon Pet: Change Character | `peon-pet.changeCharacter` |
-
----
-
-## Development Workflow
+## Workflow
 
 ```bash
-cd ~/Dev/vscode-peon-pet
-npm run compile          # dev build (webpack, source maps)
-npm run watch            # rebuild on change
-npm run lint             # ESLint
-npm run format           # Prettier
-npm run package          # production build + .vsix
-
-# Install into Cursor:
-/Applications/Cursor.app/Contents/Resources/app/bin/cursor --install-extension vscode-peon-pet-0.1.0.vsix
-
-# Then reload: Cmd+Shift+P → Developer: Reload Window
+npm run compile | watch | lint | format
+npm test                # lint + compile + jest
+npm run media           # re-record README media after visual changes
+npm run package         # pet-agents.vsix
+npm run install:vscode  # package and install into local VS Code, then Developer: Reload Window
 ```
 
-Git identity for this repo is set locally (not global):
-- `user.name = smcqueen2`
-- `user.email = mcqueen_4@hotmail.co.uk`
+## Rules
 
----
-
-## Licensing Status
-
-- **npm dependencies:** All MIT/Apache/BSD — clear
-- **Extension code:** MIT (original work)
-- **Sprite assets:** AI-generated pixel art (original, not ripped from any game). Disclaimer in README.
-- **peon-ping / peon-pet repos:** No license on those repos (not owned by this author). Outstanding action: get explicit permission from the peon-ping/peon-pet owners before making this repo public, OR regenerate assets independently.
-
----
-
-## Known Pending Items
-
-1. **Licensing sign-off** — contact peon-ping/peon-pet owner for permission to bundle the sprite assets, or regenerate them independently using `~/peon-pet/docs/sprite-atlas-prompt.md`
-2. **Demo GIF** — README has a placeholder comment for a demo GIF; needs recording
-3. **Marketplace publishing** — publisher `smcqueen` registered; PAT + `vsce login smcqueen` still needed before `vsce publish` will work
-4. **Make repo public** — once licensing is resolved, flip the GitHub repo to public
+- Keep `media/pets.js` ACCESSORIES/PATTERNS, `src/pet-config.ts` and the `package.json` enums in sync (tests enforce it). New settings must be read in `readPetConfig` and documented in the README settings table (tests enforce it).
+- ASCII only in code and comments; emoji only inside user-facing strings (`encoding.test.ts`).
+- README images must be PNG/GIF under `docs/images/` (the marketplace rejects SVG); `docs/**` is excluded from the VSIX and served from GitHub.
+- Before publishing: bump `version`, add the CHANGELOG entry (a test checks it), `npx @vscode/vsce publish`.

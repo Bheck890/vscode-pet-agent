@@ -91,8 +91,8 @@ describe('pet art', () => {
   it('pattern and settings names match the extension settings', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
     const props = pkg.contributes.configuration.properties;
-    expect(props['peon-pet.pattern'].enum).toEqual(Art.PATTERNS);
-    expect(props['peon-pet.accessory'].enum).toEqual(['none', ...Object.keys(Art.ACCESSORIES)]);
+    expect(props['pet-agents.pattern'].enum).toEqual(Art.PATTERNS);
+    expect(props['pet-agents.accessory'].enum).toEqual(['none', ...Object.keys(Art.ACCESSORIES)]);
     expect([...petConfig.PATTERNS]).toEqual(Art.PATTERNS);
     expect([...petConfig.ACCESSORIES]).toEqual(['none', ...Object.keys(Art.ACCESSORIES)]);
   });

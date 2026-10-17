@@ -9,7 +9,7 @@
   if (!window.PetArt || !window.PetPlay || !window.PetVariants || !window.PetScene) {
     document.body.insertAdjacentHTML(
       'beforeend',
-      '<p class="stale">Peon Pet was updated. Run <b>Developer: Reload Window</b> to finish.</p>',
+      '<p class="stale">Pet Agents was updated. Run <b>Developer: Reload Window</b> to finish.</p>',
     );
     return;
   }

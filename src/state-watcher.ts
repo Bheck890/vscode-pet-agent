@@ -98,7 +98,7 @@ export class StateWatcher implements vscode.Disposable {
 
   /**
    * Register a listener for animation events. Returns a {@link vscode.Disposable}
-   * that removes only this listener when disposed — safe to use alongside other
+   * that removes only this listener when disposed -- safe to use alongside other
    * active webviews.
    */
   onPeonEvent(listener: PeonEventListener): vscode.Disposable {
@@ -119,7 +119,7 @@ export class StateWatcher implements vscode.Disposable {
     });
   }
 
-  // ── Private polling pipeline ───────────────────────────────────────────────
+  // -- Private polling pipeline ---------------------------------------------------
 
   private poll(): void {
     const entry = this.readStateFile();

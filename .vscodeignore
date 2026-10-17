@@ -1,7 +1,9 @@
-# Source and build tooling — not needed in the packaged extension
+# Source and build tooling - not needed in the packaged extension
 src/**
+scripts/**
 node_modules/**
 dist/**/*.map
+.vscode/**
 .vscode-test/**
 out/**
 
@@ -9,6 +11,7 @@ out/**
 tsconfig.json
 webpack.config.js
 eslint.config.js
+jest.config.js
 .prettierrc
 .prettierignore
 .gitignore
@@ -20,12 +23,17 @@ eslint.config.js
 **/*.ts
 !**/*.d.ts
 
+# README images are served from GitHub, not the VSIX
+docs/**
+
 # Contributor docs (kept in the repo but not in the VSIX)
 CONTRIBUTING.md
 CODE_OF_CONDUCT.md
 
 # Agent/dev context files
 AGENTS.md
+CLAUDE.md
+.claude/**
 .cursor/**
 
 # Misc

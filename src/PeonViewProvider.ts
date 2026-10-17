@@ -20,7 +20,7 @@ import {
  * {@link resolveWebviewView} each time the panel becomes visible.
  */
 export class PeonViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewId = 'peonPetView';
+  public static readonly viewId = 'petAgentsView';
 
   private view?: vscode.WebviewView;
   private watcherDisposable?: vscode.Disposable;

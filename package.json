@@ -1,31 +1,40 @@
 {
-  "name": "vscode-peon-pet",
-  "displayName": "Peon Pet",
-  "description": "A pixel pet (cat, dog, bird or fox) that acts out what your AI coding agent is doing. Sub-agents spawn mini pets.",
-  "version": "0.2.0",
-  "publisher": "smcqueen",
+  "name": "pet-agents",
+  "displayName": "Pet Agents",
+  "description": "A pixel pet in your sidebar that acts out what your AI coding agent is doing, live. Sub-agents pop out as mini pets. Feed it, play fetch, collect toys.",
+  "version": "0.3.0",
+  "publisher": "bheck890",
   "license": "MIT",
   "pricing": "Free",
   "icon": "media/assets/icon.png",
+  "galleryBanner": {
+    "color": "#2a2350",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/smcqueen2/vscode-peon-pet"
+    "url": "https://github.com/Bheck890/vscode-pet-agent"
   },
-  "homepage": "https://github.com/smcqueen2/vscode-peon-pet#readme",
+  "homepage": "https://github.com/Bheck890/vscode-pet-agent#readme",
   "bugs": {
-    "url": "https://github.com/smcqueen2/vscode-peon-pet/issues"
+    "url": "https://github.com/Bheck890/vscode-pet-agent/issues"
   },
   "engines": {
     "vscode": "^1.85.0",
     "node": ">=18.0.0"
   },
   "categories": [
+    "AI",
+    "Visualization",
     "Other"
   ],
   "keywords": [
     "pet",
+    "pets",
+    "virtual pet",
     "ai",
     "agent",
+    "subagents",
     "claude",
     "claude-code",
     "peon-ping",
@@ -33,11 +42,12 @@
     "cat",
     "dog",
     "fox",
+    "bird",
     "fun"
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onView:peonPetView"
+    "onView:petAgentsView"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -45,35 +55,35 @@
       "explorer": [
         {
           "type": "webview",
-          "id": "peonPetView",
-          "name": "Agent Pet"
+          "id": "petAgentsView",
+          "name": "Pet Agents"
         }
       ]
     },
     "commands": [
       {
-        "command": "peon-pet.customize",
-        "title": "Peon Pet: Customize Pet"
+        "command": "pet-agents.customize",
+        "title": "Pet Agents: Customize Pet"
       },
       {
-        "command": "peon-pet.refresh",
-        "title": "Peon Pet: Refresh Pet",
+        "command": "pet-agents.refresh",
+        "title": "Pet Agents: Refresh Pet",
         "icon": "$(refresh)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "peon-pet.refresh",
-          "when": "view == peonPetView",
+          "command": "pet-agents.refresh",
+          "when": "view == petAgentsView",
           "group": "navigation"
         }
       ]
     },
     "configuration": {
-      "title": "Peon Pet",
+      "title": "Pet Agents",
       "properties": {
-        "peon-pet.species": {
+        "pet-agents.species": {
           "type": "string",
           "enum": [
             "cat",
@@ -84,22 +94,22 @@
           "default": "fox",
           "description": "Which animal your pet is."
         },
-        "peon-pet.color": {
+        "pet-agents.color": {
           "type": "string",
           "default": "",
           "markdownDescription": "Fur/feather colour. Any CSS colour (`#ff8800`, `hotpink`, `rebeccapurple`...). Leave empty for the species default. Your AI agent can change this for you by editing your VS Code settings."
         },
-        "peon-pet.accentColor": {
+        "pet-agents.accentColor": {
           "type": "string",
           "default": "",
           "markdownDescription": "Belly, muzzle and chest colour. Any CSS colour (`#ff8800`, `hotpink`...). Leave empty for the default."
         },
-        "peon-pet.eyeColor": {
+        "pet-agents.eyeColor": {
           "type": "string",
           "default": "",
           "markdownDescription": "Eye (iris) colour. Any CSS colour (`#ff8800`, `hotpink`...). Leave empty for the default."
         },
-        "peon-pet.pattern": {
+        "pet-agents.pattern": {
           "type": "string",
           "default": "none",
           "enum": [
@@ -120,7 +130,7 @@
           ],
           "description": "Fur pattern."
         },
-        "peon-pet.accessory": {
+        "pet-agents.accessory": {
           "type": "string",
           "default": "none",
           "enum": [
@@ -138,27 +148,27 @@
           ],
           "description": "Something for your pet to wear. Hats step aside for state props like the party hat."
         },
-        "peon-pet.accessoryColor": {
+        "pet-agents.accessoryColor": {
           "type": "string",
           "default": "",
           "markdownDescription": "Accessory colour. Any CSS colour (`#ff8800`, `hotpink`...). Leave empty for the default."
         },
-        "peon-pet.name": {
+        "pet-agents.name": {
           "type": "string",
           "default": "",
           "description": "Your pet's name. Leave empty for the species default."
         },
-        "peon-pet.stateColors": {
+        "pet-agents.stateColors": {
           "type": "boolean",
           "default": true,
           "description": "Tint the pet and glow a coloured aura that changes with what the agent is doing."
         },
-        "peon-pet.wander": {
+        "pet-agents.wander": {
           "type": "boolean",
           "default": true,
           "description": "Let the pet wander around the panel and fidget when idle."
         },
-        "peon-pet.artStyle": {
+        "pet-agents.artStyle": {
           "type": "string",
           "default": "smooth",
           "enum": [
@@ -171,7 +181,7 @@
           ],
           "description": "How the pet is drawn."
         },
-        "peon-pet.variety": {
+        "pet-agents.variety": {
           "type": "string",
           "default": "random",
           "enum": [
@@ -184,7 +194,7 @@
           ],
           "description": "How varied the pet's animations are."
         },
-        "peon-pet.disabledActions": {
+        "pet-agents.disabledActions": {
           "type": "array",
           "items": {
             "type": "string"
@@ -192,27 +202,27 @@
           "default": [],
           "markdownDescription": "Animations and idle hobbies you never want to see, e.g. `running.zoomies`, `sleeping.belly`, `idle.butterfly`. Easiest to set from the ⚙️ button in the pet panel."
         },
-        "peon-pet.toys": {
+        "pet-agents.toys": {
           "type": "boolean",
           "default": true,
           "description": "Toys and furniture turn up around the pet, from common yarn balls to legendary finds. Your pet plays with them when idle."
         },
-        "peon-pet.machines": {
+        "pet-agents.machines": {
           "type": "boolean",
           "default": true,
           "description": "Show a machine (washing machine, oven, computer, engine...) for each test run, build or background job, with the pet waiting beside it."
         },
-        "peon-pet.backgroundPets": {
+        "pet-agents.backgroundPets": {
           "type": "boolean",
           "default": true,
           "description": "Show other busy Claude sessions in this repo (e.g. a second chat) as small pets along the bottom of the panel."
         },
-        "peon-pet.otherRepoPets": {
+        "pet-agents.otherRepoPets": {
           "type": "boolean",
           "default": true,
           "description": "When no agents are running in this repo, show busy Claude sessions from your other repos (other VS Code windows) as small pets, labelled with their repo. They step aside as soon as an agent starts here, and never take over this window's pet."
         },
-        "peon-pet.size": {
+        "pet-agents.size": {
           "type": "string",
           "enum": [
             "small",
@@ -233,7 +243,7 @@
   "scripts": {
     "compile": "webpack --mode development",
     "watch": "webpack --mode development --watch",
-    "package": "webpack --mode production && npx @vscode/vsce package --no-dependencies -o vscode-peon-pet.vsix",
+    "package": "webpack --mode production && npx @vscode/vsce package --no-dependencies -o pet-agents.vsix",
     "lint": "eslint src media",
     "lint:fix": "eslint src media --fix",
     "format": "prettier --write \"src/**/*.ts\" \"media/**/*.{js,css,html}\"",
@@ -241,7 +251,8 @@
     "test": "jest",
     "pretest": "npm run lint && npm run compile",
     "prepare": "husky",
-    "install:vscode": "npm run package && code --install-extension vscode-peon-pet.vsix --force"
+    "install:vscode": "npm run package && code --install-extension pet-agents.vsix --force",
+    "media": "node scripts/record-media.js"
   },
   "lint-staged": {
     "src/**/*.ts": [
@@ -257,10 +268,13 @@
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^9.0.0",
+    "gifenc": "^1.0.3",
     "husky": "^9.0.0",
     "jest": "^30.2.0",
     "lint-staged": "^15.0.0",
+    "pngjs": "^7.0.0",
     "prettier": "^3.0.0",
+    "puppeteer-core": "^24.43.1",
     "ts-jest": "^29.4.6",
     "ts-loader": "^9.5.0",
     "typescript": "^5.3.0",

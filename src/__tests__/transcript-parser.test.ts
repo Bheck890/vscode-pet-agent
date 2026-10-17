@@ -44,6 +44,23 @@ function endTurn(ms = 0) {
   };
 }
 
+describe('since', () => {
+  it('is the transcript time of the last state change, not of every line', () => {
+    const act = createActivity();
+    applyLine(act, prompt('go', 0));
+    applyLine(act, toolUse('a', 'Bash', { command: 'ls' }, 1000));
+    applyLine(act, toolResult('a', false, 2000));
+    applyLine(act, toolUse('b', 'Bash', { command: 'pwd' }, 3000));
+    const running = currentState(act, T0 + 3500);
+    expect(running.state).toBe('running');
+    expect(running.since).toBe(T0 + 3000);
+
+    applyLine(act, toolResult('b', false, 4000));
+    applyLine(act, toolUse('c', 'Read', { file_path: 'a.ts' }, 5000));
+    expect(currentState(act, T0 + 5500)).toMatchObject({ state: 'reading', since: T0 + 5000 });
+  });
+});
+
 describe('toolState', () => {
   it('maps known tools to activities', () => {
     expect(toolState('Read')).toBe('reading');

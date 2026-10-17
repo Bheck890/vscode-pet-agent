@@ -37,7 +37,11 @@ function fakeContext() {
   });
 }
 
-function runWebviewScript({ libs = true } = {}) {
+/**
+ * Loads webview.js in a fake DOM. Frames that throw are caught and logged by
+ * the script, so by default a logged error fails the test.
+ */
+function runWebviewScript({ libs = true, allowErrors = false } = {}) {
   let frame: (() => void) | null = null;
   const windowListeners: ListenerMap = {};
   const canvasListeners: ListenerMap = {};
@@ -59,7 +63,16 @@ function runWebviewScript({ libs = true } = {}) {
   });
   const canvas = makeCanvas();
 
-  const vscodeApi = { postMessage: jest.fn(), setState: jest.fn() };
+  const vscodeApi = {
+    postMessage: jest.fn(
+      (m: { command?: string; level?: string; message?: string; state?: unknown }) => {
+        if (!allowErrors && m?.command === 'log' && m.level === 'error') {
+          throw new Error(m.message);
+        }
+      },
+    ),
+    setState: jest.fn(),
+  };
 
   const fakeEl = (data: Record<string, string> = {}) => {
     const listeners: ListenerMap = {};
@@ -68,8 +81,10 @@ function runWebviewScript({ libs = true } = {}) {
       disabled: false,
       checked: false,
       textContent: '',
+      title: '',
       innerHTML: '',
       style: {} as Record<string, string>,
+      classList: { toggle: () => undefined },
       dataset: data,
       listeners,
       addEventListener: listenerTarget(listeners),
@@ -88,6 +103,10 @@ function runWebviewScript({ libs = true } = {}) {
     'bag-grid',
     'bag-title',
     'bag-store-all',
+    'bag-view',
+    'shop-toggle',
+    'shop-view',
+    'food-picker',
     'settings-toggle',
     'settings-panel',
     'action-list',
@@ -123,6 +142,12 @@ function runWebviewScript({ libs = true } = {}) {
       addEventListener: listenerTarget(documentListeners),
     },
     acquireVsCodeApi: () => vscodeApi,
+    // Unref'd so the 5-minute self-check can't keep Jest running.
+    setInterval: (fn: () => void, ms: number) => {
+      const timer: { unref?: () => void } = setInterval(fn, ms);
+      timer.unref?.();
+      return timer;
+    },
     requestAnimationFrame: (cb: () => void) => {
       frame = cb;
       return 0;
@@ -597,7 +622,17 @@ describe('webview behavior', () => {
       try {
         const { send, runFrames, vscodeApi } = runWebviewScript();
         const config = { ...CONFIG, species, variety: 'random', toys: true, wander: true };
-        send({ command: 'init', config, state: { petX: 0, petY: 300 } });
+        const unlocks = [
+          'idle.disco',
+          'idle.magic',
+          'idle.bubbles',
+          'idle.stargaze',
+          'idle.spin',
+          'idle.party',
+          'sleeping.dreamy',
+          'done.party',
+        ];
+        send({ command: 'init', config, state: { petX: 0, petY: 300, unlocks } });
         const states = [
           'thinking',
           'reading',
@@ -674,6 +709,129 @@ describe('webview behavior', () => {
     expect(elements['bag-grid'].innerHTML).toMatch(/class="toy out" data-toy="crown"/);
     clickToy('crown');
     expect(elements['bag-grid'].innerHTML).not.toMatch(/class="toy out" data-toy="crown"/);
+  });
+
+  it('trades spare toys in at the shop for an animation and a food', () => {
+    const { send, elements, vscodeApi } = runWebviewScript();
+    send({
+      command: 'init',
+      config: CONFIG,
+      state: { petX: 0, petY: 30, bag: { yarn: 90, box: 32, rocket: 2 } },
+    });
+    elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
+    elements['shop-toggle'].listeners['click'].forEach((l) => l({}));
+    const shop = () => elements['shop-view'].innerHTML;
+    expect(shop()).toContain('Spare toys: 120 common - 1 rare');
+    expect(shop()).toMatch(/data-buy="idle\.disco" data-rarity="rare" data-n="5" disabled/);
+    expect(elements['food-picker'].hidden).toBe(true);
+
+    const buy = (id: string, rarity: string, n: number) =>
+      elements['shop-view'].listeners['click'].forEach((l) =>
+        l({ target: { closest: () => ({ dataset: { buy: id, rarity, n: String(n) } }) } }),
+      );
+    buy('idle.disco', 'common', 20);
+    buy('food.fish', 'common', 100);
+
+    expect(shop()).toContain('Unlocked 🐟 fresh fish!');
+    expect(shop()).toContain('Spare toys: 0 common - 1 rare');
+    expect(shop().match(/✅ Unlocked/g)).toHaveLength(2);
+    expect(elements['food-picker'].hidden).toBe(false);
+    expect(elements['food-picker'].innerHTML).toContain('data-food="fish" class="active"');
+    const saves = vscodeApi.postMessage.mock.calls
+      .map(([m]) => m)
+      .filter((m) => m.command === 'save-state');
+    expect(saves[saves.length - 1].state).toMatchObject({
+      bag: { yarn: 90, box: 32, rocket: 2 },
+      spent: { yarn: 89, box: 31 },
+      unlocks: ['idle.disco', 'food.fish'],
+      food: 'fish',
+    });
+
+    // Nothing left to pay with, so a second purchase does nothing.
+    buy('idle.magic', 'common', 20);
+    expect(shop()).not.toContain('Unlocked 🎩');
+  });
+
+  it('keeps the care tool in hand after closing the panel until Esc', () => {
+    const { send, pressCare, elements, documentListeners } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    const toggleCare = () => elements['care-toggle'].listeners['click'].forEach((l) => l({}));
+    toggleCare();
+    pressCare('feed');
+    toggleCare();
+    expect(elements['care-panel'].hidden).toBe(true);
+    expect(elements['care-toggle'].textContent).toBe('🍖');
+
+    documentListeners['keydown'].forEach((l) => l({ key: 'Escape' }));
+    send({ command: 'care-update', stats: { fullness: 50, fun: 50, clean: 50 } });
+    expect(elements['care-toggle'].textContent).toBe('🐾');
+  });
+
+  it('opening another panel puts the care tool away', () => {
+    const { send, pressCare, elements } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    elements['care-toggle'].listeners['click'].forEach((l) => l({}));
+    pressCare('feed');
+    elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
+    expect(elements['care-toggle'].textContent).toBe('🐾');
+  });
+
+  it('logs a failing frame, keeps going, and asks for a refresh if it keeps failing', () => {
+    jest.useFakeTimers();
+    try {
+      const { send, runFrames, vscodeApi } = runWebviewScript({ allowErrors: true });
+      send({ command: 'init', config: { ...CONFIG, species: 'dragon' }, state: {} });
+      runFrames(11500, 100);
+      const sent = vscodeApi.postMessage.mock.calls.map(([m]) => m);
+      const errors = sent.filter((m) => m.command === 'log' && m.level === 'error');
+      expect(errors[0].message).toContain('Frame failed');
+      expect(errors.filter((m) => m.message?.startsWith('Frame failed'))).toHaveLength(1);
+      expect(sent.some((m) => m.command === 'refresh')).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('shows the same animation for the same agent in two windows', () => {
+    const a = runWebviewScript();
+    const b = runWebviewScript();
+    const config = { ...CONFIG, variety: 'random' };
+    const labels = new Set<string>();
+    for (const w of [a, b]) {
+      w.send({ command: 'init', config, state: { petX: 0, petY: 30 } });
+    }
+    const states = ['running', 'testing', 'reading', 'running', 'browsing', 'done', 'error'];
+    states.forEach((state, i) => {
+      const seen = [a, b].map((w) => {
+        // Each window numbers updates its own way; only `since` is shared.
+        w.send({
+          command: 'claude-update',
+          main: {
+            sessionId: 's1',
+            state,
+            detail: 'x',
+            seq: i + (w === a ? 1 : 50),
+            since: i * 1000,
+            project: null,
+          },
+          subagents: [],
+          sessions: [],
+        });
+        w.hover(50, 80);
+        return w.tooltip.innerHTML.split('</b> is ')[1].split('<br>')[0];
+      });
+      expect(seen[0]).toBe(seen[1]);
+      labels.add(seen[0]);
+    });
+    expect(labels.size).toBeGreaterThan(2);
+  });
+
+  it('picks up shop purchases made in another window', () => {
+    const { send, elements } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send({ command: 'unlocks', unlocks: ['food.cake'] });
+    expect(elements['food-picker'].hidden).toBe(false);
+    expect(elements['food-picker'].innerHTML).toContain('data-food="cake"');
   });
 
   it('opening one corner panel closes the others', () => {
@@ -847,6 +1005,9 @@ describe('webview behavior', () => {
     const { body, vscodeApi } = runWebviewScript({ libs: false });
     expect(body.html).toContain('Pet Agents was updated');
     expect(body.html).toContain('Developer: Reload Window');
-    expect(vscodeApi.postMessage).not.toHaveBeenCalled();
+    // Only a log line for the output channel; it never says ready.
+    expect(vscodeApi.postMessage.mock.calls).toEqual([
+      [expect.objectContaining({ command: 'log', level: 'warn' })],
+    ]);
   });
 });

@@ -278,6 +278,8 @@ export function activate(context: vscode.ExtensionContext): void {
   claude.start();
   context.subscriptions.push(claude);
 
+  const log = vscode.window.createOutputChannel('Pet Agents', { log: true });
+  log.info(`Pet Agents ${String(context.extension.packageJSON.version)} started`);
   const viewProvider = new PeonViewProvider(
     mediaPath,
     peon,
@@ -286,6 +288,7 @@ export function activate(context: vscode.ExtensionContext): void {
     new CareStore(context.globalState),
     new BagStore(context.globalState),
     save,
+    log,
   );
   const careTimer = setInterval(() => viewProvider.sendCare(), 60_000);
   context.subscriptions.push(
@@ -294,6 +297,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('pet-agents.customize', customizePet),
     vscode.commands.registerCommand('pet-agents.refresh', () => viewProvider.refresh()),
+    vscode.commands.registerCommand('pet-agents.showLog', () => log.show()),
+    log,
     new vscode.Disposable(() => clearInterval(careTimer)),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('pet-agents')) {

@@ -10,6 +10,7 @@
 //   roam    'pace' | 'zoomies' | 'fly' | 'chase' | 'circle'  moves the pet around
 //   lift    raise the pet (art px)    paws    'typing' draws tapping paws
 //   species only for these species    weight  relative pick chance (1)
+//   shop    shop icon; the action stays locked until bought in the shop
 (function (root) {
   'use strict';
 
@@ -44,6 +45,16 @@
         scene: 'bed',
         eyes: 'closed',
         lift: 3,
+      },
+      {
+        id: 'dreamy',
+        label: 'having sweet dreams',
+        ...NONE,
+        motion: 'sideSleep',
+        eyes: 'closed',
+        mouth: 'smile',
+        fx: 'dream',
+        shop: '💤',
       },
       {
         id: 'perch',
@@ -288,6 +299,16 @@
       },
       { id: 'dance', label: 'victory dance', prop: null, motion: 'dance', fx: 'notes' },
       { id: 'backflip', label: 'backflip!', prop: null, motion: 'backflip', fx: 'stars' },
+      {
+        id: 'party',
+        label: 'throwing a victory party',
+        prop: 'partyHat',
+        motion: 'dance',
+        eyes: 'happy',
+        mouth: 'open',
+        fx: 'confetti',
+        shop: '🎊',
+      },
     ],
   };
 
@@ -400,10 +421,77 @@
       moves: true,
     },
     { id: 'toy', label: 'playing', dur: [7000, 11000], needs: 'toy', weight: 5, moves: true },
+    {
+      id: 'disco',
+      label: 'disco dancing',
+      dur: [4000, 6000],
+      motion: 'dance',
+      eyes: 'happy',
+      mouth: 'open',
+      wag: 8,
+      fx: 'disco',
+      shop: '🪩',
+    },
+    {
+      id: 'magic',
+      label: 'doing magic tricks',
+      dur: [3000, 4500],
+      motion: 'trick',
+      eyes: 'wide',
+      mouth: 'smile',
+      fx: 'magic',
+      shop: '🎩',
+    },
+    {
+      id: 'bubbles',
+      label: 'blowing bubbles',
+      dur: [4000, 6000],
+      motion: 'bob',
+      eyes: 'happy',
+      mouth: 'open',
+      fx: 'bubbles',
+      shop: '🫧',
+    },
+    {
+      id: 'stargaze',
+      label: 'stargazing',
+      dur: [5000, 7000],
+      prop: 'telescope',
+      eyes: 'focus',
+      fx: 'twinkle',
+      shop: '🔭',
+    },
+    {
+      id: 'spin',
+      label: 'spinning around',
+      dur: [2500, 3500],
+      motion: 'spin',
+      eyes: 'happy',
+      mouth: 'open',
+      fx: 'sparkle',
+      shop: '🌀',
+    },
+    {
+      id: 'party',
+      label: 'throwing a party',
+      dur: [4000, 6000],
+      prop: 'partyHat',
+      motion: 'bounce',
+      eyes: 'happy',
+      mouth: 'open',
+      wag: 8,
+      fx: 'confetti',
+      shop: '🎉',
+    },
   ];
 
   function allowed(v, species) {
     return !v.species || v.species.includes(species);
+  }
+
+  /** Shop actions stay out of the pickers until bought. */
+  function owned(group, v, unlocked) {
+    return !v.shop || (unlocked || []).includes(actionId(group, v));
   }
 
   /** Weighted random choice; `rand` is injectable for tests. */
@@ -419,6 +507,23 @@
     return list[list.length - 1];
   }
 
+  /**
+   * A repeatable random source for a key (FNV-1a hash into mulberry32), so
+   * every window picks the same look for the same agent state.
+   */
+  function seeded(key) {
+    let a = 0x811c9dc5;
+    for (let i = 0; i < key.length; i++) {
+      a = Math.imul(a ^ key.charCodeAt(i), 0x01000193);
+    }
+    return () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), a | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
   /** The id used to switch an action off: `state.variant` or `idle.hobby`. */
   function actionId(group, v) {
     return `${group}.${v.id}`;
@@ -429,10 +534,12 @@
    * random mode skips switched-off actions and avoids repeating the previous
    * one. With everything switched off it falls back to the classic look.
    * @param {string} state
-   * @param {{classic: boolean, species: string, lastId?: string, off?: string[], rand?: () => number}} opts
+   * @param {{classic: boolean, species: string, lastId?: string, off?: string[], unlocked?: string[], rand?: () => number}} opts
    */
   function pick(state, opts) {
-    const list = (VARIANTS[state] || []).filter((v) => allowed(v, opts.species));
+    const list = (VARIANTS[state] || []).filter(
+      (v) => allowed(v, opts.species) && owned(state, v, opts.unlocked),
+    );
     if (list.length === 0) {
       return null;
     }
@@ -446,12 +553,13 @@
 
   /**
    * Picks an idle hobby, or null if nothing fits.
-   * @param {{species: string, wander: boolean, toys: boolean, lastId?: string, off?: string[], rand?: () => number}} opts
+   * @param {{species: string, wander: boolean, toys: boolean, lastId?: string, off?: string[], unlocked?: string[], rand?: () => number}} opts
    */
   function pickIdle(opts) {
     const list = IDLE.filter(
       (a) =>
         allowed(a, opts.species) &&
+        owned('idle', a, opts.unlocked) &&
         a.id !== opts.lastId &&
         !(opts.off || []).includes(actionId('idle', a)) &&
         (opts.wander || !a.moves) &&
@@ -460,5 +568,14 @@
     return list.length > 0 ? weighted(list, opts.rand || Math.random) : null;
   }
 
-  root.PetVariants = { VARIANTS, IDLE, pick, pickIdle, actionId };
+  /** Every action sold in the shop, in display order: idle hobbies first. */
+  function shopActions() {
+    return [['idle', IDLE], ...Object.entries(VARIANTS)].flatMap(([group, list]) =>
+      list
+        .filter((v) => v.shop)
+        .map((v) => ({ id: actionId(group, v), group, icon: v.shop, label: v.label })),
+    );
+  }
+
+  root.PetVariants = { VARIANTS, IDLE, pick, pickIdle, actionId, shopActions, seeded };
 })(this);

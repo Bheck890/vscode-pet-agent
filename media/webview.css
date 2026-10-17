@@ -80,6 +80,10 @@ canvas {
   right: 68px;
 }
 
+.corner.holding {
+  outline: 2px solid var(--vscode-focusBorder, #ffd23f);
+}
+
 .corner:hover {
   background: var(--vscode-button-secondaryHoverBackground, rgba(255, 255, 255, 0.16));
 }
@@ -163,6 +167,84 @@ canvas {
 
 #bag-grid .toy.unknown {
   opacity: 0.35;
+  cursor: default;
+}
+
+#food-picker[hidden] {
+  display: none;
+}
+
+#shop-view {
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+#shop-view .group {
+  margin-top: 6px;
+  font-weight: bold;
+  opacity: 0.8;
+}
+
+.shop-spares,
+.shop-msg {
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.shop-msg {
+  font-weight: bold;
+  color: var(--vscode-charts-green, #5ad17a);
+}
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.shop-item .what {
+  flex: 1;
+}
+
+.shop-item button {
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-bottom-width: 3px;
+  background: rgba(127, 127, 127, 0.12);
+  color: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.shop-item button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#food-picker {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+#food-picker button {
+  width: 28px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  background: rgba(127, 127, 127, 0.12);
+  cursor: pointer;
+}
+
+#food-picker button.active {
+  outline: 2px solid var(--vscode-focusBorder, #ffd23f);
+}
+
+#action-list .locked {
+  opacity: 0.5;
   cursor: default;
 }
 

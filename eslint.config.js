@@ -37,6 +37,7 @@ module.exports = [
         getComputedStyle: 'readonly',
         acquireVsCodeApi: 'readonly',
         requestAnimationFrame: 'readonly',
+        setInterval: 'readonly',
       },
     },
     rules: {

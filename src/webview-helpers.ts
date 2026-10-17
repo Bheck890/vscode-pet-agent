@@ -5,11 +5,18 @@ import { PetConfig } from './pet-config';
 import { StateWatcher, PeonEvent, SessionUpdate } from './state-watcher';
 import { ClaudeWatcher, ClaudeUpdate } from './claude-watcher';
 
-/** Persisted across reloads: where the pet was dragged, and its bag of toys (id -> count). */
+/**
+ * Persisted across reloads: where the pet was dragged, its bag of toys
+ * (id -> count found), toys traded in at the shop (id -> count), shop
+ * purchases, and the food it is fed.
+ */
 export interface WebviewState {
   petX?: number;
   petY?: number;
   bag?: Record<string, number>;
+  spent?: Record<string, number>;
+  unlocks?: string[];
+  food?: string;
 }
 
 function escapeHtml(value: string): string {

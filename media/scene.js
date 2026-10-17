@@ -13,6 +13,18 @@
     legendary: { weight: 3, color: '#ffc93d', label: 'Legendary' },
   };
 
+  /**
+   * What the shop charges, in spare toys of one rarity: an animation costs
+   * 20 commons or 5 rares, a new food 100 commons.
+   */
+  const PRICES = {
+    animation: [
+      { rarity: 'common', n: 20 },
+      { rarity: 'rare', n: 5 },
+    ],
+    food: [{ rarity: 'common', n: 100 }],
+  };
+
   /** `use` decides what the pet does with it; `floats` items hover instead of resting. */
   const TOYS = [
     { id: 'yarn', emoji: '🧶', name: 'ball of yarn', rarity: 'common', use: 'play' },
@@ -117,6 +129,7 @@
    *   config: () => any,
    *   playing: () => boolean,
    *   onBag: (bag: Record<string, number>) => void,
+   *   onSpent: (spent: Record<string, number>) => void,
    * }} api
    */
   function create(api) {
@@ -134,6 +147,9 @@
     /** The inventory: toy id -> how many have been found. */
     /** @type {Map<string, number>} */
     const bag = new Map();
+    /** Toy id -> how many were traded in at the shop. Both counts only grow. */
+    /** @type {Map<string, number>} */
+    const spent = new Map();
     let nextFind = api.now() + rnd(8000, 15000);
     let toysWereOn = true;
     let pose = null;
@@ -171,6 +187,35 @@
 
     function saveBag() {
       api.onBag(Object.fromEntries(bag));
+    }
+
+    function have(id) {
+      return (bag.get(id) || 0) - (spent.get(id) || 0);
+    }
+
+    /** Toys of a rarity beyond the first of each kind; only these can be traded in. */
+    function spareOf(rarity) {
+      return TOYS.filter((d) => d.rarity === rarity).map((d) => ({
+        id: d.id,
+        n: Math.max(0, have(d.id) - 1),
+      }));
+    }
+
+    function spares(rarity) {
+      return spareOf(rarity).reduce((sum, d) => sum + d.n, 0);
+    }
+
+    /** Trades in `n` spare toys of a rarity, most plentiful kind first. False if short. */
+    function spend(rarity, n) {
+      if (spares(rarity) < n) {
+        return false;
+      }
+      for (let i = 0; i < n; i++) {
+        const most = spareOf(rarity).reduce((a, b) => (b.n > a.n ? b : a));
+        spent.set(most.id, (spent.get(most.id) || 0) + 1);
+      }
+      api.onSpent(Object.fromEntries(spent));
+      return true;
     }
 
     function freeX(g) {
@@ -1254,7 +1299,7 @@
       for (const toy of toys) {
         if (!toy.storing && Math.abs(x - toy.x) < ts / 2 && Math.abs(y - toyY(toy, g)) < ts / 2) {
           const r = RARITY[toy.def.rarity];
-          const n = bag.get(toy.def.id) || 0;
+          const n = have(toy.def.id);
           return {
             title: `${toy.def.emoji} ${toy.def.name}`,
             sub: `${r.label}${n > 1 ? ` - x${n} in the bag` : ''} - click to put it in the bag`,
@@ -1313,11 +1358,16 @@
       critter: () => (critter ? { x: critter.x, y: critter.y } : null),
       machineCount: () => machines.filter((m) => !m.leavingAt).length,
       machineSide: () => machineLayout.side,
-      /** Restores the saved inventory. */
-      setBag: (saved) => {
+      /** Restores the saved inventory and what has been traded in. */
+      setBag: (saved, savedSpent) => {
         for (const [id, n] of Object.entries(saved || {})) {
           if (TOYS.some((d) => d.id === id) && n > 0) {
             bag.set(id, n);
+          }
+        }
+        for (const [id, n] of Object.entries(savedSpent || {})) {
+          if (bag.has(id) && n > 0) {
+            spent.set(id, n);
           }
         }
         if (bag.size > 0) {
@@ -1332,13 +1382,15 @@
           name: d.name,
           rarity: RARITY[d.rarity].label,
           color: RARITY[d.rarity].color,
-          count: bag.get(d.id) || 0,
+          count: bag.has(d.id) ? have(d.id) : 0,
           out: isOut(d.id),
         })),
       takeOut,
       putAway,
       putAllAway,
       foundCount: () => bag.size,
+      spares,
+      spend,
       toyTotal: TOYS.length,
       /** Where the toy hobby wants the pet's centre to go, or null. */
       target: () => target,
@@ -1351,5 +1403,5 @@
     };
   }
 
-  root.PetScene = { create, TOYS, RARITY };
+  root.PetScene = { create, TOYS, RARITY, PRICES };
 })(this);

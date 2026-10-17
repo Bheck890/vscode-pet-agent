@@ -34,6 +34,11 @@ export interface AgentActivity {
   seq: number;
   /** Timestamp (ms) of the newest transcript line seen. */
   lastAt: number;
+  /**
+   * Transcript timestamp of the line that last changed `state`. Every window
+   * reading the transcript agrees on it, so it seeds the animation pick.
+   */
+  stateAt: number;
   cwd: string | null;
   /** Tool calls that have no result yet, keyed by tool_use id. */
   pending: Map<string, string>;
@@ -129,6 +134,7 @@ export function createActivity(): AgentActivity {
     detail: '',
     seq: 0,
     lastAt: 0,
+    stateAt: 0,
     cwd: null,
     pending: new Map(),
     finished: false,
@@ -185,6 +191,9 @@ export function toolDetail(name: string, input: unknown): string {
 }
 
 function set(act: AgentActivity, state: PetState, detail: string): void {
+  if (state !== act.state) {
+    act.stateAt = act.lastAt;
+  }
   act.state = state;
   act.detail = detail;
   act.seq++;
@@ -351,24 +360,36 @@ export function applyLine(act: AgentActivity, line: unknown): void {
 export function currentState(
   act: AgentActivity,
   now: number,
-): { state: PetState; detail: string; seq: number; jobs: Job[] } {
+): { state: PetState; detail: string; seq: number; since: number; jobs: Job[] } {
   const jobs = [...act.jobs.values()];
   const silent = now - act.lastAt;
   if (act.pending.size > 0) {
     const names = [...act.pending.values()];
     const asking = names.find((n) => toolState(n) === 'waiting');
     if (asking) {
-      return { state: 'waiting', detail: 'has a question for you', seq: act.seq, jobs };
+      return {
+        state: 'waiting',
+        detail: 'has a question for you',
+        seq: act.seq,
+        since: act.stateAt,
+        jobs,
+      };
     }
     if (silent > PERMISSION_GUESS_MS && names.some((n) => !LONG_RUNNING.has(n))) {
-      return { state: 'waiting', detail: 'needs your OK?', seq: act.seq, jobs };
+      return { state: 'waiting', detail: 'needs your OK?', seq: act.seq, since: act.stateAt, jobs };
     }
   }
   if (silent > STALE_MS && act.state !== 'waiting') {
-    return { state: 'idle', detail: '', seq: act.seq, jobs };
+    return { state: 'idle', detail: '', seq: act.seq, since: act.stateAt, jobs };
   }
   if (act.state === 'thinking' && act.linger && now < act.linger.until) {
-    return { state: act.linger.state, detail: act.linger.detail, seq: act.seq, jobs };
+    return {
+      state: act.linger.state,
+      detail: act.linger.detail,
+      seq: act.seq,
+      since: act.stateAt,
+      jobs,
+    };
   }
-  return { state: act.state, detail: act.detail, seq: act.seq, jobs };
+  return { state: act.state, detail: act.detail, seq: act.seq, since: act.stateAt, jobs };
 }

@@ -7,6 +7,11 @@
   // After an update, VS Code keeps running the old extension until the window
   // reloads, and that can serve this script without the files it needs.
   if (!window.PetArt || !window.PetPlay || !window.PetVariants || !window.PetScene) {
+    acquireVsCodeApi().postMessage({
+      command: 'log',
+      level: 'warn',
+      message: 'Helper scripts missing (extension updated without a reload)',
+    });
     document.body.insertAdjacentHTML(
       'beforeend',
       '<p class="stale">Pet Agents was updated. Run <b>Developer: Reload Window</b> to finish.</p>',
@@ -170,6 +175,16 @@
 
   // -- DOM --------------------------------------------------------------------
   const vscodeApi = acquireVsCodeApi();
+
+  /** Writes to the "Pet Agents" output channel (Pet Agents: Show Log). */
+  function log(level, message) {
+    vscodeApi.postMessage({ command: 'log', level, message: String(message).slice(0, 2000) });
+  }
+
+  window.addEventListener('error', (e) =>
+    log('error', `${e.message} (${e.filename || 'webview'}:${e.lineno || 0})`),
+  );
+  window.addEventListener('unhandledrejection', (e) => log('error', `Unhandled: ${e.reason}`));
   const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('c'));
   const tooltip = /** @type {HTMLDivElement} */ (document.getElementById('tooltip'));
   const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
@@ -179,8 +194,11 @@
   let config = null;
   let viewW = 300;
   let viewH = 300;
-  /** Persisted by VS Code across reloads: where the pet was dragged, the toy bag. */
-  /** @type {{petX?: number, petY?: number, bag?: Record<string, number>}} */
+  /**
+   * Persisted by VS Code across reloads: where the pet was dragged, the toy
+   * bag, toys traded in at the shop, what was bought there and the food in use.
+   */
+  /** @type {{petX?: number, petY?: number, bag?: Record<string, number>, spent?: Record<string, number>, unlocks?: string[], food?: string}} */
   let saved = {};
   /** @type {any} */
   let main = null;
@@ -433,14 +451,20 @@
     return !!config && config.variety === 'classic';
   }
 
-  /** STATES[state] with the pet's variant on top. A new variant is picked each time the state changes. */
+  /**
+   * STATES[state] with the pet's variant on top. A new variant is picked each
+   * time the state changes. Agents from a transcript pick from a seed every
+   * window shares, so the same agent looks the same in every panel.
+   */
   function stateDef(p, state) {
     if (!p.variant || p.variant.state !== state) {
       const v = Variants.pick(state, {
         classic: classic(),
         species: config.species,
-        lastId: p.lastVariant[state],
+        lastId: p.syncKey ? undefined : p.lastVariant[state],
         off: config.disabledActions,
+        unlocked: saved.unlocks,
+        rand: p.syncKey ? Variants.seeded(`${p.syncKey}:${state}`) : Math.random,
       });
       p.lastVariant[state] = v ? v.id : '';
       p.variant = { state, def: v ? Object.assign({}, STATES[state], v) : STATES[state] };
@@ -704,6 +728,7 @@
             toys: scene.canPlay(),
             lastId: p.hobbyLast,
             off: config.disabledActions,
+            unlocked: saved.unlocks,
           })
         : null;
     if (hobby) {
@@ -969,6 +994,11 @@
     sweatDrop: 1100,
     dirt: 80,
     dream: 1500,
+    disco: 420,
+    magic: 480,
+    bubbles: 380,
+    twinkle: 340,
+    confetti: 70,
   };
   const CODE_CHARS = '{}();<>=+*/[]01$#&|!?';
   const CODE_COLORS = ['#5aa9ff', '#ffd23f', '#b48cff', '#6be675', '#ff9f43'];
@@ -1179,6 +1209,47 @@
         txt(pickOne(['💭', '☁️', '🌙', '🦋']), c.x + s * 0.35, top + s * 0.1, {
           vy: -s * 0.15,
           life: 1.6,
+        });
+        break;
+      case 'disco':
+        txt(pickOne(['🪩', '✨', '🎶', '💫']), c.x + (r() - 0.5) * s, top + r() * s * 0.4, {
+          vy: -s * 0.2,
+          life: 1.2,
+        });
+        break;
+      case 'magic':
+        txt(pickOne(['✨', '⭐', '🐇', '🎩']), c.x + side * s * 0.35, top + s * 0.3, {
+          vx: side * s * 0.2,
+          vy: -s * 0.4,
+          g: s * 0.6,
+          life: 1,
+        });
+        break;
+      case 'bubbles':
+        txt('🫧', c.x + dir * s * 0.25, top + s * 0.45, {
+          vx: dir * s * (0.1 + r() * 0.15),
+          vy: -s * (0.15 + r() * 0.15),
+          size: s * (0.06 + r() * 0.06),
+          life: 1.8,
+        });
+        break;
+      case 'twinkle':
+        txt(pickOne(['⭐', '✨', '🌟']), c.x + (r() - 0.3) * s * 1.2, top - r() * s * 0.3, {
+          size: s * 0.07,
+          life: 0.8,
+        });
+        break;
+      case 'confetti':
+        emit({
+          x: c.x + (r() - 0.5) * s,
+          y: top,
+          vx: (r() - 0.5) * s * 0.4,
+          vy: -s * (0.2 + r() * 0.3),
+          g: s * 0.8,
+          size: bit,
+          color: pickOne(CONFETTI),
+          spin: (r() - 0.5) * 12,
+          life: 1.4,
         });
         break;
     }
@@ -2071,10 +2142,12 @@
   }
 
   /** Feeds an agent update into a pet. A changed state counts even when seq did not move. */
-  function feed(p, u) {
+  /** `key` names the agent the same way in every window: its session or sub-agent id. */
+  function feed(p, u, key) {
     if (u.seq !== p.seq || u.state !== p.reported) {
       p.seq = u.seq;
       p.reported = u.state;
+      p.syncKey = `${key}:${u.since}`;
       applyState(p, u.state, u.detail);
     } else {
       p.detail = u.detail || p.detail;
@@ -2082,7 +2155,7 @@
   }
 
   /** Creates the mini for a sub-agent or background session on first sight. */
-  function upsertMini(id, info, u, t) {
+  function upsertMini(id, key, info, u, t) {
     let m = minis.get(id);
     if (!m) {
       const c = center(main);
@@ -2115,7 +2188,7 @@
         });
       }
     }
-    feed(m, u);
+    feed(m, u, key);
   }
 
   function applyClaude(msg) {
@@ -2126,7 +2199,7 @@
     }
     if (msg.main) {
       project = msg.main.project || '';
-      feed(main, msg.main);
+      feed(main, msg.main, msg.main.sessionId);
     }
 
     const t = now();
@@ -2134,7 +2207,7 @@
     const subagents = msg.subagents || [];
     subagents.forEach((sa) => {
       live.add(sa.id);
-      upsertMini(sa.id, { name: sa.name, task: sa.task, agentType: sa.agentType }, sa, t);
+      upsertMini(sa.id, sa.id, { name: sa.name, task: sa.task, agentType: sa.agentType }, sa, t);
     });
     // The row is for this repo's agents. Other repos' sessions only fill it
     // while nothing is running here, and step aside when a helper starts.
@@ -2151,7 +2224,7 @@
         background: true,
         otherRepo: !b.local,
       };
-      upsertMini(id, info, b, t);
+      upsertMini(id, b.id, info, b, t);
     });
     minis.forEach((m, id) => {
       if (!live.has(id) && !m.leavingAt) {
@@ -2167,8 +2240,73 @@
   }
 
   // -- Render loop ------------------------------------------------------------
+  // Each frame clears the canvas first, so a frame that throws leaves the
+  // panel blank. Errors are logged; the view heals itself and, if frames keep
+  // failing, asks the extension for a refresh.
+  const CHECK_EVERY_MS = 5 * 60 * 1000;
+  const REFRESH_AFTER_MS = 10000;
+  let frames = 0;
+  let frameErrors = 0;
+  let lastFrameError = '';
+  let failingSince = 0;
+
   function render() {
     requestAnimationFrame(render);
+    try {
+      drawFrame();
+      frames++;
+      failingSince = 0;
+    } catch (err) {
+      frameFailed(err);
+    }
+  }
+
+  function frameFailed(err) {
+    const t = now();
+    const text = err instanceof Error ? err.stack || err.message : String(err);
+    frameErrors++;
+    if (text !== lastFrameError) {
+      lastFrameError = text;
+      log('error', `Frame failed: ${text}`);
+    }
+    if (!failingSince) {
+      failingSince = t;
+      heal('a frame failed');
+    } else if (t - failingSince > REFRESH_AFTER_MS) {
+      failingSince = t;
+      log('error', 'Frames keep failing, asking for a refresh');
+      vscodeApi.postMessage({ command: 'refresh' });
+    }
+  }
+
+  /** A pet with a NaN position draws nowhere without any error. */
+  function rescuePet() {
+    if (!main || [main.x, main.y, main.wx, main.wy, main.wz].every(Number.isFinite)) {
+      return;
+    }
+    log('warn', `Pet position was lost (${main.x}, ${main.y}), moving it home`);
+    main.wx = main.wxTarget = main.wy = main.wyTarget = main.wz = main.wzTarget = 0;
+    defaultMainPos();
+  }
+
+  /** Rebuilds the sprites and canvas size. Runs every 5 minutes and after any failure. */
+  function heal(reason) {
+    spriteCache.clear();
+    resizeCanvas();
+    rescuePet();
+    log(
+      frameErrors > 0 ? 'warn' : 'debug',
+      `Self-check (${reason}): ${viewW}x${viewH}px, ${frames} frames and ${frameErrors} errors since the last check`,
+    );
+    frames = 0;
+    frameErrors = 0;
+  }
+
+  setInterval(() => heal('every 5 minutes'), CHECK_EVERY_MS);
+  canvas.addEventListener('contextlost', () => log('warn', 'Canvas context lost'));
+  canvas.addEventListener('contextrestored', () => heal('canvas context restored'));
+
+  function drawFrame() {
     const t = now();
     const dt = Math.min((t - (lastFrame || t)) / 1000, 0.1);
     lastFrame = t;
@@ -2179,6 +2317,7 @@
 
     tickState(main, t);
     tickLife(main, t, dt);
+    rescuePet();
     minis.forEach((m, id) => {
       tickState(m, t);
       tickLife(m, t, dt);
@@ -2219,8 +2358,9 @@
     switch (msg.command) {
       case 'init':
         saved = msg.state && typeof msg.state === 'object' ? msg.state : {};
-        scene.setBag(saved.bag);
+        scene.setBag(saved.bag, saved.spent);
         applyConfig(msg.config);
+        renderFoods();
         break;
       case 'reinit':
         applyConfig(msg.config);
@@ -2238,6 +2378,20 @@
       case 'claude-update':
         applyClaude(msg);
         break;
+      case 'unlocks': {
+        // Purchases made in another window.
+        const mine = saved.unlocks || [];
+        const fresh = (msg.unlocks || []).filter((id) => !mine.includes(id));
+        if (fresh.length > 0) {
+          saved.unlocks = [...mine, ...fresh];
+          renderFoods();
+          renderBag();
+          if (config) {
+            renderActions();
+          }
+        }
+        break;
+      }
       case 'care-update':
         care = msg.stats;
         if (main && msg.action && msg.ok === false) {
@@ -2323,10 +2477,9 @@
       return;
     }
     const over = petAt(e.offsetX, e.offsetY);
-    const careCursor = carePanel.hidden ? null : play.cursor(e.offsetX, e.offsetY);
+    const careCursor = careOn() ? play.cursor(e.offsetX, e.offsetY) : null;
     canvas.style.cursor =
-      careCursor ??
-      (over === main ? (carePanel.hidden ? 'grab' : 'pointer') : over ? 'pointer' : '');
+      careCursor ?? (over === main ? (careOn() ? 'pointer' : 'grab') : over ? 'pointer' : '');
     const html = play.tool() ? null : tooltipHtml(e.offsetX, e.offsetY);
     if (!html) {
       tooltip.style.display = 'none';
@@ -2358,6 +2511,13 @@
     clean: /** @type {HTMLDivElement} */ (document.getElementById('bar-clean')),
   };
 
+  /** Care input is live while the panel is open, or a tool is still in hand after closing it. */
+  function careOn() {
+    return !carePanel.hidden || !!play.tool();
+  }
+
+  const TOOL_ICONS = { feed: '🍖', treat: '🍪', play: '🎾', bath: '🛁' };
+
   function showNote(text, ms = 2600) {
     careNote.textContent = text;
     noteUntil = now() + ms;
@@ -2378,9 +2538,10 @@
     view: () => ({ w: viewW, h: viewH }),
     now,
     toolChanged: () => updateCareUi(now()),
+    food: () => saved.food || 'kibble',
   });
 
-  /** Saves position and toy collection where VS Code keeps webview state. */
+  /** Saves position, toy collection and shop purchases where VS Code keeps webview state. */
   function persist() {
     vscodeApi.setState(saved);
     vscodeApi.postMessage({ command: 'save-state', state: saved });
@@ -2407,6 +2568,10 @@
       persist();
       renderBag();
     },
+    // The purchase that spent them persists both together.
+    onSpent: (spent) => {
+      saved.spent = spent;
+    },
   });
 
   // -- Bag and settings panels --------------------------------------------------
@@ -2415,6 +2580,10 @@
   const bagGrid = /** @type {HTMLDivElement} */ (document.getElementById('bag-grid'));
   const bagTitle = /** @type {HTMLSpanElement} */ (document.getElementById('bag-title'));
   const bagStoreAll = /** @type {HTMLButtonElement} */ (document.getElementById('bag-store-all'));
+  const bagView = /** @type {HTMLDivElement} */ (document.getElementById('bag-view'));
+  const shopToggle = /** @type {HTMLButtonElement} */ (document.getElementById('shop-toggle'));
+  const shopView = /** @type {HTMLDivElement} */ (document.getElementById('shop-view'));
+  const foodPicker = /** @type {HTMLDivElement} */ (document.getElementById('food-picker'));
   const settingsToggle = /** @type {HTMLButtonElement} */ (
     document.getElementById('settings-toggle')
   );
@@ -2430,9 +2599,10 @@
     ...Object.entries(Variants.VARIANTS).map(([state, list]) => [state, STATES[state].label, list]),
   ];
 
-  /** One checkbox per variant and hobby; ticked means it can happen. */
+  /** One checkbox per variant and hobby; ticked means it can happen. Unbought ones show locked. */
   function renderActions() {
     const off = new Set(config.disabledActions || []);
+    const unlocked = saved.unlocks || [];
     actionList.innerHTML = ACTION_GROUPS.map(
       ([group, title, list]) =>
         `<div class="group">${escapeHtml(title)}</div>` +
@@ -2441,6 +2611,12 @@
             const id = Variants.actionId(group, v);
             const name = v.id === 'classic' ? 'classic look' : v.label;
             const only = v.species ? ` (${v.species.join(', ')}s)` : '';
+            if (v.shop && !unlocked.includes(id)) {
+              return (
+                `<label class="locked" title="Unlock it in the shop (🎒 then 🛒)">` +
+                `<input type="checkbox" disabled /> 🔒 ${escapeHtml(name)}</label>`
+              );
+            }
             return (
               `<label><input type="checkbox" data-action="${escapeHtml(id)}"` +
               `${off.has(id) ? '' : ' checked'} /> ${escapeHtml(name + only)}</label>`
@@ -2450,6 +2626,8 @@
     ).join('');
   }
   let bagDrawnAt = 0;
+  let shopOpen = false;
+  let shopMsg = '';
 
   /** Opens one corner panel (or closes it if already open) and closes the others. */
   function togglePanel(panel) {
@@ -2457,7 +2635,8 @@
     for (const other of [carePanel, bagPanel, settingsPanel]) {
       other.hidden = other !== panel || !open;
     }
-    if (carePanel.hidden) {
+    // Closing the care panel keeps the tool in hand; opening another panel puts it away.
+    if (carePanel.hidden && panel !== carePanel) {
       play.setTool(null);
     }
     if (!bagPanel.hidden) {
@@ -2471,6 +2650,14 @@
       return;
     }
     bagDrawnAt = now();
+    bagView.hidden = shopOpen;
+    shopView.hidden = !shopOpen;
+    bagStoreAll.hidden = shopOpen;
+    shopToggle.textContent = shopOpen ? '🎒 Bag' : '🛒 Shop';
+    if (shopOpen) {
+      renderShop();
+      return;
+    }
     bagTitle.textContent = `🎒 Bag - ${scene.foundCount()}/${scene.toyTotal} found`;
     bagGrid.innerHTML = scene
       .bagList()
@@ -2485,6 +2672,79 @@
       .join('');
   }
 
+  /** Everything for sale: unlockable animations, then foods. */
+  function shopItems() {
+    const prices = window.PetScene.PRICES;
+    return [
+      ...Variants.shopActions().map((a) => ({
+        id: a.id,
+        icon: a.icon,
+        label: a.group === 'idle' ? a.label : `${a.label} (when ${STATES[a.group].label})`,
+        prices: prices.animation,
+      })),
+      ...window.PetPlay.FOODS.filter((f) => f.emoji).map((f) => ({
+        id: `food.${f.id}`,
+        icon: f.emoji,
+        label: f.name,
+        prices: prices.food,
+      })),
+    ];
+  }
+
+  function renderShop() {
+    const rarity = window.PetScene.RARITY;
+    const owned = new Set(saved.unlocks || []);
+    const spares = ['common', 'rare'].map(
+      (r) => `${scene.spares(r)} ${rarity[r].label.toLowerCase()}`,
+    );
+    const row = (item) =>
+      `<div class="shop-item"><span class="what">${item.icon} ${escapeHtml(item.label)}</span>` +
+      (owned.has(item.id)
+        ? '<span class="owned">✅ Unlocked</span>'
+        : item.prices
+            .map(
+              (p) =>
+                `<button data-buy="${escapeHtml(item.id)}" data-rarity="${p.rarity}" data-n="${p.n}"` +
+                `${scene.spares(p.rarity) < p.n ? ' disabled' : ''}` +
+                ` style="border-bottom-color:${rarity[p.rarity].color || 'rgba(127,127,127,0.5)'}">` +
+                `${p.n} ${rarity[p.rarity].label.toLowerCase()}</button>`,
+            )
+            .join('')) +
+      '</div>';
+    const items = shopItems();
+    bagTitle.textContent = '🛒 Shop';
+    shopView.innerHTML =
+      (shopMsg ? `<div class="shop-msg">${escapeHtml(shopMsg)}</div>` : '') +
+      `<div class="shop-spares">Spare toys: ${spares.join(' - ')}</div>` +
+      '<div class="group">🎭 Animations</div>' +
+      items
+        .filter((i) => !i.id.startsWith('food.'))
+        .map(row)
+        .join('') +
+      '<div class="group">🍽️ Foods</div>' +
+      items
+        .filter((i) => i.id.startsWith('food.'))
+        .map(row)
+        .join('') +
+      '<div class="panel-note">Only spares are traded in: you always keep one of each toy.</div>';
+  }
+
+  /** Food choices in the care panel, once there is more than kibble. */
+  function renderFoods() {
+    const owned = window.PetPlay.FOODS.filter(
+      (f) => !f.emoji || (saved.unlocks || []).includes(`food.${f.id}`),
+    );
+    const current = saved.food || 'kibble';
+    foodPicker.hidden = owned.length < 2;
+    foodPicker.innerHTML = owned
+      .map(
+        (f) =>
+          `<button data-food="${f.id}"${f.id === current ? ' class="active"' : ''}` +
+          ` title="${escapeHtml(f.name)}">${f.emoji || '🥣'}</button>`,
+      )
+      .join('');
+  }
+
   function syncSwitches() {
     for (const input of switches) {
       const key = input.dataset.setting || '';
@@ -2494,6 +2754,43 @@
   }
 
   bagToggle.addEventListener('click', () => togglePanel(bagPanel));
+  shopToggle.addEventListener('click', () => {
+    shopOpen = !shopOpen;
+    shopMsg = '';
+    renderBag();
+  });
+  shopView.addEventListener('click', (e) => {
+    const el = /** @type {HTMLElement} */ (e.target).closest('[data-buy]');
+    if (!el) {
+      return;
+    }
+    const { buy, rarity, n } = /** @type {HTMLElement} */ (el).dataset;
+    const item = shopItems().find((i) => i.id === buy);
+    if (!item || !rarity || !scene.spend(rarity, Number(n))) {
+      return;
+    }
+    saved.unlocks = [...(saved.unlocks || []), item.id];
+    if (item.id.startsWith('food.')) {
+      saved.food = item.id.slice('food.'.length);
+    }
+    persist();
+    shopMsg = `Unlocked ${item.icon} ${item.label}!`;
+    renderBag();
+    renderFoods();
+    if (config) {
+      renderActions();
+    }
+  });
+  foodPicker.addEventListener('click', (e) => {
+    const el = /** @type {HTMLElement} */ (e.target).closest('[data-food]');
+    const id = el && /** @type {HTMLElement} */ (el).dataset.food;
+    if (!id) {
+      return;
+    }
+    saved.food = id;
+    persist();
+    renderFoods();
+  });
   settingsToggle.addEventListener('click', () => togglePanel(settingsPanel));
   bagStoreAll.addEventListener('click', () => {
     scene.putAllAway();
@@ -2538,6 +2835,10 @@
 
   function updateCareUi(t) {
     const busy = isBusy();
+    const held = carePanel.hidden ? play.tool() : null;
+    careToggle.textContent = held ? TOOL_ICONS[held] || '🐾' : '🐾';
+    careToggle.title = held ? 'Care tool in hand. Esc puts it away' : 'Pet care';
+    careToggle.classList.toggle('holding', !!held);
     careButtons.forEach((b) => {
       b.disabled = busy || !main;
       b.className = play.tool() === b.dataset.care ? 'active' : '';
@@ -2585,7 +2886,7 @@
       return;
     }
     const pet = petAt(e.offsetX, e.offsetY);
-    if (!carePanel.hidden && play.pointerDown(e.offsetX, e.offsetY, pet === main)) {
+    if (careOn() && play.pointerDown(e.offsetX, e.offsetY, pet === main)) {
       tooltip.style.display = 'none';
       e.preventDefault();
       return;
@@ -2609,7 +2910,7 @@
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (!carePanel.hidden) {
+    if (careOn()) {
       play.pointerMove(e.clientX, e.clientY, () => petAt(e.clientX, e.clientY) === main);
     }
     if (!press || press.pet !== main) {
@@ -2635,7 +2936,7 @@
   });
 
   document.addEventListener('mouseup', () => {
-    if (!carePanel.hidden && play.pointerUp()) {
+    if (careOn() && play.pointerUp()) {
       return;
     }
     if (!press) {
@@ -2651,6 +2952,12 @@
     dragging = false;
     press = null;
     canvas.style.cursor = '';
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && play.tool()) {
+      play.setTool(null);
+    }
   });
 
   vscodeApi.postMessage({ command: 'ready' });

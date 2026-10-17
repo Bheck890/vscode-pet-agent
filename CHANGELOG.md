@@ -7,6 +7,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- 🛒 Shop in the bag panel: trade spare toys (never your last of a kind) for 8 unlockable animations at 20 common or 5 rare toys each, and 4 new foods (fish, steak, strawberries, cake) at 100 common toys each. Bought foods are picked under the care buttons. Trades and purchases are kept in extension storage and merged across windows like the bag.
+- `Pet Agents: Show Log` and a Pet Agents output channel. The view logs frames that fail to draw, a lost canvas, a lost pet position and missing helper scripts; the extension logs the view opening, closing, refreshing and (at Debug level) being shown or hidden.
+- Self-healing pet view: a frame that throws no longer leaves the panel blank for good. The view rebuilds its sprites and canvas and moves a lost pet home straight away and every 5 minutes, and refreshes itself (at most once every 5 minutes) if frames keep failing.
+- Care tools stay in hand after closing the care panel, so it no longer covers the pet. The 🐾 button shows the tool; Esc puts it away.
+
+### Changed
+
+- Animation variants for an agent are picked from its transcript, so the same agent shows the same animation in every VS Code window (main pet in one, mini pet in another). Shop purchases made in one window reach the others within a minute.
+
 ## [0.3.0] - 2026-10-16
 
 ### Added

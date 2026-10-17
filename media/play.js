@@ -14,8 +14,16 @@
     [16, 27],
   ];
 
+  /** Kibble is free; the rest are bought in the shop. `emoji` null draws the kibble pellet. */
+  const FOODS = [
+    { id: 'kibble', emoji: null, name: 'kibble' },
+    { id: 'fish', emoji: '🐟', name: 'fresh fish' },
+    { id: 'steak', emoji: '🥩', name: 'steak' },
+    { id: 'berries', emoji: '🍓', name: 'strawberries' },
+    { id: 'cake', emoji: '🍰', name: 'cake' },
+  ];
+
   const HINTS = {
-    feed: 'Click anywhere to drop kibble 🥣',
     treat: 'Hold the treat above your pet, then click to drop it 🍪',
     play: 'Grab the ball and throw it! 🎾',
     bath: 'Hold the mouse button and scrub your pet 🧽',
@@ -44,13 +52,14 @@
    *   view: () => {w: number, h: number},
    *   now: () => number,
    *   toolChanged: () => void,
+   *   food: () => string,
    * }} api
    */
   function create(api) {
     const ctx = api.ctx;
     /** @type {string | null} */
     let tool = null;
-    /** @type {Array<{x: number, y: number, vy: number, landed: boolean}>} */
+    /** @type {Array<{x: number, y: number, vy: number, landed: boolean, food: any}>} */
     let kibbles = [];
     /** @type {any} */
     let treat = null;
@@ -128,6 +137,10 @@
 
     // -- Tools --------------------------------------------------------------
 
+    function food() {
+      return FOODS.find((f) => f.id === api.food()) || FOODS[0];
+    }
+
     function setTool(name) {
       if (scrub && scrub.foam.length > 0) {
         api.anim('shake');
@@ -167,7 +180,7 @@
       if (name === 'bath' && c && c.clean >= 99) {
         api.note(`${p.name} is already squeaky clean! ✨`, 3000);
       } else {
-        api.note(HINTS[name], 4000);
+        api.note(name === 'feed' ? `Click anywhere to drop ${food().name} 🥣` : HINTS[name], 4000);
       }
       api.toolChanged();
     }
@@ -392,6 +405,11 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       for (const k of kibbles) {
+        if (k.food.emoji) {
+          ctx.font = `${Math.round(g.size * 0.11)}px sans-serif`;
+          ctx.fillText(k.food.emoji, k.x, k.y - g.size * 0.045);
+          continue;
+        }
         ctx.fillStyle = '#7a4a22';
         ctx.beginPath();
         ctx.ellipse(k.x, k.y - g.s, g.s * 1.4, g.s * 1.1, 0, 0, Math.PI * 2);
@@ -476,6 +494,7 @@
               y: Math.min(y, g.floor),
               vy: 0,
               landed: false,
+              food: food(),
             });
           }
           return true;
@@ -629,5 +648,5 @@
     };
   }
 
-  root.PetPlay = { create };
+  root.PetPlay = { create, FOODS };
 })(this);

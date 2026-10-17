@@ -1,4 +1,4 @@
-import { BagStore, parseBag } from '../bag-store';
+import { BagStore, parseBag, parseUnlocks } from '../bag-store';
 
 function memory() {
   const data: Record<string, unknown> = {};
@@ -34,5 +34,22 @@ describe('BagStore', () => {
     expect(parseBag({ yarn: 2, crown: -1, bone: 1.5, 'x y': 1, rocket: '3' })).toEqual({ yarn: 2 });
     expect(parseBag(['yarn'])).toEqual({});
     expect(parseBag(null)).toEqual({});
+  });
+
+  it('merges shop trades and purchases so neither can go backwards', () => {
+    const storage = memory();
+    const a = new BagStore(storage);
+    a.saveSpent({ yarn: 12, box: 8 });
+    a.saveUnlocks(['idle.disco']);
+    const b = new BagStore(storage);
+    expect(b.saveSpent({ yarn: 5, bone: 3 })).toEqual({ yarn: 12, box: 8, bone: 3 });
+    expect(b.saveUnlocks(['food.fish', 'idle.disco'])).toEqual(['idle.disco', 'food.fish']);
+    expect(a.getSpent()).toEqual({ yarn: 12, box: 8, bone: 3 });
+    expect(a.getUnlocks()).toEqual(['idle.disco', 'food.fish']);
+  });
+
+  it('drops malformed unlocks', () => {
+    expect(parseUnlocks(['idle.disco', 'disco', 3, 'idle.disco', 'a.b c'])).toEqual(['idle.disco']);
+    expect(parseUnlocks({ 'idle.disco': true })).toEqual([]);
   });
 });

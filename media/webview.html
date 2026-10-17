@@ -16,10 +16,16 @@
     <div id="bag-panel" class="panel" hidden>
       <div class="panel-head">
         <span id="bag-title">🎒 Bag</span>
-        <button id="bag-store-all">Put all away</button>
+        <span>
+          <button id="bag-store-all">Put all away</button>
+          <button id="shop-toggle">🛒 Shop</button>
+        </span>
       </div>
-      <div id="bag-grid"></div>
-      <div class="panel-note">Click a toy to take it out, click again to put it away.</div>
+      <div id="bag-view">
+        <div id="bag-grid"></div>
+        <div class="panel-note">Click a toy to take it out, click again to put it away.</div>
+      </div>
+      <div id="shop-view" hidden></div>
     </div>
     <div id="settings-panel" class="panel" hidden>
       <label
@@ -65,6 +71,7 @@
         <button data-care="play">🎾 Play</button>
         <button data-care="bath">🛁 Bath</button>
       </div>
+      <div id="food-picker" title="Food to feed" hidden></div>
       <div id="care-note"></div>
     </div>
     <script nonce="<!--NONCE-->" src="<!--PETS_URI-->"></script>

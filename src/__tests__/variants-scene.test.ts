@@ -10,6 +10,8 @@ interface Variant {
   roam?: string;
   moves?: boolean;
   needs?: string;
+  fx?: string | null;
+  shop?: string;
 }
 
 interface VariantsApi {
@@ -22,6 +24,7 @@ interface VariantsApi {
       species: string;
       lastId?: string;
       off?: string[];
+      unlocked?: string[];
       rand?: () => number;
     },
   ): Variant | null;
@@ -31,8 +34,11 @@ interface VariantsApi {
     toys: boolean;
     lastId?: string;
     off?: string[];
+    unlocked?: string[];
     rand?: () => number;
   }): Variant | null;
+  shopActions(): Array<{ id: string; group: string; icon: string; label: string }>;
+  seeded(key: string): () => number;
 }
 
 interface SceneApi {
@@ -44,7 +50,9 @@ interface SceneApi {
   find(): void;
   foundCount(): number;
   toyTotal: number;
-  setBag(bag: Record<string, number>): void;
+  setBag(bag: Record<string, number>, spent?: Record<string, number>): void;
+  spares(rarity: string): number;
+  spend(rarity: string, n: number): boolean;
   bagList(): Array<{ id: string; count: number; out: boolean }>;
   takeOut(id: string): boolean;
   putAway(id: string): void;
@@ -64,6 +72,7 @@ const PetScene = sandbox['PetScene'] as {
   create(api: object): SceneApi;
   TOYS: Array<{ id: string; rarity: string }>;
   RARITY: Record<string, unknown>;
+  PRICES: Record<string, Array<{ rarity: string; n: number }>>;
 };
 
 /** Must match the scenery names handled by scene.js. */
@@ -101,6 +110,48 @@ describe('animation variants', () => {
         expect(SCENERY).toContain(v.scene);
       }
     }
+  });
+
+  it('only uses effects that webview.js draws', () => {
+    const webview = fs.readFileSync(path.join(media, 'webview.js'), 'utf8');
+    const fxEvery = webview.slice(
+      webview.indexOf('const FX_EVERY'),
+      webview.indexOf('};', webview.indexOf('const FX_EVERY')),
+    );
+    for (const v of [...Object.values(V.VARIANTS).flat(), ...V.IDLE]) {
+      if (v.fx) {
+        expect([v.id, fxEvery.includes(`${v.fx}:`) ? 'ok' : v.fx]).toEqual([v.id, 'ok']);
+      }
+    }
+  });
+
+  it('keeps shop actions locked until bought', () => {
+    const shop = V.shopActions();
+    expect(shop.length).toBeGreaterThanOrEqual(6);
+    expect(shop.map((a) => a.id)).toContain('idle.disco');
+    expect(shop.map((a) => a.id)).toContain('done.party');
+    const seen = (unlocked?: string[]) => {
+      const ids = new Set<string>();
+      for (let i = 0; i < 400; i++) {
+        ids.add(`idle.${V.pickIdle({ species: 'cat', wander: true, toys: true, unlocked })?.id}`);
+        ids.add(`done.${V.pick('done', { classic: false, species: 'cat', unlocked })?.id}`);
+      }
+      return ids;
+    };
+    const locked = seen();
+    expect(shop.filter((a) => locked.has(a.id))).toEqual([]);
+    const open = seen(['idle.disco', 'done.party']);
+    expect(open.has('idle.disco')).toBe(true);
+    expect(open.has('done.party')).toBe(true);
+    expect(open.has('idle.magic')).toBe(false);
+  });
+
+  it('picks the same variant for the same seed and spreads across seeds', () => {
+    const pickFor = (key: string) =>
+      V.pick('running', { classic: false, species: 'cat', rand: V.seeded(key) })?.id;
+    expect(pickFor('s1:1000:running')).toBe(pickFor('s1:1000:running'));
+    const ids = new Set(Array.from({ length: 40 }, (_, i) => pickFor(`s1:${i}:running`)));
+    expect(ids.size).toBeGreaterThan(2);
   });
 
   it('classic mode always picks the first variant', () => {
@@ -163,6 +214,7 @@ describe('scene', () => {
 
   function makeScene(config: Record<string, unknown>) {
     const saved: Array<Record<string, number>> = [];
+    const spent: Array<Record<string, number>> = [];
     const ctx = new Proxy(
       {},
       { get: (_t, key) => (key === 'measureText' ? () => ({ width: 10 }) : () => undefined) },
@@ -177,8 +229,9 @@ describe('scene', () => {
       config: () => config,
       playing: () => false,
       onBag: (bag: Record<string, number>) => saved.push(bag),
+      onSpent: (s: Record<string, number>) => spent.push(s),
     });
-    return { scene, saved };
+    return { scene, saved, spent };
   }
 
   it('has toys in every rarity', () => {
@@ -245,6 +298,37 @@ describe('scene', () => {
       expect(Object.keys(bag)).toContain(out[0].id);
       expect(() => scene.update(Date.now() + 100, 0.016)).not.toThrow();
     }
+  });
+
+  it('charges 20 commons or 5 rares for an animation and 100 commons for a food', () => {
+    expect(PetScene.PRICES.animation).toEqual([
+      { rarity: 'common', n: 20 },
+      { rarity: 'rare', n: 5 },
+    ]);
+    expect(PetScene.PRICES.food).toEqual([{ rarity: 'common', n: 100 }]);
+  });
+
+  it('trades in spares only, most plentiful kind first, and keeps one of each', () => {
+    const { scene, spent } = makeScene({ toys: false, machines: true });
+    scene.setBag({ yarn: 15, box: 8, bone: 1, rocket: 3 });
+    expect(scene.spares('common')).toBe(21);
+    expect(scene.spares('rare')).toBe(2);
+    expect(scene.spend('rare', 5)).toBe(false);
+    expect(spent).toHaveLength(0);
+
+    expect(scene.spend('common', 20)).toBe(true);
+    expect(spent[0]).toEqual({ yarn: 14, box: 6 });
+    const count = (id: string) => scene.bagList().find((t) => t.id === id)?.count;
+    expect([count('yarn'), count('box'), count('bone')]).toEqual([1, 2, 1]);
+    expect(scene.spares('common')).toBe(1);
+    expect(scene.foundCount()).toBe(4);
+  });
+
+  it('restores what was traded in', () => {
+    const { scene } = makeScene({ toys: false, machines: true });
+    scene.setBag({ yarn: 25 }, { yarn: 20, crown: 1 });
+    expect(scene.bagList().find((t) => t.id === 'yarn')?.count).toBe(5);
+    expect(scene.spares('common')).toBe(4);
   });
 
   it('puts a machine next to the pet for each job, washing machines for tests in classic', () => {

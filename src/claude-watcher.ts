@@ -38,6 +38,8 @@ export interface MainPetUpdate {
   state: PetState;
   detail: string;
   seq: number;
+  /** Transcript time of the last state change; seeds the animation pick. */
+  since: number;
   project: string | null;
   jobs: Job[];
 }
@@ -50,6 +52,8 @@ export interface SubagentUpdate {
   state: PetState;
   detail: string;
   seq: number;
+  /** Transcript time of the last state change; seeds the animation pick. */
+  since: number;
   jobs: Job[];
 }
 
@@ -65,6 +69,8 @@ export interface BackgroundUpdate {
   state: PetState;
   detail: string;
   seq: number;
+  /** Transcript time of the last state change; seeds the animation pick. */
+  since: number;
   jobs: Job[];
 }
 

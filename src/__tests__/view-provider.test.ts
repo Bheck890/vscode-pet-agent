@@ -75,6 +75,8 @@ function fakeView() {
   };
   const view = {
     webview,
+    visible: true,
+    onDidChangeVisibility: () => ({ dispose: () => undefined }),
     onDidDispose: (fn: () => void) => {
       onDispose = fn;
       return { dispose: () => undefined };
@@ -97,6 +99,7 @@ function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?:
   const careStorage = memory();
   const bagStorage = memory();
   const saveSetting = jest.fn(() => Promise.resolve());
+  const log = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
   const settings: Record<string, unknown> = { species: 'cat', name: 'Mochi', ...opts.settings };
   const provider = new PeonViewProvider(
     MEDIA,
@@ -106,12 +109,13 @@ function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?:
     new CareStore(careStorage),
     new BagStore(bagStorage),
     saveSetting,
+    log,
   );
   const v = fakeView();
   const resolve = (view = v) =>
     provider.resolveWebviewView(view.view as never, { state: opts.state } as never, {} as never);
   resolve();
-  return { provider, v, watchers, careStorage, bagStorage, saveSetting, settings, resolve };
+  return { provider, v, watchers, careStorage, bagStorage, saveSetting, settings, resolve, log };
 }
 
 describe('PeonViewProvider', () => {
@@ -161,11 +165,28 @@ describe('PeonViewProvider', () => {
     });
   });
 
+  it('stores shop trades and purchases globally and sends them back on init', () => {
+    const { v, bagStorage } = setup();
+    v.send({
+      command: 'save-state',
+      state: { bag: { yarn: 21 }, spent: { yarn: 20 }, unlocks: ['idle.disco'], food: 'fish' },
+    });
+    v.send({ command: 'ready' });
+
+    expect(bagStorage.data['petBagSpent']).toEqual({ yarn: 20 });
+    expect(bagStorage.data['petUnlocks']).toEqual(['idle.disco']);
+    expect(v.last('init')).toMatchObject({
+      state: { bag: { yarn: 21 }, spent: { yarn: 20 }, unlocks: ['idle.disco'], food: 'fish' },
+    });
+  });
+
   it.each([
     ['a string position', { petX: '80', petY: 90 }],
     ['an infinite position', { petX: Infinity }],
     ['a bag with text counts', { bag: { yarn: 'lots' } }],
     ['a null bag', { bag: null }],
+    ['unlocks that are not a list', { unlocks: 'idle.disco' }],
+    ['a numeric food', { food: 3 }],
     ['no state at all', null],
   ])('ignores save-state with %s', (_label, state) => {
     const { v, bagStorage } = setup({ state: { petX: 1, petY: 2 } });
@@ -173,6 +194,34 @@ describe('PeonViewProvider', () => {
     v.send({ command: 'ready' });
     expect(v.last('init')).toMatchObject({ state: { petX: 1, petY: 2 } });
     expect(bagStorage.data['petBag']).toBeUndefined();
+  });
+
+  it('writes view log lines to the output channel and drops malformed ones', () => {
+    const { v, log } = setup();
+    v.send({ command: 'log', level: 'error', message: 'Frame failed: boom' });
+    v.send({ command: 'log', level: 'shout', message: 'nope' });
+    v.send({ command: 'log', level: 'info', message: 42 });
+    expect(log.error).toHaveBeenCalledWith('view: Frame failed: boom');
+    expect(log.info).not.toHaveBeenCalledWith(expect.stringContaining('nope'));
+    expect(log.info).not.toHaveBeenCalledWith(expect.stringContaining('42'));
+  });
+
+  it('refreshes a failing view at most once every 5 minutes', () => {
+    const { v, log } = setup();
+    v.webview.html = '';
+    v.send({ command: 'refresh' });
+    expect(v.webview.html).toContain('Content-Security-Policy');
+    v.webview.html = '';
+    v.send({ command: 'refresh' });
+    expect(v.webview.html).toBe('');
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('skipped'));
+  });
+
+  it('sends shop purchases from other windows with the care tick', () => {
+    const { v, provider, bagStorage } = setup();
+    bagStorage.data['petUnlocks'] = ['idle.disco'];
+    provider.sendCare();
+    expect(v.last('unlocks')).toEqual({ command: 'unlocks', unlocks: ['idle.disco'] });
   });
 
   it('applies care actions and reports refusals', () => {

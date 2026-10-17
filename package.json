@@ -69,6 +69,10 @@
         "command": "pet-agents.refresh",
         "title": "Pet Agents: Refresh Pet",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "pet-agents.showLog",
+        "title": "Pet Agents: Show Log"
       }
     ],
     "menus": {

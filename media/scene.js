@@ -25,32 +25,123 @@
     food: [{ rarity: 'common', n: 100 }],
   };
 
-  /** `use` decides what the pet does with it; `floats` items hover instead of resting. */
+  /**
+   * `kind` 'toy' things get flicked when clicked and chased; 'object' things
+   * stay put and the pet comes over to use them. `use` decides what the pet
+   * does with it; `floats` items hover instead of resting.
+   */
   const TOYS = [
-    { id: 'yarn', emoji: '🧶', name: 'ball of yarn', rarity: 'common', use: 'play' },
-    { id: 'box', emoji: '📦', name: 'cardboard box', rarity: 'common', use: 'hide' },
-    { id: 'bone', emoji: '🦴', name: 'bone', rarity: 'common', use: 'chew' },
-    { id: 'teddy', emoji: '🧸', name: 'teddy bear', rarity: 'common', use: 'cuddle' },
-    { id: 'frisbee', emoji: '🥏', name: 'frisbee', rarity: 'common', use: 'play' },
-    { id: 'plant', emoji: '🪴', name: 'potted plant', rarity: 'common', use: 'sniff' },
-    { id: 'balloon', emoji: '🎈', name: 'balloon', rarity: 'common', use: 'float', floats: true },
-    { id: 'chair', emoji: '🪑', name: 'chair', rarity: 'uncommon', use: 'sit' },
-    { id: 'couch', emoji: '🛋️', name: 'couch', rarity: 'uncommon', use: 'sit' },
-    { id: 'bed', emoji: '🛏️', name: 'comfy bed', rarity: 'uncommon', use: 'nap' },
-    { id: 'guitar', emoji: '🎸', name: 'guitar', rarity: 'uncommon', use: 'music' },
-    { id: 'drum', emoji: '🥁', name: 'drum', rarity: 'uncommon', use: 'music' },
-    { id: 'skateboard', emoji: '🛹', name: 'skateboard', rarity: 'uncommon', use: 'ride' },
-    { id: 'kite', emoji: '🪁', name: 'kite', rarity: 'uncommon', use: 'float', floats: true },
-    { id: 'basketball', emoji: '🏀', name: 'basketball', rarity: 'uncommon', use: 'play' },
-    { id: 'rocket', emoji: '🚀', name: 'toy rocket', rarity: 'rare', use: 'admire' },
-    { id: 'arcade', emoji: '🕹️', name: 'arcade stick', rarity: 'rare', use: 'game' },
-    { id: 'tent', emoji: '⛺', name: 'tent', rarity: 'rare', use: 'hide' },
-    { id: 'ufo', emoji: '🛸', name: 'tiny UFO', rarity: 'rare', use: 'float', floats: true },
-    { id: 'castle', emoji: '🏰', name: 'castle', rarity: 'rare', use: 'admire' },
-    { id: 'crown', emoji: '👑', name: 'golden crown', rarity: 'legendary', use: 'admire' },
-    { id: 'gem', emoji: '💎', name: 'giant diamond', rarity: 'legendary', use: 'admire' },
-    { id: 'unicorn', emoji: '🦄', name: 'unicorn plush', rarity: 'legendary', use: 'cuddle' },
-    { id: 'rainbow', emoji: '🌈', name: 'pocket rainbow', rarity: 'legendary', use: 'admire' },
+    { id: 'yarn', kind: 'toy', emoji: '🧶', name: 'ball of yarn', rarity: 'common', use: 'play' },
+    {
+      id: 'box',
+      kind: 'object',
+      emoji: '📦',
+      name: 'cardboard box',
+      rarity: 'common',
+      use: 'hide',
+    },
+    { id: 'bone', kind: 'toy', emoji: '🦴', name: 'bone', rarity: 'common', use: 'chew' },
+    { id: 'teddy', kind: 'toy', emoji: '🧸', name: 'teddy bear', rarity: 'common', use: 'cuddle' },
+    { id: 'frisbee', kind: 'toy', emoji: '🥏', name: 'frisbee', rarity: 'common', use: 'play' },
+    {
+      id: 'plant',
+      kind: 'object',
+      emoji: '🪴',
+      name: 'potted plant',
+      rarity: 'common',
+      use: 'sniff',
+    },
+    {
+      id: 'balloon',
+      kind: 'toy',
+      emoji: '🎈',
+      name: 'balloon',
+      rarity: 'common',
+      use: 'float',
+      floats: true,
+    },
+    { id: 'chair', kind: 'object', emoji: '🪑', name: 'chair', rarity: 'uncommon', use: 'sit' },
+    { id: 'couch', kind: 'object', emoji: '🛋️', name: 'couch', rarity: 'uncommon', use: 'sit' },
+    { id: 'bed', kind: 'object', emoji: '🛏️', name: 'comfy bed', rarity: 'uncommon', use: 'nap' },
+    { id: 'guitar', kind: 'object', emoji: '🎸', name: 'guitar', rarity: 'uncommon', use: 'music' },
+    { id: 'drum', kind: 'object', emoji: '🥁', name: 'drum', rarity: 'uncommon', use: 'music' },
+    {
+      id: 'skateboard',
+      kind: 'toy',
+      emoji: '🛹',
+      name: 'skateboard',
+      rarity: 'uncommon',
+      use: 'ride',
+    },
+    {
+      id: 'kite',
+      kind: 'toy',
+      emoji: '🪁',
+      name: 'kite',
+      rarity: 'uncommon',
+      use: 'float',
+      floats: true,
+    },
+    {
+      id: 'basketball',
+      kind: 'toy',
+      emoji: '🏀',
+      name: 'basketball',
+      rarity: 'uncommon',
+      use: 'play',
+    },
+    { id: 'rocket', kind: 'toy', emoji: '🚀', name: 'toy rocket', rarity: 'rare', use: 'admire' },
+    {
+      id: 'arcade',
+      kind: 'object',
+      emoji: '🕹️',
+      name: 'arcade stick',
+      rarity: 'rare',
+      use: 'game',
+    },
+    { id: 'tent', kind: 'object', emoji: '⛺', name: 'tent', rarity: 'rare', use: 'hide' },
+    {
+      id: 'ufo',
+      kind: 'toy',
+      emoji: '🛸',
+      name: 'tiny UFO',
+      rarity: 'rare',
+      use: 'float',
+      floats: true,
+    },
+    { id: 'castle', kind: 'object', emoji: '🏰', name: 'castle', rarity: 'rare', use: 'admire' },
+    {
+      id: 'crown',
+      kind: 'object',
+      emoji: '👑',
+      name: 'golden crown',
+      rarity: 'legendary',
+      use: 'admire',
+    },
+    {
+      id: 'gem',
+      kind: 'object',
+      emoji: '💎',
+      name: 'giant diamond',
+      rarity: 'legendary',
+      use: 'admire',
+    },
+    {
+      id: 'unicorn',
+      kind: 'toy',
+      emoji: '🦄',
+      name: 'unicorn plush',
+      rarity: 'legendary',
+      use: 'cuddle',
+    },
+    {
+      id: 'rainbow',
+      kind: 'object',
+      emoji: '🌈',
+      name: 'pocket rainbow',
+      rarity: 'legendary',
+      use: 'admire',
+    },
   ];
 
   const USE_LABEL = {
@@ -401,7 +492,14 @@
      * empty the pet pulls a random toy out of the bag, out of nowhere, and it
      * goes back in a few seconds after playtime.
      */
-    function startToy(until) {
+    function startToy(until, chosen) {
+      if (chosen) {
+        if (!toys.includes(chosen) || chosen.storing) {
+          return false;
+        }
+        use = { toy: chosen, until, since: 0, lastKick: 0, fxAt: 0, rideTo: chosen.x };
+        return true;
+      }
       if (!canPlay()) {
         return false;
       }
@@ -1300,9 +1398,10 @@
         if (!toy.storing && Math.abs(x - toy.x) < ts / 2 && Math.abs(y - toyY(toy, g)) < ts / 2) {
           const r = RARITY[toy.def.rarity];
           const n = have(toy.def.id);
+          const click = toy.def.kind === 'toy' ? 'click to flick it' : 'click to use it';
           return {
             title: `${toy.def.emoji} ${toy.def.name}`,
-            sub: `${r.label}${n > 1 ? ` - x${n} in the bag` : ''} - click to put it in the bag`,
+            sub: `${r.label} ${toy.def.kind}${n > 1 ? ` - x${n} in the bag` : ''} - ${click}, right-click to put it away`,
           };
         }
       }
@@ -1325,21 +1424,42 @@
       return null;
     }
 
-    /** Clicking a toy on the floor puts it in the bag. Returns true when a toy was hit. */
-    function grab(x, y) {
+    function toyAt(x, y) {
       if (!api.main()) {
-        return false;
+        return undefined;
       }
       const g = geom();
       const ts = toySize(g);
-      const toy = toys.find(
+      return toys.find(
         (o) => !o.storing && Math.abs(x - o.x) < ts / 2 && Math.abs(y - toyY(o, g)) < ts / 2,
       );
+    }
+
+    /** Right-clicking a toy on the floor puts it in the bag. Returns true when a toy was hit. */
+    function grab(x, y) {
+      const toy = toyAt(x, y);
       if (!toy) {
         return false;
       }
       store(toy, api.now());
       return true;
+    }
+
+    /**
+     * Clicking a toy on the floor: a real toy gets flicked away from the
+     * click. Returns the toy (or object) so the pet can come and play with
+     * it, or null when nothing was hit.
+     */
+    function poke(x, y) {
+      const toy = toyAt(x, y);
+      if (!toy) {
+        return null;
+      }
+      if (toy.def.kind === 'toy') {
+        kick(toy, Math.sign(toy.x - x) || (Math.random() < 0.5 ? -1 : 1), geom());
+      }
+      toy.until = Math.max(toy.until, api.now() + 60000);
+      return toy;
     }
 
     return {
@@ -1350,6 +1470,8 @@
       setJobs,
       hover,
       grab,
+      poke,
+      say,
       startToy,
       stopToy,
       startCritter,

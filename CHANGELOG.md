@@ -12,12 +12,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - 🛒 Shop in the bag panel: trade spare toys (never your last of a kind) for 8 unlockable animations at 20 common or 5 rare toys each, and 4 new foods (fish, steak, strawberries, cake) at 100 common toys each. Bought foods are picked under the care buttons. Trades and purchases are kept in extension storage and merged across windows like the bag.
-- `Pet Agents: Show Log` and a Pet Agents output channel. The view logs frames that fail to draw, a lost canvas, a lost pet position and missing helper scripts; the extension logs the view opening, closing, refreshing and (at Debug level) being shown or hidden.
+- `Pet Agents: Show Log` and a Pet Agents output channel. The view logs frames that fail to draw, a lost canvas, a lost pet position and missing helper scripts; the extension logs the view opening, closing, refreshing and (at Debug level) being shown or hidden. **🪵 Gather debug logs** in the ⚙️ panel adds a snapshot of the view (size, pet position and state, frame errors, sprites) and the extension (VS Code version, sessions) and opens the log.
 - Self-healing pet view: a frame that throws no longer leaves the panel blank for good. The view rebuilds its sprites and canvas and moves a lost pet home straight away and every 5 minutes, and refreshes itself (at most once every 5 minutes) if frames keep failing.
+- Bag tabs: 🧸 Toys, ✨ Collection and 🛒 Shop. The collection lists what you've bought; pick the food to feed and switch each bought animation on or off.
+- Click toys and objects on the floor to interact. Real toys (yarn, ball, frisbee...) get flicked across the panel and the pet chases and plays with them; objects (couch, bed, guitar, box...) stay put and the pet comes over to use them. A napping pet wakes up to play.
 - Care tools stay in hand after closing the care panel, so it no longer covers the pet. The 🐾 button shows the tool; Esc puts it away.
 
 ### Changed
 
+- Clicking a toy on the floor now plays with it; right-click puts it back in the bag.
 - Animation variants for an agent are picked from its transcript, so the same agent shows the same animation in every VS Code window (main pet in one, mini pet in another). Shop purchases made in one window reach the others within a minute.
 
 ## [0.3.0] - 2026-10-16

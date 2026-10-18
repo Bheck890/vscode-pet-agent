@@ -57,7 +57,9 @@ interface SceneApi {
   takeOut(id: string): boolean;
   putAway(id: string): void;
   canPlay(): boolean;
-  startToy(until: number): boolean;
+  startToy(until: number, chosen?: object): boolean;
+  poke(x: number, y: number): { def: { id: string; kind: string }; vx: number } | null;
+  toyLabel(): string;
   grab(x: number, y: number): boolean;
 }
 
@@ -70,7 +72,7 @@ const V = sandbox['PetVariants'] as VariantsApi;
 const Art = sandbox['PetArt'] as { PROPS: Record<string, unknown> };
 const PetScene = sandbox['PetScene'] as {
   create(api: object): SceneApi;
-  TOYS: Array<{ id: string; rarity: string }>;
+  TOYS: Array<{ id: string; rarity: string; kind: string }>;
   RARITY: Record<string, unknown>;
   PRICES: Record<string, Array<{ rarity: string; n: number }>>;
 };
@@ -263,7 +265,41 @@ describe('scene', () => {
     expect(scene.bagList().find((t) => t.id === 'yarn')?.out).toBe(false);
   });
 
-  it('clicking a toy on the floor puts it back in the bag', () => {
+  it('sorts every find into a real toy or an object', () => {
+    const kinds = new Set(PetScene.TOYS.map((t) => t.kind));
+    expect([...kinds].sort()).toEqual(['object', 'toy']);
+    const kindOf = (id: string) => PetScene.TOYS.find((t) => t.id === id)?.kind;
+    expect([kindOf('yarn'), kindOf('frisbee'), kindOf('couch'), kindOf('bed')]).toEqual([
+      'toy',
+      'toy',
+      'object',
+      'object',
+    ]);
+  });
+
+  it('flicks a real toy when clicked but leaves an object where it is', () => {
+    const pokeOut = (id: string) => {
+      const { scene } = makeScene({ toys: false, machines: true });
+      scene.setBag({ [id]: 1 });
+      scene.takeOut(id);
+      for (let x = 0; x <= 600; x += 5) {
+        const toy = scene.poke(x, 187);
+        if (toy) {
+          return { scene, toy };
+        }
+      }
+      throw new Error(`${id} not found on the floor`);
+    };
+    expect(Math.abs(pokeOut('yarn').toy.vx)).toBeGreaterThan(0);
+
+    const { scene, toy } = pokeOut('couch');
+    expect(toy.vx).toBe(0);
+    expect(scene.startToy(Date.now() + 5000, toy)).toBe(true);
+    expect(scene.toyLabel()).toBe('lounging on the couch');
+    expect(scene.poke(9999, 9999)).toBeNull();
+  });
+
+  it('right-clicking a toy on the floor puts it back in the bag', () => {
     const { scene } = makeScene({ toys: false, machines: true });
     scene.setBag({ yarn: 1 });
     scene.takeOut('yarn');

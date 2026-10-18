@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 /** The slice of vscode.LogOutputChannel the view writes to. */
-export type PetLog = Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn' | 'error'>;
+export type PetLog = Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn' | 'error' | 'show'>;
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 /** The view can ask for a refresh when its frames keep failing; at most this often. */
@@ -111,6 +111,8 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
         );
       } else if (message['command'] === 'refresh') {
         this.autoRefresh();
+      } else if (message['command'] === 'gather-logs') {
+        this.gatherLogs(webviewView, message['snapshot']);
       } else if (message['command'] === 'setting') {
         const change = panelSetting(message['key'], message['value']);
         if (change) {
@@ -154,6 +156,27 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
   sendCare(): void {
     this.view?.webview.postMessage({ command: 'care-update', stats: this.care.get() });
     this.view?.webview.postMessage({ command: 'unlocks', unlocks: this.bag.getUnlocks() });
+  }
+
+  /** The settings panel's "Gather debug logs": both sides' state into the log, then show it. */
+  private gatherLogs(webviewView: vscode.WebviewView, snapshot: unknown): void {
+    const latest = this.claude.latest();
+    this.log.info(
+      `Debug snapshot (extension): ${JSON.stringify({
+        vscode: vscode.version,
+        platform: process.platform,
+        viewVisible: webviewView.visible,
+        mainState: latest?.main?.state ?? null,
+        subagents: latest?.subagents.length ?? 0,
+        background: latest?.background.length ?? 0,
+        sessions: latest?.sessions.length ?? 0,
+        lastAutoRefresh: this.lastAutoRefresh ? new Date(this.lastAutoRefresh).toISOString() : null,
+      })}`,
+    );
+    this.log.info(
+      `Debug snapshot (view): ${typeof snapshot === 'string' ? snapshot.slice(0, 4000) : 'none'}`,
+    );
+    this.log.show(true);
   }
 
   private autoRefresh(): void {

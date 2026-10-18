@@ -127,18 +127,25 @@ Every few minutes your pet finds something new (`pet-agents.toys`), and every fi
 
 A new find shows off on the floor for a minute (rarer ones glow and sparkle, and a banner announces them), then flies into the bag. When your pet fancies a play it pulls something out: it chases the yarn, hides in the box, lounges on the couch, rides the skateboard, jams on the guitar or admires the treasure, then puts it back.
 
+**Play with it.** Every find is either a real **toy** or an **object**:
+
+- **Toys** (🧶 yarn, 🦴 bone, 🧸 teddy, 🥏 frisbee, 🎈 balloon, 🛹 skateboard, 🪁 kite, 🏀 basketball, 🚀 rocket, 🛸 UFO, 🦄 unicorn): click one on the floor to flick it across the panel. Your pet chases it and plays with it.
+- **Objects** (📦 box, 🪴 plant, 🪑 chair, 🛋️ couch, 🛏️ bed, 🎸 guitar, 🥁 drum, 🕹️ arcade stick, ⛺ tent, 🏰 castle, 👑 crown, 💎 diamond, 🌈 rainbow): click one and your pet comes over to use it: sits, naps, hides, jams or admires.
+
+A napping pet wakes up to play. While the agent is working, toys still fly but your pet stays at work. Right-click a toy or object to put it back in the bag.
+
 Click 🎒 to see the bag: all 24 slots, with ❔ for ones you haven't found yet. Click a toy to take it out, click again to put it away. The bag is shared by every VS Code window and survives reloads and reinstalls.
 
 ### The shop
 
-Click 🛒 Shop in the bag to trade spare toys for new things. Only spares are traded in, so you always keep one of each toy you've found.
+The bag has three tabs: **🧸 Toys** (your finds), **✨ Collection** (what you've bought) and **🛒 Shop**. In the shop you trade spare toys for new things. Only spares are traded in, so you always keep one of each toy you've found.
 
 | For sale   | Price                   | What you get                                                                                                                                                   |
 | ---------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Animations | 20 common **or** 5 rare | 🪩 disco dancing, 🎩 magic tricks, 🫧 blowing bubbles, 🔭 stargazing, 🌀 spinning, 🎉 party (idle hobbies), 💤 sweet dreams (napping), 🎊 victory party (done) |
 | Foods      | 100 common              | 🐟 fresh fish, 🥩 steak, 🍓 strawberries, 🍰 cake                                                                                                              |
 
-Bought animations join the random mix (and the ⚙️ action list, where locked ones show 🔒). Bought foods appear under the care buttons; pick one and 🍖 Feed drops it instead of kibble.
+Bought animations join the random mix (and the ⚙️ action list, where locked ones show 🔒). In ✨ Collection you pick which food 🍖 Feed drops, and switch each bought animation on or off. Bought foods can also be picked under the care buttons.
 
 ### Take care of it
 
@@ -164,7 +171,7 @@ Your pet has opinions: it won't eat when it's full, and is too hungry to play wh
 
 ### Quick settings and tooltips
 
-The ⚙️ button switches things on and off without leaving the panel: random animations and hobbies, wandering, new toys, machines, pets for other sessions, state colours, and each individual action. Changes are saved to your VS Code settings.
+The ⚙️ button switches things on and off without leaving the panel: random animations and hobbies, wandering, new toys, machines, pets for other sessions, state colours, and each individual action. Changes are saved to your VS Code settings. **🪵 Gather debug logs** at the bottom writes a snapshot of the view and the extension to the Pet Agents log and opens it.
 
 Hover any pet for details: what it is doing, which file, which project, its care stats and how many helpers and jobs are running. The **session dots** in the top-left corner show your other active agent sessions (bright green = active, dark green = idle, grey = cold). **Drag** your pet anywhere in the panel; the position is remembered.
 
@@ -195,7 +202,7 @@ Tests, builds and background jobs are recognised from the shell command (`npm te
 
 If the panel ever says **"Pet Agents was updated"**, the extension was updated but the window is still running the old version: run **Developer: Reload Window**.
 
-If the pet ever vanishes, run **Pet Agents: Show Log**. The view logs any frame that fails to draw, a lost canvas, and a pet that lost its position. It heals itself (rebuilds its sprites, resizes and moves the pet home) straight away and every 5 minutes. If frames keep failing for 10 seconds it refreshes itself, at most once every 5 minutes. Set the channel's log level to Debug (gear icon in the Output panel) to also see each 5-minute check and the view being shown and hidden.
+If the pet ever vanishes, click **🪵 Gather debug logs** in ⚙️ (or run **Pet Agents: Show Log**). The view logs any frame that fails to draw, a lost canvas, and a pet that lost its position. It heals itself (rebuilds its sprites, resizes and moves the pet home) straight away and every 5 minutes. If frames keep failing for 10 seconds it refreshes itself, at most once every 5 minutes. Set the channel's log level to Debug (gear icon in the Output panel) to also see each 5-minute check and the view being shown and hidden.
 
 ## Settings
 

@@ -16,15 +16,14 @@
     <div id="bag-panel" class="panel" hidden>
       <div class="panel-head">
         <span id="bag-title">🎒 Bag</span>
-        <span>
-          <button id="bag-store-all">Put all away</button>
-          <button id="shop-toggle">🛒 Shop</button>
-        </span>
+        <button id="bag-store-all">Put all away</button>
       </div>
+      <div id="bag-tabs" class="tabs"></div>
       <div id="bag-view">
         <div id="bag-grid"></div>
         <div class="panel-note">Click a toy to take it out, click again to put it away.</div>
       </div>
+      <div id="collection-view" hidden></div>
       <div id="shop-view" hidden></div>
     </div>
     <div id="settings-panel" class="panel" hidden>
@@ -49,6 +48,9 @@
         <summary>🎭 Actions (untick the ones you don't like)</summary>
         <div id="action-list"></div>
       </details>
+      <button id="gather-logs" title="Writes a snapshot to the Pet Agents log and opens it">
+        🪵 Gather debug logs
+      </button>
     </div>
     <div id="care-panel" hidden>
       <div class="care-bars">

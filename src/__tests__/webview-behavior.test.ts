@@ -104,8 +104,10 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     'bag-title',
     'bag-store-all',
     'bag-view',
-    'shop-toggle',
+    'bag-tabs',
+    'collection-view',
     'shop-view',
+    'gather-logs',
     'food-picker',
     'settings-toggle',
     'settings-panel',
@@ -190,8 +192,14 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     }
   };
 
+  const rightClick = (offsetX: number, offsetY: number) =>
+    canvasListeners['contextmenu'].forEach((l) =>
+      l({ offsetX, offsetY, preventDefault: () => undefined }),
+    );
+
   return {
     body,
+    rightClick,
     runFrames,
     send,
     hover,
@@ -719,7 +727,9 @@ describe('webview behavior', () => {
       state: { petX: 0, petY: 30, bag: { yarn: 90, box: 32, rocket: 2 } },
     });
     elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
-    elements['shop-toggle'].listeners['click'].forEach((l) => l({}));
+    elements['bag-tabs'].listeners['click'].forEach((l) =>
+      l({ target: { closest: () => ({ dataset: { tab: 'shop' } }) } }),
+    );
     const shop = () => elements['shop-view'].innerHTML;
     expect(shop()).toContain('Spare toys: 120 common - 1 rare');
     expect(shop()).toMatch(/data-buy="idle\.disco" data-rarity="rare" data-n="5" disabled/);
@@ -832,6 +842,104 @@ describe('webview behavior', () => {
     send({ command: 'unlocks', unlocks: ['food.cake'] });
     expect(elements['food-picker'].hidden).toBe(false);
     expect(elements['food-picker'].innerHTML).toContain('data-food="cake"');
+  });
+
+  it('has toy, collection and shop tabs; the collection picks food and switches animations', () => {
+    const { send, elements, vscodeApi } = runWebviewScript();
+    send({
+      command: 'init',
+      config: CONFIG,
+      state: { petX: 0, petY: 30, bag: { yarn: 1 }, unlocks: ['idle.disco', 'food.cake'] },
+    });
+    elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
+    expect(elements['bag-tabs'].innerHTML).toContain('data-tab="toys" class="active"');
+    expect(elements['bag-tabs'].innerHTML).toContain('data-tab="collection"');
+    expect(elements['bag-tabs'].innerHTML).toContain('data-tab="shop"');
+
+    const tab = (name: string) =>
+      elements['bag-tabs'].listeners['click'].forEach((l) =>
+        l({ target: { closest: () => ({ dataset: { tab: name } }) } }),
+      );
+    const clickIn = (dataset: Record<string, string>) =>
+      elements['collection-view'].listeners['click'].forEach((l) =>
+        l({
+          target: {
+            closest: (sel: string) => (sel.includes(Object.keys(dataset)[0]) ? { dataset } : null),
+          },
+        }),
+      );
+    tab('collection');
+    expect(elements['collection-view'].hidden).toBe(false);
+    expect(elements['bag-view'].hidden).toBe(true);
+    expect(elements['bag-title'].textContent).toContain('2/12 unlocked');
+    expect(elements['collection-view'].innerHTML).toContain('data-food="kibble" class="active"');
+    expect(elements['collection-view'].innerHTML).toContain('data-anim="idle.disco" class="on"');
+
+    clickIn({ food: 'cake' });
+    expect(elements['collection-view'].innerHTML).toContain('data-food="cake" class="active"');
+    clickIn({ anim: 'idle.disco' });
+    expect(vscodeApi.postMessage).toHaveBeenCalledWith({
+      command: 'setting',
+      key: 'disabledActions',
+      value: ['idle.disco'],
+    });
+    expect(elements['collection-view'].innerHTML).toContain('data-anim="idle.disco"');
+    expect(elements['collection-view'].innerHTML).not.toContain('class="on"');
+  });
+
+  it('gathers a debug snapshot from the settings panel', () => {
+    const { send, elements, vscodeApi } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    elements['gather-logs'].listeners['click'].forEach((l) => l({}));
+    const msg = vscodeApi.postMessage.mock.calls
+      .map(([m]) => m)
+      .find((m) => m.command === 'gather-logs') as { snapshot: string };
+    expect(JSON.parse(msg.snapshot)).toMatchObject({
+      pet: { state: 'sleeping' },
+      config: { species: 'fox' },
+    });
+  });
+
+  it('clicking a toy on the floor wakes the pet to play with it; right-click puts it away', () => {
+    jest.useFakeTimers();
+    try {
+      const { send, elements, hover, click, rightClick, runFrames, tooltip } = runWebviewScript();
+      send({
+        command: 'init',
+        config: { ...CONFIG, toys: true },
+        state: { petX: 300, petY: 30, bag: { yarn: 1 } },
+      });
+      elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
+      elements['bag-grid'].listeners['click'].forEach((l) =>
+        l({ target: { closest: () => ({ dataset: { toy: 'yarn' } }) } }),
+      );
+      runFrames(400);
+      // Find the yarn on the pet's floor line by its tooltip.
+      let at = -1;
+      for (let x = 0; x <= 600 && at < 0; x += 5) {
+        hover(x, 187);
+        if (tooltip.innerHTML.includes('ball of yarn')) {
+          at = x;
+        }
+      }
+      expect(at).toBeGreaterThanOrEqual(0);
+      expect(tooltip.innerHTML).toContain('click to flick it');
+
+      click(at, 187);
+      runFrames(1500);
+      hover(396, 120);
+      expect(tooltip.innerHTML).toContain('playing with the ball of yarn');
+
+      let stored = false;
+      for (let x = 0; x <= 600 && !stored; x += 5) {
+        rightClick(x, 187);
+        stored = !elements['bag-grid'].innerHTML.includes('class="toy out"');
+        runFrames(16);
+      }
+      expect(stored).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('opening one corner panel closes the others', () => {

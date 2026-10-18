@@ -99,7 +99,13 @@ function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?:
   const careStorage = memory();
   const bagStorage = memory();
   const saveSetting = jest.fn(() => Promise.resolve());
-  const log = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+  const log = {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    show: jest.fn(),
+  };
   const settings: Record<string, unknown> = { species: 'cat', name: 'Mochi', ...opts.settings };
   const provider = new PeonViewProvider(
     MEDIA,
@@ -204,6 +210,14 @@ describe('PeonViewProvider', () => {
     expect(log.error).toHaveBeenCalledWith('view: Frame failed: boom');
     expect(log.info).not.toHaveBeenCalledWith(expect.stringContaining('nope'));
     expect(log.info).not.toHaveBeenCalledWith(expect.stringContaining('42'));
+  });
+
+  it('gathers debug logs from both sides and opens the log', () => {
+    const { v, log } = setup();
+    v.send({ command: 'gather-logs', snapshot: '{"view":"300x400"}' });
+    expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Debug snapshot (extension)'));
+    expect(log.info).toHaveBeenCalledWith('Debug snapshot (view): {"view":"300x400"}');
+    expect(log.show).toHaveBeenCalledWith(true);
   });
 
   it('refreshes a failing view at most once every 5 minutes', () => {

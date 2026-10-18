@@ -174,11 +174,36 @@ canvas {
   display: none;
 }
 
-#shop-view {
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.tabs button {
+  flex: 1;
+  padding: 3px 0;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  background: rgba(127, 127, 127, 0.12);
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tabs button.active {
+  color: var(--vscode-button-foreground, #fff);
+  background: var(--vscode-button-background, #3a6df0);
+  border-color: transparent;
+}
+
+#shop-view,
+#collection-view {
   max-height: 190px;
   overflow-y: auto;
 }
 
+#collection-view .group,
 #shop-view .group {
   margin-top: 6px;
   font-weight: bold;
@@ -218,6 +243,31 @@ canvas {
   cursor: pointer;
 }
 
+.shop-item button.on {
+  background: rgba(90, 209, 122, 0.25);
+}
+
+.food-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.food-choices button {
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  background: rgba(127, 127, 127, 0.12);
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.food-choices button.active {
+  outline: 2px solid var(--vscode-focusBorder, #ffd23f);
+}
+
 .shop-item button:disabled {
   opacity: 0.4;
   cursor: default;
@@ -254,6 +304,18 @@ canvas {
   bottom: 0;
   font-size: 9px;
   line-height: 1.2;
+}
+
+#gather-logs {
+  margin-top: 8px;
+  width: 100%;
+  padding: 3px 0;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  background: rgba(127, 127, 127, 0.12);
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 
 #settings-panel details {

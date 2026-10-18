@@ -879,6 +879,41 @@
   }
 
   /** Click = pet it (hearts), double-click = trick (spin jump). Clicking wakes it up. */
+  /**
+   * The pet comes over to play with a toy (or use an object) you clicked. A
+   * napping pet wakes up first; a busy one stays at work.
+   */
+  function playWith(toy) {
+    if (!main) {
+      return;
+    }
+    const t = now();
+    main.wantsToy = null;
+    if (isBusy() || play.tool() || dragging) {
+      if (toy.def.kind === 'object') {
+        scene.say(`🛠️ ${main.name} is busy. Play after the task!`, '#ffd23f', 2500);
+      }
+      return;
+    }
+    if (displayState(main) === 'sleeping') {
+      startOneShot(main, 'waking', 'idle');
+      main.oneShotUntil = t + 900;
+    }
+    if (displayState(main) !== 'idle') {
+      main.wantsToy = toy;
+      return;
+    }
+    const hobby = Variants.IDLE.find((h) => h.needs === 'toy');
+    const dur = hobby.dur[0] + Math.random() * (hobby.dur[1] - hobby.dur[0]);
+    if (scene.startToy(t + dur, toy)) {
+      main.lastActivity = t;
+      main.reaction = null;
+      main.hobbyLast = hobby.id;
+      main.fidget = { kind: hobby.id, start: t, until: t + dur, hobby };
+      main.fidgetNext = t + dur + 2000 + Math.random() * 4000;
+    }
+  }
+
   function clickPet(p) {
     const t = now();
     if (isBusy()) {
@@ -2316,6 +2351,9 @@
     }
 
     tickState(main, t);
+    if (main.wantsToy && displayState(main) === 'idle') {
+      playWith(main.wantsToy);
+    }
     tickLife(main, t, dt);
     rescuePet();
     minis.forEach((m, id) => {
@@ -2493,6 +2531,13 @@
     tooltip.style.top = Math.max(4, Math.min(e.offsetY + 12, viewH - th - 4)) + 'px';
   });
 
+  canvas.addEventListener('contextmenu', (e) => {
+    if (scene.grab(e.offsetX, e.offsetY)) {
+      tooltip.style.display = 'none';
+      e.preventDefault();
+    }
+  });
+
   canvas.addEventListener('mouseleave', () => {
     tooltip.style.display = 'none';
     play.pointerLeave();
@@ -2581,7 +2626,8 @@
   const bagTitle = /** @type {HTMLSpanElement} */ (document.getElementById('bag-title'));
   const bagStoreAll = /** @type {HTMLButtonElement} */ (document.getElementById('bag-store-all'));
   const bagView = /** @type {HTMLDivElement} */ (document.getElementById('bag-view'));
-  const shopToggle = /** @type {HTMLButtonElement} */ (document.getElementById('shop-toggle'));
+  const bagTabs = /** @type {HTMLDivElement} */ (document.getElementById('bag-tabs'));
+  const collectionView = /** @type {HTMLDivElement} */ (document.getElementById('collection-view'));
   const shopView = /** @type {HTMLDivElement} */ (document.getElementById('shop-view'));
   const foodPicker = /** @type {HTMLDivElement} */ (document.getElementById('food-picker'));
   const settingsToggle = /** @type {HTMLButtonElement} */ (
@@ -2592,6 +2638,45 @@
     Array.from(document.querySelectorAll('[data-setting]'))
   );
   const actionList = /** @type {HTMLDivElement} */ (document.getElementById('action-list'));
+  const gatherLogs = /** @type {HTMLButtonElement} */ (document.getElementById('gather-logs'));
+
+  /** What the view is doing right now, for the debug log. No agent text or file paths. */
+  function debugSnapshot() {
+    const pet = main && {
+      x: Math.round(main.x),
+      y: Math.round(main.y),
+      wx: Math.round(main.wx),
+      wy: Math.round(main.wy),
+      wz: main.wz,
+      state: displayState(main),
+      look: lookOf(main, displayState(main), now()).label,
+    };
+    return JSON.stringify({
+      view: `${viewW}x${viewH}`,
+      canvas: `${canvas.width}x${canvas.height}`,
+      dpr: window.devicePixelRatio || 1,
+      hidden: document.hidden,
+      pet,
+      minis: minis.size,
+      particles: particles.length,
+      sprites: spriteCache.size,
+      framesSinceCheck: frames,
+      errorsSinceCheck: frameErrors,
+      lastFrameError: lastFrameError.split('\n')[0],
+      careTool: play.tool(),
+      toysFound: scene.foundCount(),
+      unlocks: (saved.unlocks || []).length,
+      config: config && {
+        species: config.species,
+        size: config.size,
+        variety: config.variety,
+        wander: config.wander,
+        toys: config.toys,
+        machines: config.machines,
+        disabledActions: (config.disabledActions || []).length,
+      },
+    });
+  }
 
   /** Groups of switchable actions for the settings panel, in display order. */
   const ACTION_GROUPS = [
@@ -2626,8 +2711,14 @@
     ).join('');
   }
   let bagDrawnAt = 0;
-  let shopOpen = false;
+  /** Which page of the bag is showing. */
+  let bagTab = 'toys';
   let shopMsg = '';
+  const BAG_TABS = [
+    ['toys', '🧸 Toys'],
+    ['collection', '✨ Collection'],
+    ['shop', '🛒 Shop'],
+  ];
 
   /** Opens one corner panel (or closes it if already open) and closes the others. */
   function togglePanel(panel) {
@@ -2650,11 +2741,19 @@
       return;
     }
     bagDrawnAt = now();
-    bagView.hidden = shopOpen;
-    shopView.hidden = !shopOpen;
-    bagStoreAll.hidden = shopOpen;
-    shopToggle.textContent = shopOpen ? '🎒 Bag' : '🛒 Shop';
-    if (shopOpen) {
+    bagTabs.innerHTML = BAG_TABS.map(
+      ([id, label]) =>
+        `<button data-tab="${id}"${id === bagTab ? ' class="active"' : ''}>${label}</button>`,
+    ).join('');
+    bagView.hidden = bagTab !== 'toys';
+    collectionView.hidden = bagTab !== 'collection';
+    shopView.hidden = bagTab !== 'shop';
+    bagStoreAll.hidden = bagTab !== 'toys';
+    if (bagTab === 'collection') {
+      renderCollection();
+      return;
+    }
+    if (bagTab === 'shop') {
       renderShop();
       return;
     }
@@ -2729,6 +2828,61 @@
       '<div class="panel-note">Only spares are traded in: you always keep one of each toy.</div>';
   }
 
+  /** What has been bought: pick the food to feed and switch animations on or off. */
+  function renderCollection() {
+    const owned = new Set(saved.unlocks || []);
+    const off = new Set((config && config.disabledActions) || []);
+    const items = shopItems();
+    const anims = items.filter((i) => !i.id.startsWith('food.') && owned.has(i.id));
+    const foods = window.PetPlay.FOODS.filter((f) => !f.emoji || owned.has(`food.${f.id}`));
+    const current = saved.food || 'kibble';
+    bagTitle.textContent = `✨ Collection - ${items.filter((i) => owned.has(i.id)).length}/${items.length} unlocked`;
+    collectionView.innerHTML =
+      '<div class="group">🍽️ Food to feed</div>' +
+      '<div class="food-choices">' +
+      foods
+        .map(
+          (f) =>
+            `<button data-food="${f.id}"${f.id === current ? ' class="active"' : ''}>` +
+            `${f.emoji || '🥣'} ${escapeHtml(f.name)}</button>`,
+        )
+        .join('') +
+      '</div>' +
+      '<div class="group">🎭 Animations</div>' +
+      (anims.length === 0
+        ? '<div class="panel-note">None yet. Trade spare toys for some in the 🛒 Shop.</div>'
+        : anims
+            .map((a) => {
+              const on = !off.has(a.id);
+              return (
+                `<div class="shop-item"><span class="what">${a.icon} ${escapeHtml(a.label)}</span>` +
+                `<button data-anim="${escapeHtml(a.id)}"${on ? ' class="on"' : ''}` +
+                ` title="Click to switch it ${on ? 'off' : 'on'}">${on ? 'On' : 'Off'}</button></div>`
+              );
+            })
+            .join(''));
+  }
+
+  function pickFood(id) {
+    saved.food = id;
+    persist();
+    renderFoods();
+    renderBag();
+  }
+
+  /** Switches an action on or off in pet-agents.disabledActions. */
+  function setActionOn(id, on) {
+    const off = new Set(config.disabledActions || []);
+    if (on) {
+      off.delete(id);
+    } else {
+      off.add(id);
+    }
+    // Shown straight away; the extension echoes the setting back with a reinit.
+    config.disabledActions = [...off];
+    vscodeApi.postMessage({ command: 'setting', key: 'disabledActions', value: [...off] });
+  }
+
   /** Food choices in the care panel, once there is more than kibble. */
   function renderFoods() {
     const owned = window.PetPlay.FOODS.filter(
@@ -2754,10 +2908,28 @@
   }
 
   bagToggle.addEventListener('click', () => togglePanel(bagPanel));
-  shopToggle.addEventListener('click', () => {
-    shopOpen = !shopOpen;
+  bagTabs.addEventListener('click', (e) => {
+    const el = /** @type {HTMLElement} */ (e.target).closest('[data-tab]');
+    const tab = el && /** @type {HTMLElement} */ (el).dataset.tab;
+    if (!tab) {
+      return;
+    }
+    bagTab = tab;
     shopMsg = '';
     renderBag();
+  });
+  collectionView.addEventListener('click', (e) => {
+    const target = /** @type {HTMLElement} */ (e.target);
+    const food = target.closest('[data-food]');
+    const anim = target.closest('[data-anim]');
+    if (food) {
+      pickFood(/** @type {HTMLElement} */ (food).dataset.food);
+    } else if (anim && config) {
+      const id = /** @type {HTMLElement} */ (anim).dataset.anim || '';
+      setActionOn(id, (config.disabledActions || []).includes(id));
+      renderBag();
+      renderActions();
+    }
   });
   shopView.addEventListener('click', (e) => {
     const el = /** @type {HTMLElement} */ (e.target).closest('[data-buy]');
@@ -2784,12 +2956,9 @@
   foodPicker.addEventListener('click', (e) => {
     const el = /** @type {HTMLElement} */ (e.target).closest('[data-food]');
     const id = el && /** @type {HTMLElement} */ (el).dataset.food;
-    if (!id) {
-      return;
+    if (id) {
+      pickFood(id);
     }
-    saved.food = id;
-    persist();
-    renderFoods();
   });
   settingsToggle.addEventListener('click', () => togglePanel(settingsPanel));
   bagStoreAll.addEventListener('click', () => {
@@ -2812,17 +2981,13 @@
   actionList.addEventListener('change', (e) => {
     const input = /** @type {HTMLInputElement} */ (e.target);
     const id = input.dataset.action;
-    if (!id) {
-      return;
+    if (id) {
+      setActionOn(id, input.checked);
     }
-    const off = new Set(config.disabledActions || []);
-    if (input.checked) {
-      off.delete(id);
-    } else {
-      off.add(id);
-    }
-    vscodeApi.postMessage({ command: 'setting', key: 'disabledActions', value: [...off] });
   });
+  gatherLogs.addEventListener('click', () =>
+    vscodeApi.postMessage({ command: 'gather-logs', snapshot: debugSnapshot() }),
+  );
   switches.forEach((input) =>
     input.addEventListener('change', () =>
       vscodeApi.postMessage({
@@ -2891,8 +3056,10 @@
       e.preventDefault();
       return;
     }
-    if (scene.grab(e.offsetX, e.offsetY)) {
+    const toy = scene.poke(e.offsetX, e.offsetY);
+    if (toy) {
       tooltip.style.display = 'none';
+      playWith(toy);
       e.preventDefault();
       return;
     }

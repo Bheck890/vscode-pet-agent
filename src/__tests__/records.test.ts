@@ -322,6 +322,8 @@ describe('RecordsService', () => {
       prompt('p2', 'again please', 20000),
       endTurn(30000),
     ]);
+    // Touched "this week" by the test's clock, whatever the real date is.
+    fs.utimesSync(path.join(dir, 'proj', 'sess.jsonl'), NOW, NOW);
     expect(await service.backfill(dir)).toBe(2);
     expect(store.turns()).toHaveLength(2);
     expect(await service.backfill(dir)).toBe(0);
@@ -353,6 +355,43 @@ describe('RecordsService', () => {
     expect(hidden.records.every((r) => r.preview === undefined)).toBe(true);
     expect(hidden.totals).toMatchObject({ prompts: 1, actions: 1, agentTime: '1m 05s' });
     expect(service.snapshot(true).records[0].preview).toBe('make it faster');
-    expect(hidden.hallOfFame.length).toBeGreaterThan(0);
+  });
+
+  it("shows a record once when this week's is also the all-time best", () => {
+    const service = new RecordsService(new RecordsStore(memory()), memory(), () => NOW);
+    service.line('s', prompt('p1', 'go', 0));
+    service.line('s', toolUse(1000));
+    service.line('s', endTurn(65000));
+    const board = service.snapshot(false);
+    expect(board.records.length).toBeGreaterThan(0);
+    expect(board.records.every((r) => r.allTime)).toBe(true);
+    expect(board.hallOfFame).toEqual([]);
+  });
+
+  it('lists all-time bests from earlier weeks in the hall of fame, without a badge', () => {
+    const storage = memory();
+    const store = new RecordsStore(storage);
+    const day = 24 * 3600000;
+    const lastWeek = new Date(NOW.getTime() - 7 * day);
+    store.add(
+      [
+        turn({
+          promptId: 'legend',
+          actions: 99,
+          startedAt: lastWeek.getTime() - 60000,
+          endedAt: lastWeek.getTime(),
+        }),
+      ],
+      lastWeek,
+    );
+    store.add([turn({ promptId: 'today', actions: 3 })], NOW);
+    const board = new RecordsService(store, storage, () => NOW).snapshot(false);
+    const busiest = board.records.find((r) => r.id === 'busiest');
+    expect(busiest?.value).toMatch(/^3 actions/);
+    expect(busiest?.allTime).toBeUndefined();
+    expect(board.hallOfFame.find((r) => r.id === 'busiest')?.value).toMatch(/^99 actions/);
+    // Sniper: today's 3 actions beat last week's 99, so it shows once, badged.
+    expect(board.records.find((r) => r.id === 'sniper')?.allTime).toBe(true);
+    expect(board.hallOfFame.find((r) => r.id === 'sniper')).toBeUndefined();
   });
 });

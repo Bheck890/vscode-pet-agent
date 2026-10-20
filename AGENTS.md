@@ -25,7 +25,7 @@ A VS Code extension (`bheck890.pet-agents`, display name **Pet Agents**) that dr
   `pets.js` art (+ holiday COSTUMES), `states.js` state looks, `play.js` care, `variants.js` animation variants, `scene.js` toys/machines, `events.js` holidays, `enemies.js` bugs to squash, `house.js` the house, `panels.js` corner panels (care, bag/shop, settings, trophy, house), `webview.js` renderer + input. Each helper is `Pet*.create(api)` or pure data on `window.Pet*`.
 - `scripts/record-media.js` renders README GIFs/screenshots (`docs/images/`) and `media/assets/icon.png` in headless Chrome with a fake clock
 - `src/__tests__/` Jest. Webview scripts are loaded with `vm` in template order; `manifest.test.ts` checks package.json against the code and README.
-- `docs/Plans/Roadmap.md` the plan for holidays, records, levels, enemies and the house.
+- `docs/Plans/Roadmap.md` the plan for holidays, records, levels, enemies and the house (built). `docs/Plans/Bags.md` the next plan: 20 level-unlocked themed packs, each a bag of toys with its own shop plus animations, a house with rooms, room themes and a pet style (not started). `docs/Plans/Profiles.md` after that: the finish screen, sharing, and save slots archived to profile files you can visit from the house menu, friends' guest houses, and moving a pet to another computer with an optional password (not started).
 
 ## Workflow
 

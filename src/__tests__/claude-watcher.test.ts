@@ -22,15 +22,21 @@ import { ClaudeWatcher, ClaudeUpdate } from '../claude-watcher';
 
 const projects = path.join(mockHome, '.claude', 'projects');
 
-function line(obj: Record<string, unknown>): string {
-  return JSON.stringify({ timestamp: new Date().toISOString(), ...obj }) + '\n';
+function line(obj: Record<string, unknown>, at = new Date()): string {
+  return JSON.stringify({ timestamp: at.toISOString(), ...obj }) + '\n';
 }
 
-function writeSession(project: string, id: string, cwd: string, body: string): string {
+function writeSession(
+  project: string,
+  id: string,
+  cwd: string,
+  body: string,
+  at = new Date(),
+): string {
   const dir = path.join(projects, project);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${id}.jsonl`);
-  fs.writeFileSync(file, line({ type: 'user', cwd, message: { content: 'go' } }) + body);
+  fs.writeFileSync(file, line({ type: 'user', cwd, message: { content: 'go' } }, at) + body);
   return dir;
 }
 
@@ -109,8 +115,10 @@ describe('ClaudeWatcher', () => {
   });
 
   it('reports a second busy session in this workspace as a background agent', () => {
-    const dir = writeSession('p1', 'older', '/work/mine/tools', '');
+    // Older by its transcript times as well as its file time: lines written in the
+    // same millisecond as the newer session's would tie on a fast machine.
     const earlier = new Date(Date.now() - 30_000);
+    const dir = writeSession('p1', 'older', '/work/mine/tools', '', earlier);
     fs.utimesSync(path.join(dir, 'older.jsonl'), earlier, earlier);
     writeSession(
       'p2',

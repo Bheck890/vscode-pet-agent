@@ -17,6 +17,8 @@ export interface RecordEntry {
   /** Only when the user turned prompt previews on. */
   preview?: string;
   endedAt: number;
+  /** This week's record is also the all-time best; the hall of fame leaves it out. */
+  allTime?: boolean;
 }
 
 export interface RecordsUpdate {
@@ -140,10 +142,17 @@ export class RecordsService {
     const best = bestOf(week);
     const fame = this.store.hallOfFame();
     const sum = totals(week);
+    // A weekly record that is also the all-time best is shown once, with a badge.
+    const allTime = (id: string) => !!fame[id] && fame[id].promptId === best[id]?.promptId;
     return {
       week: weekId(now),
-      records: CATEGORIES.filter((c) => best[c.id]).map((c) => entry(c.id, best[c.id]!)),
-      hallOfFame: CATEGORIES.filter((c) => fame[c.id]).map((c) => entry(c.id, fame[c.id])),
+      records: CATEGORIES.filter((c) => best[c.id]).map((c) => ({
+        ...entry(c.id, best[c.id]!),
+        ...(allTime(c.id) ? { allTime: true } : {}),
+      })),
+      hallOfFame: CATEGORIES.filter((c) => fame[c.id] && !allTime(c.id)).map((c) =>
+        entry(c.id, fame[c.id]),
+      ),
       totals: { ...sum, agentTime: formatDuration(sum.agentMs) },
       broken,
     };

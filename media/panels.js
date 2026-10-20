@@ -570,9 +570,10 @@
     function recordRow(r) {
       const where = r.project ? `<span class="dim">${escapeHtml(r.project)}</span>` : '';
       const said = r.preview ? `<span class="prompt">"${escapeHtml(r.preview)}"</span>` : '';
+      const best = r.allTime ? ' <span title="Also your all-time best">🏛️</span>' : '';
       return (
         `<div class="record"><span class="value">${escapeHtml(r.value)}</span>` +
-        `${r.emoji} <b>${escapeHtml(r.title)}</b><br>${where}${said}</div>`
+        `${r.emoji} <b>${escapeHtml(r.title)}</b>${best}<br>${where}${said}</div>`
       );
     }
 

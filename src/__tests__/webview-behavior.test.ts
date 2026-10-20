@@ -1273,6 +1273,9 @@ describe('webview behavior', () => {
     expect(board).toContain('40 actions in 9m 00s');
     expect(board).toContain('&lt;b&gt;it&lt;/b&gt;');
     expect(board).not.toContain('<b>it</b>');
+    expect(board).not.toContain('all-time best');
+    h.send({ ...RECORDS, records: [{ ...RECORDS.records[0], allTime: true }] });
+    expect(h.elements['trophy-view'].innerHTML).toContain('title="Also your all-time best"');
   });
 
   it('hides the buttons for switched-off features and closes their panels', () => {

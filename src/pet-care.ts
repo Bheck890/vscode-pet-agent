@@ -1,3 +1,5 @@
+import { Storage } from './storage';
+
 export type CareStat = 'fullness' | 'fun' | 'clean';
 /** One rewarded moment of hands-on care: a kibble eaten, a fetch returned, a scrub stroke... */
 export type CareAction = 'kibble' | 'treat' | 'fetch' | 'scrub' | 'pet';
@@ -15,12 +17,6 @@ export interface CareResult {
   ok: boolean;
   /** Why the pet refused, e.g. "isn't hungry right now". */
   reason?: string;
-}
-
-/** Minimal slice of vscode.Memento, so the store is testable without VS Code. */
-export interface CareStorage {
-  get<T>(key: string): T | undefined;
-  update(key: string, value: unknown): Thenable<void>;
 }
 
 const STATS: CareStat[] = ['fullness', 'fun', 'clean'];
@@ -112,7 +108,7 @@ export function isCareAction(v: unknown): v is CareAction {
 
 /** Persists care stats in extension global state so they survive restarts. */
 export class CareStore {
-  constructor(private readonly storage: CareStorage) {}
+  constructor(private readonly storage: Storage) {}
 
   get(now = Date.now()): CareStats {
     return decay(parseStats(this.storage.get(STORAGE_KEY), now), now);

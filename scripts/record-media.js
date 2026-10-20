@@ -125,13 +125,8 @@ function writeHarness() {
   const html = fs
     .readFileSync(path.join(MEDIA, 'webview.html'), 'utf8')
     .replace('<!--CSP_PLACEHOLDER-->', `<style>${THEME}</style><script>${FAKE_HOST}</script>`)
-    .replace('<!--CSS_URI-->', url('webview.css'))
     .replace(/ nonce="<!--NONCE-->"/g, '')
-    .replace('<!--PETS_URI-->', url('pets.js'))
-    .replace('<!--PLAY_URI-->', url('play.js'))
-    .replace('<!--VARIANTS_URI-->', url('variants.js'))
-    .replace('<!--SCENE_URI-->', url('scene.js'))
-    .replace('<!--SCRIPT_URI-->', url('webview.js'));
+    .replace(/<!--MEDIA:([\w.-]+)-->/g, (_m, file) => url(file));
   fs.writeFileSync(HARNESS, html);
 }
 

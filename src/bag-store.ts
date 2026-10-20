@@ -1,4 +1,4 @@
-import { CareStorage } from './pet-care';
+import { Storage } from './storage';
 
 const STORAGE_KEY = 'petBag';
 const SPENT_KEY = 'petBagSpent';
@@ -38,7 +38,7 @@ export function parseUnlocks(v: unknown): string[] {
  * older copy can't wipe finds, trades or purchases made in another window.
  */
 export class BagStore {
-  constructor(private readonly storage: CareStorage) {}
+  constructor(private readonly storage: Storage) {}
 
   get(): Record<string, number> {
     return parseBag(this.storage.get(STORAGE_KEY));

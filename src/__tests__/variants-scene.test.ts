@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
+import { PET_STATES } from '../transcript-parser';
 
 interface Variant {
   id: string;
@@ -65,11 +66,16 @@ interface SceneApi {
 
 const media = path.join(process.cwd(), 'media');
 const sandbox: Record<string, unknown> = {};
-for (const file of ['pets.js', 'variants.js', 'scene.js']) {
+for (const file of ['pets.js', 'states.js', 'variants.js', 'scene.js']) {
   vm.runInNewContext(fs.readFileSync(path.join(media, file), 'utf8'), sandbox);
 }
 const V = sandbox['PetVariants'] as VariantsApi;
 const Art = sandbox['PetArt'] as { PROPS: Record<string, unknown> };
+const PetStates = sandbox['PetStates'] as {
+  STATES: Record<string, { label: string; oneShot?: number }>;
+  PEON_TO_STATE: Record<string, string>;
+  WORKING: Set<string>;
+};
 const PetScene = sandbox['PetScene'] as {
   create(api: object): SceneApi;
   TOYS: Array<{ id: string; rarity: string; kind: string }>;
@@ -80,21 +86,30 @@ const PetScene = sandbox['PetScene'] as {
 /** Must match the scenery names handled by scene.js. */
 const SCENERY = ['box', 'bed', 'perch', 'wheel', 'surfboard', 'dish', 'chalkboard', 'books'];
 
+describe('agent states', () => {
+  it('has a look for exactly the states the extension reports', () => {
+    expect(Object.keys(PetStates.STATES).sort()).toEqual([...PET_STATES].sort());
+  });
+
+  it('every state has a label, and every variant group is a real state', () => {
+    for (const [id, def] of Object.entries(PetStates.STATES)) {
+      expect([id, typeof def.label]).toEqual([id, 'string']);
+    }
+    for (const state of Object.keys(V.VARIANTS)) {
+      expect(PET_STATES).toContain(state);
+    }
+  });
+
+  it('maps peon-ping animations and busy states onto real states', () => {
+    for (const state of [...Object.values(PetStates.PEON_TO_STATE), ...PetStates.WORKING]) {
+      expect(PET_STATES).toContain(state);
+    }
+  });
+});
+
 describe('animation variants', () => {
-  const STATES = [
-    'sleeping',
-    'waking',
-    'thinking',
-    'reading',
-    'writing',
-    'running',
-    'testing',
-    'browsing',
-    'delegating',
-    'waiting',
-    'error',
-    'done',
-  ];
+  // Idle has hobbies (IDLE) instead of variants.
+  const STATES = PET_STATES.filter((s) => s !== 'idle');
 
   it.each(STATES)('%s starts with the classic look and has alternatives', (state) => {
     const list = V.VARIANTS[state];

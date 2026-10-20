@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ACCESSORIES, PATTERNS, SPECIES, readPetConfig } from '../pet-config';
+import { mediaFiles } from '../media-files';
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -82,6 +83,7 @@ describe('marketplace manifest', () => {
 
 describe('contributions', () => {
   const extensionSource = read('src/extension.ts');
+  const settingsSource = read('src/settings.ts');
   const providerSource = read('src/PeonViewProvider.ts');
 
   it('registers every contributed command, and contributes every registered one', () => {
@@ -117,7 +119,9 @@ describe('contributions', () => {
   it('reads settings from the same section the manifest declares', () => {
     expect(Object.keys(props).every((k) => k.startsWith(PREFIX))).toBe(true);
     const sections = [
-      ...extensionSource.matchAll(/(?:getConfiguration|affectsConfiguration)\('([^']+)'\)/g),
+      ...(extensionSource + settingsSource).matchAll(
+        /(?:getConfiguration|affectsConfiguration)\('([^']+)'\)/g,
+      ),
     ];
     expect(sections.length).toBeGreaterThan(0);
     for (const m of sections) {
@@ -181,14 +185,10 @@ describe('packaging', () => {
 
   it('keeps everything the webview loads inside the VSIX', () => {
     expect(ignore.some((l) => l.startsWith('media'))).toBe(false);
-    const template = read('media/webview.html');
-    const helpers = read('src/webview-helpers.ts');
-    for (const [, placeholder] of template.matchAll(/<!--([A-Z_]+_URI)-->/g)) {
-      const file = helpers.match(new RegExp(`'<!--${placeholder}-->', uri\\('([^']+)'\\)`))?.[1];
-      expect([placeholder, file && fs.existsSync(path.join(root, 'media', file))]).toEqual([
-        placeholder,
-        true,
-      ]);
+    const files = mediaFiles(read('media/webview.html'));
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      expect([file, fs.existsSync(path.join(root, 'media', file))]).toEqual([file, true]);
     }
   });
 

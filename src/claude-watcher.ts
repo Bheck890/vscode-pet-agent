@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { buildSessionStates, SessionState } from './session-tracker';
 import { funnyName } from './pet-names';
 import { inFolders } from './workspace';
+import { TailedFile, firstCwd, readLines, safeReaddir, safeStat } from './transcript-tail';
 import {
   AgentActivity,
   Job,
@@ -87,13 +88,17 @@ function projectName(cwd: string | null): string | null {
 
 type Listener = (u: ClaudeUpdate) => void;
 
-interface Tracked {
-  file: string;
-  offset: number;
-  /** True until the first read, when `offset` may point into the middle of a line. */
-  midLine: boolean;
+interface Tracked extends TailedFile {
   mtime: number;
   act: AgentActivity;
+}
+
+/** Feeds the lines appended to a transcript since the last read into its activity. */
+function readNewLines(t: Tracked, size: number): void {
+  if (readLines(t, size, (line) => applyLine(t.act, line)) === 'restarted') {
+    t.act = createActivity();
+    readLines(t, size, (line) => applyLine(t.act, line));
+  }
 }
 
 interface TrackedSession extends Tracked {
@@ -110,86 +115,6 @@ interface TrackedSubagent extends Tracked {
   agentType: string;
   task: string;
   doneAt: number | null;
-}
-
-function safeReaddir(dir: string): fs.Dirent[] {
-  try {
-    return fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-}
-
-function safeStat(file: string): fs.Stats | null {
-  try {
-    return fs.statSync(file);
-  } catch {
-    return null;
-  }
-}
-
-/** The `cwd` on the first transcript lines, i.e. where the session was started. */
-function firstCwd(file: string): string | null {
-  let fd: number | null = null;
-  try {
-    fd = fs.openSync(file, 'r');
-    const buf = Buffer.alloc(64 * 1024);
-    const n = fs.readSync(fd, buf, 0, buf.length, 0);
-    const m = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(buf.toString('utf8', 0, n));
-    return m ? (JSON.parse(`"${m[1]}"`) as string) : null;
-  } catch {
-    return null;
-  } finally {
-    if (fd !== null) {
-      fs.closeSync(fd);
-    }
-  }
-}
-
-/**
- * Reads complete lines appended to `t.file` since `t.offset` and feeds them
- * to the activity. A trailing partial line is left for the next read.
- */
-function readNewLines(t: Tracked, size: number): void {
-  if (size < t.offset) {
-    t.offset = 0;
-    t.act = createActivity();
-  }
-  if (size === t.offset) {
-    return;
-  }
-  let fd: number | null = null;
-  try {
-    fd = fs.openSync(t.file, 'r');
-    const buf = Buffer.alloc(size - t.offset);
-    const n = fs.readSync(fd, buf, 0, buf.length, t.offset);
-    const end = buf.lastIndexOf(0x0a, n - 1);
-    if (end < 0) {
-      return;
-    }
-    let start = 0;
-    if (t.midLine) {
-      start = buf.indexOf(0x0a) + 1;
-      t.midLine = false;
-    }
-    for (const line of buf.toString('utf8', start, end).split('\n')) {
-      if (!line.trim()) {
-        continue;
-      }
-      try {
-        applyLine(t.act, JSON.parse(line));
-      } catch {
-        // Ignore a malformed line rather than losing the whole transcript.
-      }
-    }
-    t.offset += end + 1;
-  } catch {
-    // File vanished or is locked; try again next tick.
-  } finally {
-    if (fd !== null) {
-      fs.closeSync(fd);
-    }
-  }
 }
 
 /**

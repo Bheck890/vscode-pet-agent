@@ -1,20 +1,22 @@
 import * as path from 'path';
 
-/** Everything a pet can be doing. Mirrored by `STATES` in `media/webview.js`. */
-export type PetState =
-  | 'sleeping'
-  | 'idle'
-  | 'waking'
-  | 'thinking'
-  | 'reading'
-  | 'writing'
-  | 'running'
-  | 'testing'
-  | 'browsing'
-  | 'delegating'
-  | 'waiting'
-  | 'error'
-  | 'done';
+/** Everything a pet can be doing. `media/states.js` has a look for each (a test checks). */
+export const PET_STATES = [
+  'sleeping',
+  'idle',
+  'waking',
+  'thinking',
+  'reading',
+  'writing',
+  'running',
+  'testing',
+  'browsing',
+  'delegating',
+  'waiting',
+  'error',
+  'done',
+] as const;
+export type PetState = (typeof PET_STATES)[number];
 
 export type JobKind = 'test' | 'build' | 'server' | 'job';
 

@@ -15,7 +15,8 @@ jest.mock(
 
 import * as path from 'path';
 import { PeonViewProvider } from '../PeonViewProvider';
-import { CareStore, CareStorage } from '../pet-care';
+import { CareStore } from '../pet-care';
+import type { Storage } from '../storage';
 import { BagStore } from '../bag-store';
 import { readPetConfig } from '../pet-config';
 import type { StateWatcher } from '../state-watcher';
@@ -23,7 +24,7 @@ import type { ClaudeWatcher, ClaudeUpdate } from '../claude-watcher';
 
 type Fn = (arg: unknown) => void;
 
-function memory(): CareStorage & { data: Record<string, unknown> } {
+function memory(): Storage & { data: Record<string, unknown> } {
   const data: Record<string, unknown> = {};
   return {
     data,
@@ -107,16 +108,16 @@ function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?:
     show: jest.fn(),
   };
   const settings: Record<string, unknown> = { species: 'cat', name: 'Mochi', ...opts.settings };
-  const provider = new PeonViewProvider(
-    MEDIA,
-    watchers.peon,
-    watchers.claude,
-    () => readPetConfig((k) => settings[k]),
-    new CareStore(careStorage),
-    new BagStore(bagStorage),
+  const provider = new PeonViewProvider({
+    mediaPath: MEDIA,
+    peon: watchers.peon,
+    claude: watchers.claude,
+    getConfig: () => readPetConfig((k) => settings[k]),
+    care: new CareStore(careStorage),
+    bag: new BagStore(bagStorage),
     saveSetting,
     log,
-  );
+  });
   const v = fakeView();
   const resolve = (view = v) =>
     provider.resolveWebviewView(view.view as never, { state: opts.state } as never, {} as never);
@@ -132,7 +133,7 @@ describe('PeonViewProvider', () => {
     expect(options.localResourceRoots).toEqual([{ fsPath: MEDIA }]);
     expect(v.webview.html).toContain('Content-Security-Policy');
     expect(v.webview.html).toMatch(/script-src 'nonce-[0-9a-f]{32}'/);
-    expect(v.webview.html).not.toMatch(/<!--[A-Z_]+-->/);
+    expect(v.webview.html).not.toContain('<!--');
   });
 
   it('answers ready with the config, saved position, bag and care stats', () => {
@@ -231,10 +232,10 @@ describe('PeonViewProvider', () => {
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('skipped'));
   });
 
-  it('sends shop purchases from other windows with the care tick', () => {
+  it('sends shop purchases from other windows with the shared-state tick', () => {
     const { v, provider, bagStorage } = setup();
     bagStorage.data['petUnlocks'] = ['idle.disco'];
-    provider.sendCare();
+    provider.syncShared();
     expect(v.last('unlocks')).toEqual({ command: 'unlocks', unlocks: ['idle.disco'] });
   });
 
@@ -313,14 +314,14 @@ describe('PeonViewProvider', () => {
     const { provider, v, settings } = setup();
     settings['name'] = 'Duchess';
     provider.reinit();
-    provider.sendCare();
+    provider.syncShared();
     expect(v.last('reinit')).toMatchObject({ config: { name: 'Duchess' } });
     expect(v.last('care-update')).toBeDefined();
 
     v.close();
     v.posted.length = 0;
     provider.reinit();
-    provider.sendCare();
+    provider.syncShared();
     provider.refresh();
     expect(v.posted).toHaveLength(0);
   });

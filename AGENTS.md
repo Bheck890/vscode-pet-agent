@@ -11,20 +11,26 @@ A VS Code extension (`bheck890.pet-agents`, display name **Pet Agents**) that dr
 ## Layout
 
 - `src/` extension host (TypeScript, bundled by webpack into `dist/extension.js`)
-  - `extension.ts` activation, commands, Customize Pet menu
-  - `PeonViewProvider.ts` sidebar webview and its message protocol (`ready`, `care`, `setting`, `save-state` in; `init`, `reinit`, `claude-update`, `peon-event`, `session-update`, `care-update` out)
-  - `claude-watcher.ts` + `transcript-parser.ts` Claude Code transcripts -> pet states
+  - `extension.ts` activation only: builds the watchers and stores, registers commands and the view
+  - `settings.ts` reads/saves `pet-agents.*`; `customize-menu.ts` the Customize Pet quick picks
+  - `PeonViewProvider.ts` the sidebar view: routes webview messages to stores, forwards watcher events
+  - `protocol.ts` every message both ways (`FromWebview` / `ToWebview`) and their validation
+  - `webview-html.ts` page HTML + CSP; `media-files.ts` reads the script list from `media/webview.html`
+  - `transcript-tail.ts` reads appended JSONL lines; `transcript-parser.ts` lines -> pet state (`PET_STATES`); `claude-watcher.ts` picks which sessions and sub-agents to show
   - `state-watcher.ts` + `session-tracker.ts` peon-ping polling
-  - `pet-config.ts`, `pet-care.ts`, `bag-store.ts`, `pet-names.ts`, `workspace.ts`
-- `media/` webview (plain JS with `// @ts-check`): `pets.js` art, `variants.js` animation variants, `scene.js` toys/machines, `play.js` care, `webview.js` renderer
+  - `storage.ts` the globalState interface; stores: `pet-care.ts`, `bag-store.ts`
+  - `pet-config.ts`, `pet-names.ts`, `workspace.ts`
+- `media/` webview (plain JS with `// @ts-check`), loaded in the order `webview.html` lists them (`<!--MEDIA:file-->`):
+  `pets.js` art, `states.js` state looks, `play.js` care, `variants.js` animation variants, `scene.js` toys/machines, `panels.js` corner panels (care, bag/shop, settings), `webview.js` renderer + input. Each helper is `Pet*.create(api)` or pure data on `window.Pet*`.
 - `scripts/record-media.js` renders README GIFs/screenshots (`docs/images/`) and `media/assets/icon.png` in headless Chrome with a fake clock
-- `src/__tests__/` Jest. Webview scripts are loaded with `vm`; `manifest.test.ts` checks package.json against the code and README.
+- `src/__tests__/` Jest. Webview scripts are loaded with `vm` in template order; `manifest.test.ts` checks package.json against the code and README.
+- `docs/Plans/Roadmap.md` the plan for holidays, records, levels, enemies and the house.
 
 ## Workflow
 
 ```bash
 npm run compile | watch | lint | format
-npm test                # lint + compile + jest
+npm test                # lint + compile + jest (CI runs this on Windows/macOS/Linux for every push)
 npm run media           # re-record README media after visual changes
 npm run package         # pet-agents.vsix
 npm run install:vscode  # package and install into local VS Code, then Developer: Reload Window
@@ -34,5 +40,7 @@ npm run install:vscode  # package and install into local VS Code, then Developer
 
 - Keep `media/pets.js` ACCESSORIES/PATTERNS, `src/pet-config.ts` and the `package.json` enums in sync (tests enforce it). New settings must be read in `readPetConfig` and documented in the README settings table (tests enforce it).
 - ASCII only in code and comments; emoji only inside user-facing strings (`encoding.test.ts`).
+- New webview message: add it to `protocol.ts` (and its test) first. New webview script: one `<!--MEDIA:x.js-->` line in `webview.html`, nothing else.
+- Every commit is tested in full by `.github/workflows/ci.yml`; keep it green and add tests with each feature.
 - README images must be PNG/GIF under `docs/images/` (the marketplace rejects SVG); `docs/**` is excluded from the VSIX and served from GitHub.
 - Before publishing: bump `version`, add the CHANGELOG entry (a test checks it), `npx @vscode/vsce publish`.

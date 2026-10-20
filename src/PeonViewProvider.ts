@@ -1,25 +1,29 @@
 import * as vscode from 'vscode';
+import { PetConfig } from './pet-config';
+import { StateWatcher } from './state-watcher';
+import { ClaudeWatcher } from './claude-watcher';
+import { CareStore } from './pet-care';
+import { BagStore } from './bag-store';
+import { FromWebview, ToWebview, WebviewState, parseFromWebview } from './protocol';
+import { getNonce, getWebviewOptions, buildHtml } from './webview-html';
 
 /** The slice of vscode.LogOutputChannel the view writes to. */
 export type PetLog = Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn' | 'error' | 'show'>;
 
-const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 /** The view can ask for a refresh when its frames keep failing; at most this often. */
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
-import { PetConfig, panelSetting } from './pet-config';
-import { StateWatcher } from './state-watcher';
-import { ClaudeWatcher } from './claude-watcher';
-import { CareStore, isCareAction } from './pet-care';
-import { BagStore } from './bag-store';
-import {
-  WebviewState,
-  getNonce,
-  getWebviewOptions,
-  buildHtml,
-  attachWatchers,
-  sendInit,
-  sendReinit,
-} from './webview-helpers';
+
+/** Everything the pet view reads from or writes to. */
+export interface PetViewDeps {
+  mediaPath: string;
+  peon: StateWatcher;
+  claude: ClaudeWatcher;
+  getConfig: () => PetConfig;
+  care: CareStore;
+  bag: BagStore;
+  saveSetting: (key: string, value: unknown) => Thenable<void>;
+  log: PetLog;
+}
 
 /**
  * {@link vscode.WebviewViewProvider} that renders the pet in the Explorer
@@ -34,36 +38,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
   private savedState?: WebviewState;
   private lastAutoRefresh = 0;
 
-  private static isWebviewState(value: unknown): value is WebviewState {
-    if (!value || typeof value !== 'object') {
-      return false;
-    }
-    const state = value as Record<string, unknown>;
-    const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
-    const counts = (v: unknown) =>
-      v === undefined || (typeof v === 'object' && v !== null && Object.values(v).every(num));
-    const unlocks = state['unlocks'];
-    return (
-      (state['petX'] === undefined || num(state['petX'])) &&
-      (state['petY'] === undefined || num(state['petY'])) &&
-      counts(state['bag']) &&
-      counts(state['spent']) &&
-      (unlocks === undefined ||
-        (Array.isArray(unlocks) && unlocks.every((id) => typeof id === 'string'))) &&
-      (state['food'] === undefined || typeof state['food'] === 'string')
-    );
-  }
-
-  constructor(
-    private readonly mediaPath: string,
-    private readonly peon: StateWatcher,
-    private readonly claude: ClaudeWatcher,
-    private readonly getConfig: () => PetConfig,
-    private readonly care: CareStore,
-    private readonly bag: BagStore,
-    private readonly saveSetting: (key: string, value: unknown) => Thenable<void>,
-    private readonly log: PetLog,
-  ) {}
+  constructor(private readonly deps: PetViewDeps) {}
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -71,97 +46,127 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
     _token: vscode.CancellationToken,
   ): void {
     this.view = webviewView;
+    const { log, mediaPath } = this.deps;
 
-    webviewView.webview.options = getWebviewOptions(this.mediaPath);
-    webviewView.webview.html = buildHtml(webviewView.webview, this.mediaPath, getNonce());
+    webviewView.webview.options = getWebviewOptions(mediaPath);
+    webviewView.webview.html = buildHtml(webviewView.webview, mediaPath, getNonce());
 
     if (context.state) {
       this.savedState = context.state;
     }
-    this.log.info(`Pet view opened${context.state ? ' (restored)' : ''}`);
+    log.info(`Pet view opened${context.state ? ' (restored)' : ''}`);
     webviewView.onDidChangeVisibility(() =>
-      this.log.debug(`Pet view ${webviewView.visible ? 'shown' : 'hidden'}`),
+      log.debug(`Pet view ${webviewView.visible ? 'shown' : 'hidden'}`),
     );
 
     webviewView.webview.onDidReceiveMessage((msg: unknown) => {
-      if (!msg || typeof msg !== 'object') {
-        return;
-      }
-      const message = msg as Record<string, unknown>;
-      if (message['command'] === 'ready') {
-        const state = {
-          ...this.savedState,
-          bag: this.bag.get(),
-          spent: this.bag.getSpent(),
-          unlocks: this.bag.getUnlocks(),
-        };
-        sendInit(webviewView.webview, this.getConfig(), state, this.claude.latest());
-        this.sendCare();
-      } else if (message['command'] === 'care' && isCareAction(message['action'])) {
-        // The webview only sends this when the agent is not working.
-        const result = this.care.act(message['action']);
-        webviewView.webview.postMessage({ command: 'care-update', ...result });
-      } else if (
-        message['command'] === 'log' &&
-        LOG_LEVELS.includes(message['level'] as (typeof LOG_LEVELS)[number]) &&
-        typeof message['message'] === 'string'
-      ) {
-        this.log[message['level'] as (typeof LOG_LEVELS)[number]](
-          `view: ${message['message'].slice(0, 2000)}`,
-        );
-      } else if (message['command'] === 'refresh') {
-        this.autoRefresh();
-      } else if (message['command'] === 'gather-logs') {
-        this.gatherLogs(webviewView, message['snapshot']);
-      } else if (message['command'] === 'setting') {
-        const change = panelSetting(message['key'], message['value']);
-        if (change) {
-          void this.saveSetting(...change);
-        }
-      } else if (
-        message['command'] === 'save-state' &&
-        PeonViewProvider.isWebviewState(message['state'])
-      ) {
-        // Position and food stay with this view; the bag and shop go to extension storage.
-        const { bag, spent, unlocks, ...view } = message['state'];
-        this.savedState = view;
-        if (bag) {
-          this.bag.save(bag);
-        }
-        if (spent) {
-          this.bag.saveSpent(spent);
-        }
-        if (unlocks) {
-          this.bag.saveUnlocks(unlocks);
-        }
+      const message = parseFromWebview(msg);
+      if (message) {
+        this.handle(webviewView, message);
       }
     });
 
     // Replace any stale watcher binding with a fresh one
     this.watcherDisposable?.dispose();
-    this.watcherDisposable = attachWatchers(webviewView.webview, this.peon, this.claude);
+    this.watcherDisposable = this.attachWatchers(webviewView.webview);
 
     webviewView.onDidDispose(() => {
-      this.log.info('Pet view closed');
+      log.info('Pet view closed');
       this.watcherDisposable?.dispose();
       this.watcherDisposable = undefined;
       this.view = undefined;
     });
   }
 
+  private handle(webviewView: vscode.WebviewView, message: FromWebview): void {
+    const { bag, care, claude, getConfig, log, saveSetting } = this.deps;
+    switch (message.command) {
+      case 'ready': {
+        const state = {
+          ...this.savedState,
+          bag: bag.get(),
+          spent: bag.getSpent(),
+          unlocks: bag.getUnlocks(),
+        };
+        post(webviewView.webview, { command: 'init', config: getConfig(), state });
+        const latest = claude.latest();
+        if (latest) {
+          post(webviewView.webview, { command: 'claude-update', ...latest });
+        }
+        this.syncShared();
+        break;
+      }
+      case 'care':
+        // The webview only sends this when the agent is not working.
+        post(webviewView.webview, { command: 'care-update', ...care.act(message.action) });
+        break;
+      case 'log':
+        log[message.level](`view: ${message.message}`);
+        break;
+      case 'refresh':
+        this.autoRefresh();
+        break;
+      case 'gather-logs':
+        this.gatherLogs(webviewView, message.snapshot);
+        break;
+      case 'setting':
+        void saveSetting(message.key, message.value);
+        break;
+      case 'save-state': {
+        // Position and food stay with this view; the bag and shop go to extension storage.
+        const { bag: found, spent, unlocks, ...view } = message.state;
+        this.savedState = view;
+        if (found) {
+          bag.save(found);
+        }
+        if (spent) {
+          bag.saveSpent(spent);
+        }
+        if (unlocks) {
+          bag.saveUnlocks(unlocks);
+        }
+        break;
+      }
+    }
+  }
+
   /**
-   * Pushes current (decayed) care stats to the view, if it is open, and shop
-   * purchases, which another window may have made.
+   * Forwards peon-ping and Claude transcript events into the webview. The
+   * returned Disposable removes only this webview's listeners.
    */
-  sendCare(): void {
-    this.view?.webview.postMessage({ command: 'care-update', stats: this.care.get() });
-    this.view?.webview.postMessage({ command: 'unlocks', unlocks: this.bag.getUnlocks() });
+  private attachWatchers(webview: vscode.Webview): vscode.Disposable {
+    const { peon, claude } = this.deps;
+    const disposables = [
+      // peon-ping reports every agent on the machine; only this workspace's move this pet.
+      peon.onPeonEvent((e) => {
+        if (claude.ownsDir(e.cwd)) {
+          post(webview, { command: 'peon-event', ...e });
+        }
+      }),
+      peon.onSessionUpdate((e) => post(webview, { command: 'session-update', ...e })),
+      claude.onUpdate((e) => post(webview, { command: 'claude-update', ...e })),
+    ];
+    return new vscode.Disposable(() => disposables.forEach((d) => d.dispose()));
+  }
+
+  /**
+   * Pushes state every window shares, if the view is open: current (decayed)
+   * care stats, and shop purchases, which another window may have made.
+   */
+  syncShared(): void {
+    if (!this.view) {
+      return;
+    }
+    const { care, bag } = this.deps;
+    post(this.view.webview, { command: 'care-update', stats: care.get() });
+    post(this.view.webview, { command: 'unlocks', unlocks: bag.getUnlocks() });
   }
 
   /** The settings panel's "Gather debug logs": both sides' state into the log, then show it. */
-  private gatherLogs(webviewView: vscode.WebviewView, snapshot: unknown): void {
-    const latest = this.claude.latest();
-    this.log.info(
+  private gatherLogs(webviewView: vscode.WebviewView, snapshot: string | null): void {
+    const { claude, log } = this.deps;
+    const latest = claude.latest();
+    log.info(
       `Debug snapshot (extension): ${JSON.stringify({
         vscode: vscode.version,
         platform: process.platform,
@@ -173,35 +178,37 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
         lastAutoRefresh: this.lastAutoRefresh ? new Date(this.lastAutoRefresh).toISOString() : null,
       })}`,
     );
-    this.log.info(
-      `Debug snapshot (view): ${typeof snapshot === 'string' ? snapshot.slice(0, 4000) : 'none'}`,
-    );
-    this.log.show(true);
+    log.info(`Debug snapshot (view): ${snapshot ?? 'none'}`);
+    log.show(true);
   }
 
   private autoRefresh(): void {
     const now = Date.now();
     if (now - this.lastAutoRefresh < AUTO_REFRESH_MS) {
-      this.log.warn('Pet view asked for a refresh again within 5 minutes; skipped');
+      this.deps.log.warn('Pet view asked for a refresh again within 5 minutes; skipped');
       return;
     }
     this.lastAutoRefresh = now;
-    this.log.warn('Pet view kept failing to draw; refreshing it');
+    this.deps.log.warn('Pet view kept failing to draw; refreshing it');
     this.refresh();
   }
 
   /** Rebuilds the pet view from scratch; it keeps its position, bag, purchases and care stats. */
   refresh(): void {
-    this.log.info('Refreshing pet view');
+    this.deps.log.info('Refreshing pet view');
     if (this.view) {
-      this.view.webview.html = buildHtml(this.view.webview, this.mediaPath, getNonce());
+      this.view.webview.html = buildHtml(this.view.webview, this.deps.mediaPath, getNonce());
     }
   }
 
   /** Call when a pet setting changes to redraw with the new look. */
   reinit(): void {
     if (this.view) {
-      sendReinit(this.view.webview, this.getConfig());
+      post(this.view.webview, { command: 'reinit', config: this.deps.getConfig() });
     }
   }
+}
+
+function post(webview: vscode.Webview, message: ToWebview): void {
+  void webview.postMessage(message);
 }

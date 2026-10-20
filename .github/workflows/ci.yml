@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Transcript paths differ per OS (D:\ vs /d/ vs /home), so all three run the suite.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [20]
+        include:
+          - os: ubuntu-latest
+            node: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Format
+        run: npm run format:check
+      - name: Lint, compile and test
+        run: npm test -- --ci --coverage
+      - name: Upload coverage
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.node == 20
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+  package:
+    name: Package VSIX
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pet-agents-vsix
+          path: pet-agents.vsix

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
+import { mediaFiles } from '../media-files';
 
 type Listener = (event: unknown) => void;
 type ListenerMap = Record<string, Listener[]>;
@@ -158,17 +159,23 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     console,
   };
 
+  // The same scripts, in the same order, as the real page loads.
   const media = path.join(process.cwd(), 'media');
-  vm.runInNewContext(fs.readFileSync(path.join(media, 'pets.js'), 'utf8'), context);
-  vm.runInNewContext(fs.readFileSync(path.join(media, 'play.js'), 'utf8'), context);
-  vm.runInNewContext(fs.readFileSync(path.join(media, 'variants.js'), 'utf8'), context);
-  vm.runInNewContext(fs.readFileSync(path.join(media, 'scene.js'), 'utf8'), context);
+  const scripts = mediaFiles(fs.readFileSync(path.join(media, 'webview.html'), 'utf8')).filter(
+    (f) => f.endsWith('.js'),
+  );
+  for (const file of scripts.slice(0, -1)) {
+    vm.runInNewContext(fs.readFileSync(path.join(media, file), 'utf8'), context);
+  }
   if (libs) {
-    for (const lib of ['PetArt', 'PetPlay', 'PetVariants', 'PetScene']) {
+    for (const lib of Object.keys(context).filter((k) => k.startsWith('Pet'))) {
       windowObj[lib] = context[lib];
     }
   }
-  vm.runInNewContext(fs.readFileSync(path.join(media, 'webview.js'), 'utf8'), context);
+  vm.runInNewContext(
+    fs.readFileSync(path.join(media, scripts[scripts.length - 1]), 'utf8'),
+    context,
+  );
 
   const send = (data: unknown) => windowListeners['message'].forEach((l) => l({ data }));
   const hover = (offsetX: number, offsetY: number) =>
@@ -930,11 +937,27 @@ describe('webview behavior', () => {
       hover(396, 120);
       expect(tooltip.innerHTML).toContain('playing with the ball of yarn');
 
+      // The yarn rolls and gets batted about at random, so look for it again each try.
+      const findYarn = () => {
+        for (let y = 140; y <= 200; y += 5) {
+          for (let x = 0; x <= 600; x += 5) {
+            hover(x, y);
+            // The pet's own tooltip also names the yarn while playing with it.
+            if (tooltip.innerHTML.includes('right-click to put it away')) {
+              return { x, y };
+            }
+          }
+        }
+        return null;
+      };
       let stored = false;
-      for (let x = 0; x <= 600 && !stored; x += 5) {
-        rightClick(x, 187);
+      for (let i = 0; i < 40 && !stored; i++) {
+        const yarn = findYarn();
+        if (yarn) {
+          rightClick(yarn.x, yarn.y);
+        }
+        runFrames(600);
         stored = !elements['bag-grid'].innerHTML.includes('class="toy out"');
-        runFrames(16);
       }
       expect(stored).toBe(true);
     } finally {

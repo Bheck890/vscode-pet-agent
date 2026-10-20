@@ -36,9 +36,10 @@ jest.mock(
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildHtml, getNonce } from '../webview-helpers';
+import { buildHtml, getNonce } from '../webview-html';
+import { mediaFiles } from '../media-files';
 
-describe('webview-helpers', () => {
+describe('webview-html', () => {
   afterEach(() => {
     jest.restoreAllMocks();
     (fs.readFileSync as jest.Mock).mockReset();
@@ -54,12 +55,12 @@ describe('webview-helpers', () => {
     (fs.readFileSync as jest.Mock).mockReturnValue(
       `<!doctype html>
 <head><!--CSP_PLACEHOLDER--></head>
-<link rel="stylesheet" href="<!--CSS_URI-->">
-<script nonce="<!--NONCE-->" src="<!--PETS_URI-->"></script>
-<script nonce="<!--NONCE-->" src="<!--PLAY_URI-->"></script>
-<script nonce="<!--NONCE-->" src="<!--VARIANTS_URI-->"></script>
-<script nonce="<!--NONCE-->" src="<!--SCENE_URI-->"></script>
-<script nonce="<!--NONCE-->" src="<!--SCRIPT_URI-->"></script>` as unknown as ReturnType<
+<link rel="stylesheet" href="<!--MEDIA:webview.css-->">
+<script nonce="<!--NONCE-->" src="<!--MEDIA:pets.js-->"></script>
+<script nonce="<!--NONCE-->" src="<!--MEDIA:play.js-->"></script>
+<script nonce="<!--NONCE-->" src="<!--MEDIA:variants.js-->"></script>
+<script nonce="<!--NONCE-->" src="<!--MEDIA:scene.js-->"></script>
+<script nonce="<!--NONCE-->" src="<!--MEDIA:webview.js-->"></script>` as unknown as ReturnType<
         typeof fs.readFileSync
       >,
     );
@@ -103,5 +104,24 @@ describe('webview-helpers', () => {
     );
     expect(html).toContain('Pet Agents failed to load its webview template');
     expect(html).toContain('missing template');
+  });
+
+  it('lists the media files a template loads, in order', () => {
+    expect(
+      mediaFiles('<link href="<!--MEDIA:a.css-->"><script src="<!--MEDIA:b-c.js-->"></script>'),
+    ).toEqual(['a.css', 'b-c.js']);
+  });
+
+  it('loads every script the real template names, each with the nonce', () => {
+    const actual = jest.requireActual<typeof fs>('fs');
+    const template = actual.readFileSync(path.join(process.cwd(), 'media', 'webview.html'), 'utf8');
+    const scripts = mediaFiles(template).filter((f) => f.endsWith('.js'));
+    expect(scripts[0]).toBe('pets.js');
+    expect(scripts[scripts.length - 1]).toBe('webview.js');
+    for (const file of scripts) {
+      expect(template).toContain(
+        `<script nonce="<!--NONCE-->" src="<!--MEDIA:${file}-->"></script>`,
+      );
+    }
   });
 });

@@ -28,6 +28,18 @@ export interface Job {
   background: boolean;
 }
 
+/** How a test run or build ended. Ids are tool_use ids, the same in every window. */
+export interface Outcome {
+  id: string;
+  kind: 'test' | 'build';
+  ok: boolean;
+  /** Transcript time of the result. */
+  at: number;
+}
+
+/** Outcomes kept per agent; enough for the webview to replay recent fails and fixes. */
+export const MAX_OUTCOMES = 20;
+
 /** Live activity of one agent (main session or sub-agent), built from its transcript. */
 export interface AgentActivity {
   state: PetState;
@@ -52,6 +64,10 @@ export interface AgentActivity {
   linger: { state: PetState; detail: string; until: number } | null;
   /** How many tool calls in a row had the same state. */
   streak: { state: PetState; count: number };
+  /** The latest finished test runs and builds, oldest first. */
+  outcomes: Outcome[];
+  /** Outcomes ever recorded, so a reader can tell which ones are new. */
+  outcomeCount: number;
 }
 
 /** A pending non-shell tool call this old is most likely sitting on a permission prompt. */
@@ -143,7 +159,28 @@ export function createActivity(): AgentActivity {
     jobs: new Map(),
     linger: null,
     streak: { state: 'idle', count: 0 },
+    outcomes: [],
+    outcomeCount: 0,
   };
+}
+
+/**
+ * The text of a real prompt in a user line's content, or null for tool
+ * results, interrupts, and slash-command plumbing and hook output (which
+ * arrive as tagged strings).
+ */
+export function promptText(content: unknown): string | null {
+  if (typeof content === 'string') {
+    return content.startsWith('<') ? null : content;
+  }
+  if (!Array.isArray(content)) {
+    return null;
+  }
+  const texts = (content as Record<string, unknown>[])
+    .filter((b) => b?.['type'] === 'text')
+    .map((b) => str(b['text']))
+    .filter((t) => !t.startsWith('[Request interrupted'));
+  return texts.length > 0 ? texts.join('\n') : null;
 }
 
 export function toolState(name: string): PetState {
@@ -255,6 +292,14 @@ function startTool(act: AgentActivity, block: Record<string, unknown>): void {
   set(act, state, toolDetail(name, input));
 }
 
+function recordOutcome(act: AgentActivity, outcome: Outcome): void {
+  act.outcomes.push(outcome);
+  act.outcomeCount++;
+  if (act.outcomes.length > MAX_OUTCOMES) {
+    act.outcomes.shift();
+  }
+}
+
 /** Applies one parsed transcript line to the activity. Unknown shapes are ignored. */
 export function applyLine(act: AgentActivity, line: unknown): void {
   if (!line || typeof line !== 'object') {
@@ -294,7 +339,7 @@ export function applyLine(act: AgentActivity, line: unknown): void {
       // Slash-command plumbing and hook output arrive as tagged strings, not prompts.
       if (content.startsWith('<task-notification>')) {
         endJobs(act, content);
-      } else if (!content.startsWith('<')) {
+      } else if (promptText(content) !== null) {
         newTurn(act);
       }
       return;
@@ -306,7 +351,16 @@ export function applyLine(act: AgentActivity, line: unknown): void {
       if (block?.['type'] === 'tool_result') {
         const id = str(block['tool_use_id']);
         act.pending.delete(id);
-        if (!act.jobs.get(id)?.background) {
+        const job = act.jobs.get(id);
+        if (job && !job.background && (job.kind === 'test' || job.kind === 'build')) {
+          recordOutcome(act, {
+            id,
+            kind: job.kind,
+            ok: block['is_error'] !== true,
+            at: act.lastAt,
+          });
+        }
+        if (!job?.background) {
           act.jobs.delete(id);
         }
         if (block['is_error'] === true) {
@@ -362,8 +416,16 @@ export function applyLine(act: AgentActivity, line: unknown): void {
 export function currentState(
   act: AgentActivity,
   now: number,
-): { state: PetState; detail: string; seq: number; since: number; jobs: Job[] } {
+): {
+  state: PetState;
+  detail: string;
+  seq: number;
+  since: number;
+  jobs: Job[];
+  outcomes: Outcome[];
+} {
   const jobs = [...act.jobs.values()];
+  const outcomes = [...act.outcomes];
   const silent = now - act.lastAt;
   if (act.pending.size > 0) {
     const names = [...act.pending.values()];
@@ -375,14 +437,22 @@ export function currentState(
         seq: act.seq,
         since: act.stateAt,
         jobs,
+        outcomes,
       };
     }
     if (silent > PERMISSION_GUESS_MS && names.some((n) => !LONG_RUNNING.has(n))) {
-      return { state: 'waiting', detail: 'needs your OK?', seq: act.seq, since: act.stateAt, jobs };
+      return {
+        state: 'waiting',
+        detail: 'needs your OK?',
+        seq: act.seq,
+        since: act.stateAt,
+        jobs,
+        outcomes,
+      };
     }
   }
   if (silent > STALE_MS && act.state !== 'waiting') {
-    return { state: 'idle', detail: '', seq: act.seq, since: act.stateAt, jobs };
+    return { state: 'idle', detail: '', seq: act.seq, since: act.stateAt, jobs, outcomes };
   }
   if (act.state === 'thinking' && act.linger && now < act.linger.until) {
     return {
@@ -391,7 +461,8 @@ export function currentState(
       seq: act.seq,
       since: act.stateAt,
       jobs,
+      outcomes,
     };
   }
-  return { state: act.state, detail: act.detail, seq: act.seq, since: act.stateAt, jobs };
+  return { state: act.state, detail: act.detail, seq: act.seq, since: act.stateAt, jobs, outcomes };
 }

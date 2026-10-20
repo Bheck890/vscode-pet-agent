@@ -20,6 +20,7 @@
    *   now: () => number,
    *   escapeHtml: (s: string) => string,
    *   debugSnapshot: () => string,
+   *   house: any,
    * }} api
    */
   function create(api) {
@@ -73,6 +74,22 @@
       Array.from(document.querySelectorAll('[data-setting]'))
     );
     const actionList = /** @type {HTMLDivElement} */ (document.getElementById('action-list'));
+    const byId = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
+    const trophyToggle = byId('trophy-toggle');
+    const trophyPanel = byId('trophy-panel');
+    const trophyTitle = byId('trophy-title');
+    const trophyTabs = byId('trophy-tabs');
+    const trophyView = byId('trophy-view');
+    const houseToggle = byId('house-toggle');
+    const housePanel = byId('house-panel');
+    const houseNote = byId('house-note');
+    const houseDone = byId('house-done');
+    const houseItems = byId('house-items');
+    const houseThemes = byId('house-themes');
+    /** The latest level and records from the extension, or null before the first. */
+    let progress = null;
+    let records = null;
+    let trophyTab = 'level';
     const gatherLogs = /** @type {HTMLButtonElement} */ (document.getElementById('gather-logs'));
 
     /** Groups of switchable actions for the settings panel, in display order. */
@@ -124,9 +141,11 @@
     /** Opens one corner panel (or closes it if already open) and closes the others. */
     function togglePanel(panel) {
       const open = panel.hidden;
-      for (const other of [carePanel, bagPanel, settingsPanel]) {
+      for (const other of [carePanel, bagPanel, settingsPanel, trophyPanel, housePanel]) {
         other.hidden = other !== panel || !open;
       }
+      renderTrophy();
+      renderHouse();
       // Closing the care panel keeps the tool in hand; opening another panel puts it away.
       if (carePanel.hidden && panel !== carePanel) {
         play.setTool(null);
@@ -363,6 +382,46 @@
       }
     });
     settingsToggle.addEventListener('click', () => togglePanel(settingsPanel));
+    trophyToggle.addEventListener('click', () => togglePanel(trophyPanel));
+    // The house stays open with its furniture bar hidden; 🏠 again leaves it.
+    houseToggle.addEventListener('click', () => {
+      if (api.house.isOpen()) {
+        leaveHouse();
+        return;
+      }
+      api.house.setOpen(true);
+      if (housePanel.hidden) {
+        togglePanel(housePanel);
+      }
+      houseToggle.classList.toggle('holding', api.house.isOpen());
+    });
+    houseDone.addEventListener('click', () => {
+      housePanel.hidden = true;
+    });
+    trophyTabs.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-tab]');
+      const tab = el && /** @type {HTMLElement} */ (el).dataset.tab;
+      if (tab) {
+        trophyTab = tab;
+        renderTrophy();
+      }
+    });
+    houseItems.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-furniture]');
+      const id = el && /** @type {HTMLElement} */ (el).dataset.furniture;
+      if (id) {
+        api.house.toggle(id);
+        renderHouse();
+      }
+    });
+    houseThemes.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-theme]');
+      const id = el && /** @type {HTMLElement} */ (el).dataset.theme;
+      if (id) {
+        api.house.setTheme(id);
+        renderHouse();
+      }
+    });
     bagStoreAll.addEventListener('click', () => {
       scene.putAllAway();
       renderBag();
@@ -447,6 +506,151 @@
       }),
     );
 
+    /** Which trophy tabs exist: levels and records can each be switched off. */
+    function trophyTabsOn() {
+      const cfg = api.config() || {};
+      return [
+        ['level', '⭐ Level', cfg.levels !== false],
+        ['records', '🏆 Records', cfg.records !== false],
+      ].filter(([, , on]) => on);
+    }
+
+    function renderTrophy() {
+      if (trophyPanel.hidden) {
+        return;
+      }
+      const tabs = trophyTabsOn();
+      if (!tabs.some(([id]) => id === trophyTab) && tabs.length > 0) {
+        trophyTab = String(tabs[0][0]);
+      }
+      trophyTabs.innerHTML = tabs
+        .map(
+          ([id, label]) =>
+            `<button data-tab="${id}"${id === trophyTab ? ' class="active"' : ''}>${label}</button>`,
+        )
+        .join('');
+      trophyTabs.hidden = tabs.length < 2;
+      if (trophyTab === 'records') {
+        trophyTitle.textContent = '🏆 Prompt records';
+        trophyView.innerHTML = recordsHtml();
+      } else {
+        trophyTitle.textContent = '⭐ Level and challenges';
+        trophyView.innerHTML = levelHtml();
+      }
+    }
+
+    function levelHtml() {
+      if (!progress) {
+        return '<div class="panel-note">Counting your XP...</div>';
+      }
+      const span = Math.max(1, progress.next - progress.floor);
+      const pct = Math.round(((progress.xp - progress.floor) / span) * 100);
+      const next = root.PetHouse.FURNITURE.find((f) => f.level > progress.level);
+      const challenges = progress.challenges
+        .map(
+          (c) =>
+            `<div class="challenge${c.done ? ' done' : ''}"><span>${c.emoji}</span>` +
+            `<span class="what">${escapeHtml(c.text)}</span>` +
+            `<span class="dim">${c.done ? '✅' : `${c.progress}/${c.target}`}</span></div>`,
+        )
+        .join('');
+      return (
+        `<div class="level-head"><span>⭐ Level ${progress.level}</span>` +
+        `<span class="dim">${progress.xp} / ${progress.next} XP</span></div>` +
+        `<div class="xp-track"><div class="xp-fill" style="width:${pct}%"></div></div>` +
+        `<div class="dim">+${progress.weekXp} XP this week` +
+        (next ? ` - next: ${next.emoji} ${escapeHtml(next.name)} at level ${next.level}` : '') +
+        '</div>' +
+        `<div class="group">📅 This week's challenges</div>${challenges}` +
+        '<div class="panel-note">XP comes from finished prompts, passing tests and builds, ' +
+        'helpers, records and care. Every challenge is worth 100.</div>'
+      );
+    }
+
+    function recordRow(r) {
+      const where = r.project ? `<span class="dim">${escapeHtml(r.project)}</span>` : '';
+      const said = r.preview ? `<span class="prompt">"${escapeHtml(r.preview)}"</span>` : '';
+      return (
+        `<div class="record"><span class="value">${escapeHtml(r.value)}</span>` +
+        `${r.emoji} <b>${escapeHtml(r.title)}</b><br>${where}${said}</div>`
+      );
+    }
+
+    function recordsHtml() {
+      if (!records) {
+        return '<div class="panel-note">Reading your prompts...</div>';
+      }
+      const t = records.totals;
+      return (
+        `<div class="dim">${t.prompts} prompts - ${t.actions} actions - ` +
+        `${escapeHtml(t.agentTime)} of agent time this week</div>` +
+        '<div class="group">📅 This week</div>' +
+        (records.records.length > 0
+          ? records.records.map(recordRow).join('')
+          : '<div class="panel-note">No finished prompts yet this week.</div>') +
+        (records.hallOfFame.length > 0
+          ? '<div class="group">🏛️ Hall of fame</div>' + records.hallOfFame.map(recordRow).join('')
+          : '')
+      );
+    }
+
+    function renderHouse() {
+      if (housePanel.hidden) {
+        return;
+      }
+      const cat = api.house.catalogue();
+      houseNote.textContent = cat.levelsOn ? `Level ${cat.level}` : '';
+      houseItems.innerHTML = cat.furniture
+        .map((f) =>
+          f.unlocked
+            ? `<button data-furniture="${f.id}"${f.placed ? ' class="active"' : ''}` +
+              ` title="${escapeHtml(f.name)} - click to ${f.placed ? 'take it out' : 'put it in'}">` +
+              `${f.emoji}</button>`
+            : `<button class="locked" disabled` +
+              ` title="${escapeHtml(f.name)}: unlocks at level ${f.level}">🔒</button>`,
+        )
+        .join('');
+      houseThemes.innerHTML = cat.themes
+        .map((t) =>
+          t.unlocked
+            ? `<button data-theme="${t.id}"${t.active ? ' class="active"' : ''}>` +
+              `${escapeHtml(t.name)}</button>`
+            : `<button disabled title="Unlocks at level ${t.level}">🔒 ${escapeHtml(t.name)}</button>`,
+        )
+        .join('');
+    }
+
+    function leaveHouse() {
+      api.house.setOpen(false);
+      housePanel.hidden = true;
+      houseToggle.classList.toggle('holding', false);
+    }
+
+    /** Corner buttons right to left; ones for switched-off features hide and the rest close up. */
+    function layoutCorners() {
+      const cfg = api.config() || {};
+      const shown = [
+        [careToggle, true],
+        [bagToggle, true],
+        [settingsToggle, true],
+        [trophyToggle, cfg.levels !== false || cfg.records !== false],
+        [houseToggle, cfg.house !== false],
+      ];
+      let i = 0;
+      for (const [button, on] of shown) {
+        button.hidden = !on;
+        if (on) {
+          button.style.right = `${8 + 30 * i++}px`;
+        }
+      }
+      if (trophyToggle.hidden && !trophyPanel.hidden) {
+        togglePanel(trophyPanel);
+      }
+      if (houseToggle.hidden && api.house.isOpen()) {
+        leaveHouse();
+      }
+    }
+
     return {
       /** Per-frame upkeep: the care panel, and the bag while it is open. */
       tick(t) {
@@ -460,8 +664,25 @@
       careOn,
       refreshCare: () => updateCareUi(now()),
       refreshBag: renderBag,
-      /** Settings changed: tick the switches to match. */
-      syncConfig: syncSwitches,
+      /** Settings changed: tick the switches to match and show the right buttons. */
+      syncConfig() {
+        syncSwitches();
+        layoutCorners();
+        renderTrophy();
+        renderHouse();
+      },
+      setProgress(update) {
+        progress = update;
+        renderTrophy();
+        renderHouse();
+      },
+      setRecords(update) {
+        records = update;
+        renderTrophy();
+      },
+      refreshHouse: renderHouse,
+      /** Leaves the house (agent work pulls the pet back to its desk). */
+      closeHouse: leaveHouse,
       /** Purchases changed (here or in another window). */
       refreshUnlocks() {
         renderFoods();

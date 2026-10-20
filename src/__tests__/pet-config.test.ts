@@ -29,6 +29,13 @@ const DEFAULTS = {
   backgroundPets: true,
   otherRepoPets: true,
   disabledActions: [],
+  holidays: true,
+  hemisphere: 'north',
+  records: true,
+  recordsShowPrompts: false,
+  levels: true,
+  enemies: true,
+  house: true,
   size: 200,
 };
 
@@ -69,6 +76,13 @@ describe('readPetConfig', () => {
       backgroundPets: false,
       otherRepoPets: false,
       disabledActions: ['running.zoomies', 'idle.butterfly'],
+      holidays: false,
+      hemisphere: 'south',
+      records: false,
+      recordsShowPrompts: true,
+      levels: false,
+      enemies: false,
+      house: false,
       size: 'large',
     };
     expect(readPetConfig((k) => values[k])).toEqual({
@@ -89,12 +103,26 @@ describe('readPetConfig', () => {
       backgroundPets: false,
       otherRepoPets: false,
       disabledActions: ['running.zoomies', 'idle.butterfly'],
+      holidays: false,
+      hemisphere: 'south',
+      records: false,
+      recordsShowPrompts: true,
+      levels: false,
+      enemies: false,
+      house: false,
       size: 250,
     });
   });
 });
 
 describe('panelSetting', () => {
+  it('accepts the game switches from the panel', () => {
+    for (const key of ['holidays', 'records', 'recordsShowPrompts', 'levels', 'enemies', 'house']) {
+      expect(panelSetting(key, false)).toEqual([key, false]);
+    }
+    expect(panelSetting('hemisphere', true)).toBeNull();
+  });
+
   it('maps the settings panel switches to settings', () => {
     expect(panelSetting('toys', false)).toEqual(['toys', false]);
     expect(panelSetting('variety', true)).toEqual(['variety', 'random']);

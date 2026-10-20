@@ -873,6 +873,116 @@ CLIPS.tooltip = async (browser) => {
   return writePng(path.join(OUT, 'tooltip.png'), png);
 };
 
+/** One panel per holiday event: costume, decorations and weather. */
+CLIPS.holidays = async (browser) => {
+  const events = [
+    ['halloween', 'fox'],
+    ['thanksgiving', 'dog'],
+    ['christmas', 'cat'],
+    ['newyear', 'bird'],
+    ['valentine', 'cat'],
+    ['easter', 'fox'],
+  ];
+  const shots = [];
+  for (const [event, species] of events) {
+    const panel = await Panel.open(browser, {
+      width: 240,
+      height: 220,
+      scale: 2,
+      cfg: { species, name: NAMES[species], size: SIZES.small },
+    });
+    await panel.send({ command: 'calendar', day: '2026-01-01', events: [event], season: 'winter' });
+    // Long enough for the greeting banner to pass and some weather to fall.
+    await panel.advance(9000);
+    shots.push(await panel.shot());
+    await panel.close();
+  }
+  return writePng(path.join(OUT, 'holidays.png'), grid(shots, 3, 8));
+};
+
+/** Level and challenges, the prompt records board, and the house with a bug in it. */
+CLIPS.adventure = async (browser) => {
+  const opts = { width: 320, height: 380, scale: 2 };
+  const progress = {
+    command: 'progress-update',
+    level: 7,
+    xp: 2410,
+    floor: 2100,
+    next: 2800,
+    week: '2026-10-19',
+    weekXp: 385,
+    challenges: [
+      { id: 'tests', emoji: '🧪', text: 'Pass 5 test runs', progress: 5, target: 5, done: true },
+      { id: 'helpers', emoji: '🐣', text: 'Have 3 helpers finish', progress: 2, target: 3 },
+      { id: 'days', emoji: '📅', text: 'Ship on 4 different days', progress: 3, target: 4 },
+    ],
+  };
+  const entry = (id, emoji, title, value, project, preview) => ({
+    id,
+    emoji,
+    title,
+    value,
+    project,
+    preview,
+    endedAt: 0,
+  });
+  const records = {
+    command: 'records-update',
+    week: '2026-10-19',
+    records: [
+      entry('tinyEpic', '🪄', 'Tiny prompt, epic run', '3 words -> 24m 10s', 'my-app', 'fix the tests'),
+      entry('busiest', '⚙️', 'Busiest prompt', '96 actions in 31m 05s', 'my-app', 'migrate auth to v2'),
+      entry('sniper', '🎯', 'Sniper', 'done in 1 action', 'docs', 'typo in README'),
+      entry('litter', '🐣', 'Biggest litter', '5 helpers', 'api', 'audit every endpoint'),
+    ],
+    hallOfFame: [entry('marathon', '⏱️', 'Marathon', '2h 14m, 310 actions', 'api', 'port to rust')],
+    totals: { prompts: 42, actions: 1310, subagents: 17, agentMs: 0, agentTime: '6h 12m' },
+    broken: [],
+  };
+  const withData = async (cfg) => {
+    const panel = await Panel.open(browser, { ...opts, cfg: { recordsShowPrompts: true, ...cfg } });
+    await panel.send(progress);
+    await panel.send(records);
+    return panel;
+  };
+
+  const level = await withData();
+  await level.click('#trophy-toggle');
+  await level.advance(300);
+
+  const board = await withData();
+  await board.click('#trophy-toggle');
+  await board.frame.evaluate(() => document.querySelector('[data-tab="records"]').click());
+  await board.advance(300);
+
+  const home = await withData({ species: 'cat', name: 'Mochi', toys: false });
+  await home.send({
+    command: 'house',
+    layout: {
+      items: [
+        { id: 'bed', x: 0.16, y: 0, at: 1 },
+        { id: 'plant', x: 0.92, y: 0, at: 1 },
+        { id: 'painting', x: 0.62, y: 0.2, at: 1 },
+        { id: 'clock', x: 0.88, y: 0.1, at: 1 },
+        { id: 'sofa', x: 0.78, y: 0, at: 1 },
+      ],
+      theme: 'mint',
+      themeAt: 1,
+    },
+  });
+  await home.send({ command: 'calendar', day: '2026-10-21', events: [], season: 'autumn' });
+  await home.click('#house-toggle');
+  const now = await home.frame.evaluate(() => Date.now());
+  const update = claude('idle');
+  update.main.outcomes = [{ id: 'f1', kind: 'test', ok: false, at: now - 60000 }];
+  await home.send(update);
+  await home.advance(4000);
+
+  const shots = [await level.shot(), await board.shot(), await home.shot()];
+  await Promise.all([level, board, home].map((p) => p.close()));
+  return writePng(path.join(OUT, 'adventure.png'), grid(shots, 3, 8));
+};
+
 /** The marketplace icon: the default fox on a rounded tile. */
 CLIPS.icon = async (browser) => {
   const scale = 8;

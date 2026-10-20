@@ -26,33 +26,57 @@ Ground rules for every phase:
 - CI (`.github/workflows/ci.yml`) runs everything on every push. Each phase
   lands with its tests in the same commit.
 
+## Status
+
+All five phases are built (October 2026) and covered by tests; see the
+CHANGELOG's Unreleased section. Where the build differs from the plan below:
+
+- **Level unlocks** are not written to `petUnlocks`. The webview works them
+  out from the level and the furniture catalogue in `media/house.js`, so
+  there is nothing extra to store or sync. With `pet-agents.levels` off,
+  every piece of furniture is open.
+- **Outcomes** live on the transcript parser's `AgentActivity.outcomes`
+  (the last 20 per agent). `ClaudeWatcher.onEvent` reports new ones once,
+  together with main-session lines, finished helpers and dropped sessions.
+  `src/games.ts` routes them to the records and XP.
+- **Squashing** is decided per session and kind: a pass after failures in
+  the same session earns `squash:<pass id>`.
+- **XP banking** keeps a total per month (`petXpBanked`) and takes the larger
+  value on every fold, so two windows tidying at once can't double it.
+- **The house** shows a slim furniture strip along the bottom. 🏠 enters and
+  leaves; **Done** hides the strip and keeps you in the house. Wall items sit
+  in the lower half of the wall, clear of the corner buttons.
+- **Records** need a finished turn of 3s or more; the 📜 essay category
+  also needs at least 20 words.
+
 ---
 
 ## Phase 0: architecture prep (done)
 
 What changed so the phases below plug in without touching unrelated code:
 
-| Before | After | Why it matters for the roadmap |
-|---|---|---|
-| Message handling was an if/else chain with inline validation in the provider | `protocol.ts`: typed `FromWebview` / `ToWebview`, one `parseFromWebview` | Records, levels and the house each add messages; one place to add and test them |
-| `PeonViewProvider` took 8 positional args | One `PetViewDeps` object | New stores (records, progress, house) join as fields |
-| `sendCare()` also sent shop unlocks | `syncShared()` pushes all cross-window state | Levels and records sync through the same 60s tick |
-| `CareStorage` lived in `pet-care.ts`, imported by `bag-store.ts` | `storage.ts` `Storage` interface | New stores depend on storage, not on care |
-| `webview-helpers.ts` mixed HTML, watcher wiring and init messages | `webview-html.ts` (HTML) + provider owns wiring | |
-| The script list was copied in 4 places (template, builder, recorder, tests) | `<!--MEDIA:file-->` in `webview.html`; `media-files.ts` reads it | New scripts (`events.js`, `house.js`...) are a one-line change |
-| `extension.ts` was 300 lines, mostly the Customize menu | `settings.ts`, `customize-menu.ts`; `extension.ts` only wires things together | |
-| Transcript tailing was inside `claude-watcher.ts` | `transcript-tail.ts` `readLines(file, size, onLine)` | Prompt records reuse it for live stats **and** history backfill |
-| Pet states were a TS type plus a "mirrored in webview.js" comment | `PET_STATES` list; `media/states.js`; a test checks they match | Enemies and events key off states safely |
-| `webview.js` was 3,131 lines including all DOM panels | `media/panels.js` owns the corner panels | Records, challenges and house panels go next to the existing ones |
-| One flaky webview test | Fixed (found the toy by its own tooltip) | CI stays trustworthy |
+| Before                                                                       | After                                                                         | Why it matters for the roadmap                                                  |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Message handling was an if/else chain with inline validation in the provider | `protocol.ts`: typed `FromWebview` / `ToWebview`, one `parseFromWebview`      | Records, levels and the house each add messages; one place to add and test them |
+| `PeonViewProvider` took 8 positional args                                    | One `PetViewDeps` object                                                      | New stores (records, progress, house) join as fields                            |
+| `sendCare()` also sent shop unlocks                                          | `syncShared()` pushes all cross-window state                                  | Levels and records sync through the same 60s tick                               |
+| `CareStorage` lived in `pet-care.ts`, imported by `bag-store.ts`             | `storage.ts` `Storage` interface                                              | New stores depend on storage, not on care                                       |
+| `webview-helpers.ts` mixed HTML, watcher wiring and init messages            | `webview-html.ts` (HTML) + provider owns wiring                               |                                                                                 |
+| The script list was copied in 4 places (template, builder, recorder, tests)  | `<!--MEDIA:file-->` in `webview.html`; `media-files.ts` reads it              | New scripts (`events.js`, `house.js`...) are a one-line change                  |
+| `extension.ts` was 300 lines, mostly the Customize menu                      | `settings.ts`, `customize-menu.ts`; `extension.ts` only wires things together |                                                                                 |
+| Transcript tailing was inside `claude-watcher.ts`                            | `transcript-tail.ts` `readLines(file, size, onLine)`                          | Prompt records reuse it for live stats **and** history backfill                 |
+| Pet states were a TS type plus a "mirrored in webview.js" comment            | `PET_STATES` list; `media/states.js`; a test checks they match                | Enemies and events key off states safely                                        |
+| `webview.js` was 3,131 lines including all DOM panels                        | `media/panels.js` owns the corner panels                                      | Records, challenges and house panels go next to the existing ones               |
+| One flaky webview test                                                       | Fixed (found the toy by its own tooltip)                                      | CI stays trustworthy                                                            |
 
 ---
 
-## Phase 1: Holiday events, Halloween first (target: before Oct 31, 2026)
+## Phase 1: Holiday events, Halloween first (done)
 
 Halloween is the deadline, and it doesn't depend on any other phase.
 
 **Extension**
+
 - `src/calendar.ts` (pure): `activeEvents(date: Date): EventId[]`.
   - Fixed: New Year (Dec 31-Jan 2), Valentine's (Feb 10-14), Halloween
     (Oct 24-31), Christmas (Dec 18-26).
@@ -65,6 +89,7 @@ Halloween is the deadline, and it doesn't depend on any other phase.
   date rolls over.
 
 **Webview**
+
 - `media/events.js`: data per event:
   - `decor`: things drawn in `scene.drawBack` / `drawFront`, e.g. pumpkins,
     cobwebs, snow, lights.
@@ -86,28 +111,29 @@ every event active at once (behavior test).
 
 ---
 
-## Phase 2: Turn tracking and weekly prompt records
+## Phase 2: Turn tracking and weekly prompt records (done)
 
 **Data: one record per prompt (a "turn")**, built from the transcript:
 
 ```ts
 interface TurnRecord {
-  promptId: string;        // from the user line; the dedupe key
+  promptId: string; // from the user line; the dedupe key
   sessionId: string;
-  project: string | null;  // basename of the session root
-  startedAt: number;       // user prompt timestamp
-  endedAt: number;         // end_turn / interrupt timestamp
-  words: number;           // prompt length
+  project: string | null; // basename of the session root
+  startedAt: number; // user prompt timestamp
+  endedAt: number; // end_turn / interrupt timestamp
+  words: number; // prompt length
   chars: number;
-  actions: number;         // tool_use blocks in the main transcript
-  subagents: number;       // Agent/Task tool calls
-  outputTokens: number;    // sum of assistant message.usage.output_tokens
+  actions: number; // tool_use blocks in the main transcript
+  subagents: number; // Agent/Task tool calls
+  outputTokens: number; // sum of assistant message.usage.output_tokens
   outcome: 'done' | 'interrupted';
-  preview: string;         // first 80 chars of the prompt, kept locally only
+  preview: string; // first 80 chars of the prompt, kept locally only
 }
 ```
 
 **Extension**
+
 - `src/turn-tracker.ts` (pure): `createTurns()` + `applyTurnLine(turns, line)`.
   It is a second consumer of the lines `readLines` already passes to
   `applyLine`, and returns a `TurnRecord` when a turn ends. It uses the same
@@ -133,11 +159,13 @@ interface TurnRecord {
   on `ready`, when a turn ends, and on the sync tick.
 
 **Webview**
+
 - A 🏆 tab in the bag panel (or its own corner button) showing this week's
   board, the totals (prompts, actions, agent hours) and the hall of fame.
 - The pet celebrates when a turn breaks a weekly record.
 
 **Settings**
+
 - `pet-agents.records` (boolean, default on).
 - `pet-agents.recordsShowPrompts` (boolean, **default off**): show prompt
   previews on the board. When off, the board shows only numbers and the
@@ -147,6 +175,7 @@ interface TurnRecord {
 The debug snapshot includes counts only.
 
 **Tests**: turn tracking against real-shaped transcript lines:
+
 - a normal turn, an interrupt, and compaction in the middle of a turn
 - sub-agent calls, and tool results arriving after the turn ends
 - the same prompt seen by two trackers is stored once
@@ -155,19 +184,19 @@ The debug snapshot includes counts only.
 
 ---
 
-## Phase 3: Levels, XP and weekly challenges
+## Phase 3: Levels, XP and weekly challenges (done)
 
 **XP comes from facts, never from counters**:
 
-| Source | XP | Dedupe key |
-|---|---|---|
-| Finished turn | 10 + 1 per action (cap 40) | `promptId` |
-| Test run passed | 15 | `tool_use` id |
-| Build passed | 10 | `tool_use` id |
-| Sub-agent finished | 5 | agent id |
-| Weekly record won | 50 | `week:category` |
-| Care action | 2 (cap 20/day) | `care:<day>:<n>` |
-| Challenge completed | 100 | `week:challengeId` |
+| Source              | XP                         | Dedupe key         |
+| ------------------- | -------------------------- | ------------------ |
+| Finished turn       | 10 + 1 per action (cap 40) | `promptId`         |
+| Test run passed     | 15                         | `tool_use` id      |
+| Build passed        | 10                         | `tool_use` id      |
+| Sub-agent finished  | 5                          | agent id           |
+| Weekly record won   | 50                         | `week:category`    |
+| Care action         | 2 (cap 20/day)             | `care:<day>:<n>`   |
+| Challenge completed | 100                        | `week:challengeId` |
 
 - `src/progress.ts` (pure): `level(xp)` uses a gentle curve (level n needs
   `50 * n * (n + 1)` XP) and returns the unlocks per level.
@@ -198,7 +227,7 @@ and differs across weeks; catch-up only triggers after a real gap.
 
 ---
 
-## Phase 4: Enemies (bugs you squash)
+## Phase 4: Enemies, bugs you squash (done)
 
 - `transcript-parser.ts` already knows test/build jobs and `is_error` results.
   Add `onJobEnd(job, ok)` (or an `outcomes` list on the update) so failures
@@ -220,7 +249,7 @@ and differs across weeks; catch-up only triggers after a real gap.
 
 ---
 
-## Phase 5: The house
+## Phase 5: The house (done)
 
 - A 🏠 corner button flips the panel to the pet's room: the same canvas, a
   different background layer (wall, floor and window, with the season from
@@ -241,13 +270,13 @@ and differs across weeks; catch-up only triggers after a real gap.
 
 ## Order and timing
 
-| When | What |
-|---|---|
-| Oct 20-30, 2026 | Phase 1 with Halloween only, then ship 0.4.0 |
-| Nov 2026 | Phase 2 (records + backfill); Thanksgiving decor (Nov 26) |
-| Dec 2026 | Phase 3 (levels + challenges); Christmas and New Year decor |
-| Jan-Feb 2027 | Phase 4 (enemies); Valentine's |
-| Spring 2027 | Phase 5 (house); Easter (Mar 28) |
+| When            | What                                                        |
+| --------------- | ----------------------------------------------------------- |
+| Oct 20-30, 2026 | Phase 1 with Halloween only, then ship 0.4.0                |
+| Nov 2026        | Phase 2 (records + backfill); Thanksgiving decor (Nov 26)   |
+| Dec 2026        | Phase 3 (levels + challenges); Christmas and New Year decor |
+| Jan-Feb 2027    | Phase 4 (enemies); Valentine's                              |
+| Spring 2027     | Phase 5 (house); Easter (Mar 28)                            |
 
 Each release: bump `version`, add a CHANGELOG entry, run `npm run media` if
 the visuals changed, get CI green, then `npx @vscode/vsce publish`.

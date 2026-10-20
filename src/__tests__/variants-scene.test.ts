@@ -78,7 +78,7 @@ const PetStates = sandbox['PetStates'] as {
 };
 const PetScene = sandbox['PetScene'] as {
   create(api: object): SceneApi;
-  TOYS: Array<{ id: string; rarity: string; kind: string }>;
+  TOYS: Array<{ id: string; rarity: string; kind: string; event?: string }>;
   RARITY: Record<string, unknown>;
   PRICES: Record<string, Array<{ rarity: string; n: number }>>;
 };
@@ -229,7 +229,7 @@ describe('animation variants', () => {
 describe('scene', () => {
   const pet = { x: 0, y: 30, wx: 0, scale: 6 };
 
-  function makeScene(config: Record<string, unknown>) {
+  function makeScene(config: Record<string, unknown>, events: string[] = []) {
     const saved: Array<Record<string, number>> = [];
     const spent: Array<Record<string, number>> = [];
     const ctx = new Proxy(
@@ -247,6 +247,7 @@ describe('scene', () => {
       playing: () => false,
       onBag: (bag: Record<string, number>) => saved.push(bag),
       onSpent: (s: Record<string, number>) => spent.push(s),
+      events: () => events,
     });
     return { scene, saved, spent };
   }
@@ -255,6 +256,35 @@ describe('scene', () => {
     for (const rarity of Object.keys(PetScene.RARITY)) {
       expect(PetScene.TOYS.some((t) => t.rarity === rarity)).toBe(true);
     }
+  });
+
+  it('has one holiday toy per event, and only holiday toys are of the event rarity', () => {
+    const eventToys = PetScene.TOYS.filter((t) => t.event);
+    expect(eventToys.map((t) => t.event).sort()).toEqual(
+      ['christmas', 'easter', 'halloween', 'newyear', 'thanksgiving', 'valentine'].sort(),
+    );
+    expect(eventToys.every((t) => t.rarity === 'event')).toBe(true);
+    expect(PetScene.TOYS.filter((t) => t.rarity === 'event')).toHaveLength(eventToys.length);
+  });
+
+  it('never finds a holiday toy outside its event', () => {
+    const { scene, saved } = makeScene({ toys: true, machines: true });
+    for (let i = 0; i < 300; i++) {
+      scene.find();
+    }
+    const found = Object.keys(saved[saved.length - 1]);
+    const holiday = new Set(PetScene.TOYS.filter((t) => t.event).map((t) => t.id));
+    expect(found.filter((id) => holiday.has(id))).toEqual([]);
+  });
+
+  it("finds the running event's toy while it is on, and no other event's", () => {
+    const { scene, saved } = makeScene({ toys: true, machines: true }, ['halloween']);
+    for (let i = 0; i < 60; i++) {
+      scene.find();
+    }
+    const found = Object.keys(saved[saved.length - 1]);
+    expect(found).toContain('pumpkin');
+    expect(found).not.toContain('snowman');
   });
 
   it('puts every find straight into the bag and saves it', () => {

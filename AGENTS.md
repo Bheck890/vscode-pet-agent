@@ -18,10 +18,11 @@ A VS Code extension (`bheck890.pet-agents`, display name **Pet Agents**) that dr
   - `webview-html.ts` page HTML + CSP; `media-files.ts` reads the script list from `media/webview.html`
   - `transcript-tail.ts` reads appended JSONL lines; `transcript-parser.ts` lines -> pet state (`PET_STATES`); `claude-watcher.ts` picks which sessions and sub-agents to show
   - `state-watcher.ts` + `session-tracker.ts` peon-ping polling
-  - `storage.ts` the globalState interface; stores: `pet-care.ts`, `bag-store.ts`
+  - `storage.ts` the globalState interface; stores: `pet-care.ts`, `bag-store.ts`, `records-store.ts`, `progress-store.ts`, `house-store.ts` (all merge across windows)
+  - Games (`docs/Plans/Roadmap.md`): `calendar.ts` holidays/weeks; `turn-tracker.ts` + `records*.ts` weekly prompt records and backfill; `progress*.ts` XP facts, levels, challenges; `games.ts` wires watcher events into them
   - `pet-config.ts`, `pet-names.ts`, `workspace.ts`
 - `media/` webview (plain JS with `// @ts-check`), loaded in the order `webview.html` lists them (`<!--MEDIA:file-->`):
-  `pets.js` art, `states.js` state looks, `play.js` care, `variants.js` animation variants, `scene.js` toys/machines, `panels.js` corner panels (care, bag/shop, settings), `webview.js` renderer + input. Each helper is `Pet*.create(api)` or pure data on `window.Pet*`.
+  `pets.js` art (+ holiday COSTUMES), `states.js` state looks, `play.js` care, `variants.js` animation variants, `scene.js` toys/machines, `events.js` holidays, `enemies.js` bugs to squash, `house.js` the house, `panels.js` corner panels (care, bag/shop, settings, trophy, house), `webview.js` renderer + input. Each helper is `Pet*.create(api)` or pure data on `window.Pet*`.
 - `scripts/record-media.js` renders README GIFs/screenshots (`docs/images/`) and `media/assets/icon.png` in headless Chrome with a fake clock
 - `src/__tests__/` Jest. Webview scripts are loaded with `vm` in template order; `manifest.test.ts` checks package.json against the code and README.
 - `docs/Plans/Roadmap.md` the plan for holidays, records, levels, enemies and the house.

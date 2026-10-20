@@ -113,6 +113,17 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     'settings-toggle',
     'settings-panel',
     'action-list',
+    'trophy-toggle',
+    'trophy-panel',
+    'trophy-title',
+    'trophy-tabs',
+    'trophy-view',
+    'house-toggle',
+    'house-panel',
+    'house-note',
+    'house-items',
+    'house-themes',
+    'house-done',
   ]) {
     elements[id] = fakeEl();
   }
@@ -712,7 +723,7 @@ describe('webview behavior', () => {
     });
     elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
     expect(elements['bag-panel'].hidden).toBe(false);
-    expect(elements['bag-title'].textContent).toContain('2/24 found');
+    expect(elements['bag-title'].textContent).toMatch(/2\/\d+ found/);
     expect(elements['bag-grid'].innerHTML).toContain('data-toy="yarn"');
     expect(elements['bag-grid'].innerHTML).toContain('x2');
 
@@ -1140,5 +1151,309 @@ describe('webview behavior', () => {
     expect(vscodeApi.postMessage.mock.calls).toEqual([
       [expect.objectContaining({ command: 'log', level: 'warn' })],
     ]);
+  });
+
+  it('dresses up for holidays, and not when holidays are off', () => {
+    jest.useFakeTimers();
+    try {
+      const { send, hover, tooltip, runFrames } = runWebviewScript();
+      send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      send({ command: 'calendar', day: '2026-10-30', events: ['halloween'], season: 'autumn' });
+      runFrames(3000);
+      hover(50, 80);
+      expect(tooltip.innerHTML).toContain('Halloween');
+
+      send({ command: 'reinit', config: { ...CONFIG, holidays: false } });
+      runFrames(100);
+      hover(50, 80);
+      expect(tooltip.innerHTML).not.toContain('Halloween');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('draws every holiday at once without errors', () => {
+    jest.useFakeTimers();
+    try {
+      const { send, runFrames } = runWebviewScript();
+      send({
+        command: 'init',
+        config: { ...CONFIG, artStyle: 'pixel' },
+        state: { petX: 0, petY: 30 },
+      });
+      send({
+        command: 'calendar',
+        day: '2026-12-31',
+        events: ['newyear', 'valentine', 'easter', 'halloween', 'thanksgiving', 'christmas'],
+        season: 'winter',
+      });
+      runFrames(6000);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('ignores a malformed calendar', () => {
+    const { send } = runWebviewScript();
+    send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    send({ command: 'calendar', events: 'halloween' });
+    send({ command: 'calendar', events: ['not-a-holiday'] });
+  });
+
+  /** The view's own debug snapshot, via the settings panel button. */
+  function snapshotOf(h: ReturnType<typeof runWebviewScript>): Record<string, unknown> {
+    h.elements['gather-logs'].listeners['click'].forEach((l) => l({}));
+    const msg = h.vscodeApi.postMessage.mock.calls
+      .map(([m]) => m)
+      .filter((m) => m.command === 'gather-logs')
+      .pop() as unknown as { snapshot: string };
+    return JSON.parse(msg.snapshot);
+  }
+
+  const clickEl = (el: { listeners: Record<string, Array<(e: unknown) => void>> }, target = {}) =>
+    el.listeners['click'].forEach((l) => l({ target }));
+
+  const PROGRESS = {
+    command: 'progress-update',
+    level: 3,
+    xp: 350,
+    floor: 300,
+    next: 600,
+    week: '2026-10-19',
+    weekXp: 120,
+    challenges: [
+      { id: 'tests', emoji: '🧪', text: 'Pass 5 test runs', progress: 2, target: 5, done: false },
+      {
+        id: 'record',
+        emoji: '🏆',
+        text: 'Set a weekly prompt record',
+        progress: 1,
+        target: 1,
+        done: true,
+      },
+    ],
+  };
+
+  const RECORDS = {
+    command: 'records-update',
+    week: '2026-10-19',
+    records: [
+      {
+        id: 'busiest',
+        emoji: '⚙️',
+        title: 'Busiest prompt',
+        value: '40 actions in 9m 00s',
+        project: 'app',
+        preview: 'make <b>it</b> fast',
+        endedAt: 1,
+      },
+    ],
+    hallOfFame: [],
+    totals: { prompts: 3, actions: 50, subagents: 1, agentMs: 600000, agentTime: '10m 00s' },
+    broken: [],
+  };
+
+  it('shows the level, challenges and records in the trophy panel, escaping prompt text', () => {
+    const h = runWebviewScript();
+    h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    h.send(PROGRESS);
+    h.send(RECORDS);
+    clickEl(h.elements['trophy-toggle']);
+    expect(h.elements['trophy-panel'].hidden).toBe(false);
+    const level = h.elements['trophy-view'].innerHTML;
+    expect(level).toContain('Level 3');
+    expect(level).toContain('Pass 5 test runs');
+    expect(level).toContain('2/5');
+    expect(level).toContain('class="challenge done"');
+    h.elements['trophy-tabs'].listeners['click'].forEach((l) =>
+      l({ target: { closest: () => ({ dataset: { tab: 'records' } }) } }),
+    );
+    const board = h.elements['trophy-view'].innerHTML;
+    expect(board).toContain('Busiest prompt');
+    expect(board).toContain('40 actions in 9m 00s');
+    expect(board).toContain('&lt;b&gt;it&lt;/b&gt;');
+    expect(board).not.toContain('<b>it</b>');
+  });
+
+  it('hides the buttons for switched-off features and closes their panels', () => {
+    const h = runWebviewScript();
+    h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    expect(h.elements['trophy-toggle'].hidden).toBe(false);
+    expect(h.elements['house-toggle'].hidden).toBe(false);
+    clickEl(h.elements['house-toggle']);
+    expect(h.elements['house-panel'].hidden).toBe(false);
+    h.send({
+      command: 'reinit',
+      config: { ...CONFIG, levels: false, records: false, house: false },
+    });
+    expect(h.elements['trophy-toggle'].hidden).toBe(true);
+    expect(h.elements['house-toggle'].hidden).toBe(true);
+    expect(h.elements['house-panel'].hidden).toBe(true);
+  });
+
+  it('furnishes the house with what the level unlocks, and saves it', () => {
+    const h = runWebviewScript();
+    h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    h.send({ ...PROGRESS, level: 2 });
+    clickEl(h.elements['house-toggle']);
+    const items = h.elements['house-items'].innerHTML;
+    expect(items).toContain('data-furniture="bed"');
+    expect(items).toContain('data-furniture="plant"');
+    expect(items).not.toContain('data-furniture="sofa"');
+    expect(items).toContain('unlocks at level 6');
+    h.elements['house-items'].listeners['click'].forEach((l) =>
+      l({ target: { closest: () => ({ dataset: { furniture: 'bed' } }) } }),
+    );
+    const saved = h.vscodeApi.postMessage.mock.calls
+      .map(([m]) => m as unknown as { command: string; layout?: { items: Array<{ id: string }> } })
+      .filter((m) => m.command === 'house-save')
+      .pop();
+    expect(saved?.layout?.items.map((i) => i.id)).toEqual(['bed']);
+    expect(snapshotOf(h)).toMatchObject({ inHouse: true });
+    // A locked theme can't be picked.
+    const saves = () =>
+      h.vscodeApi.postMessage.mock.calls.filter(([m]) => m.command === 'house-save').length;
+    const before = saves();
+    h.elements['house-themes'].listeners['click'].forEach((l) =>
+      l({ target: { closest: () => ({ dataset: { theme: 'space' } }) } }),
+    );
+    expect(saves()).toBe(before);
+    h.elements['house-themes'].listeners['click'].forEach((l) =>
+      l({ target: { closest: () => ({ dataset: { theme: 'cozy' } }) } }),
+    );
+    expect(saves()).toBe(before + 1);
+  });
+
+  it('lets you drag furniture around the room', () => {
+    jest.useFakeTimers();
+    try {
+      const h = runWebviewScript();
+      h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      h.send({
+        command: 'house',
+        layout: { items: [{ id: 'bed', x: 0.8, y: 0.5, at: 1 }], theme: 'cozy', themeAt: 0 },
+      });
+      clickEl(h.elements['house-toggle']);
+      h.runFrames(100);
+      let bed: { x: number; y: number } | null = null;
+      for (let y = 100; y <= 260 && !bed; y += 4) {
+        for (let x = 300; x <= 600 && !bed; x += 4) {
+          h.hover(x, y);
+          if (h.tooltip.innerHTML.includes('Drag to move it')) {
+            bed = { x, y };
+          }
+        }
+      }
+      expect(bed).not.toBeNull();
+      h.canvasListeners['mousedown'].forEach((l) =>
+        l({ button: 0, offsetX: bed!.x, offsetY: bed!.y, preventDefault: () => undefined }),
+      );
+      h.documentListeners['mousemove'].forEach((l) => l({ clientX: 60, clientY: bed!.y }));
+      h.documentListeners['mouseup'].forEach((l) => l({}));
+      const saved = h.vscodeApi.postMessage.mock.calls
+        .map(([m]) => m as unknown as { command: string; layout?: { items: Array<{ x: number }> } })
+        .filter((m) => m.command === 'house-save')
+        .pop();
+      expect(saved?.layout?.items[0].x).toBeLessThan(0.3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('lets bugs in for failing runs and squashes them on the next pass', () => {
+    jest.useFakeTimers();
+    try {
+      const h = runWebviewScript();
+      h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      const update = (outcomes: object[]) => ({
+        command: 'claude-update',
+        main: { sessionId: 's', state: 'idle', detail: '', seq: 1, project: 'app', outcomes },
+        subagents: [],
+        sessions: [],
+      });
+      const fail = { id: 't1', kind: 'test', ok: false, at: Date.now() };
+      const buildFail = { id: 'b1', kind: 'build', ok: false, at: Date.now() };
+      h.send(update([fail, buildFail]));
+      h.runFrames(200);
+      expect(snapshotOf(h)).toMatchObject({ enemies: 2 });
+      // The same outcomes again change nothing.
+      h.send(update([fail, buildFail]));
+      expect(snapshotOf(h)).toMatchObject({ enemies: 2 });
+      h.send(update([fail, buildFail, { id: 't2', kind: 'test', ok: true, at: Date.now() }]));
+      h.runFrames(1000);
+      expect(snapshotOf(h)).toMatchObject({ enemies: 1 });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('leaves old failures and switched-off enemies alone', () => {
+    const h = runWebviewScript();
+    h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+    const old = Date.now() - 9 * 3600000;
+    h.send({
+      command: 'claude-update',
+      main: {
+        sessionId: 's',
+        state: 'idle',
+        detail: '',
+        seq: 1,
+        outcomes: [{ id: 'old', kind: 'test', ok: false, at: old }],
+      },
+      subagents: [],
+      sessions: [],
+    });
+    expect(snapshotOf(h)).toMatchObject({ enemies: 0 });
+    h.send({ command: 'reinit', config: { ...CONFIG, enemies: false } });
+    h.send({
+      command: 'claude-update',
+      main: {
+        sessionId: 's',
+        state: 'idle',
+        detail: '',
+        seq: 2,
+        outcomes: [{ id: 'new', kind: 'test', ok: false, at: Date.now() }],
+      },
+      subagents: [],
+      sessions: [],
+    });
+    expect(snapshotOf(h)).toMatchObject({ enemies: 0 });
+  });
+
+  it('pulls the pet out of its house when the agent starts work', () => {
+    jest.useFakeTimers();
+    try {
+      const h = runWebviewScript();
+      h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      clickEl(h.elements['house-toggle']);
+      h.runFrames(100);
+      expect(h.elements['house-panel'].hidden).toBe(false);
+      h.send({
+        command: 'claude-update',
+        main: { sessionId: 's', state: 'writing', detail: 'Edit a.ts', seq: 1, project: 'app' },
+        subagents: [],
+        sessions: [],
+      });
+      h.runFrames(100);
+      expect(h.elements['house-panel'].hidden).toBe(true);
+      expect(snapshotOf(h)).toMatchObject({ inHouse: false });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cheers level-ups and XP without errors', () => {
+    jest.useFakeTimers();
+    try {
+      const h = runWebviewScript();
+      h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 } });
+      h.send({ ...PROGRESS, level: 1, xp: 90, floor: 0, next: 100 });
+      h.send({ ...PROGRESS, level: 1, xp: 95, floor: 0, next: 100 });
+      h.send({ ...PROGRESS, level: 2, xp: 120, floor: 100, next: 300 });
+      h.send({ ...RECORDS, broken: ['busiest'] });
+      h.runFrames(2000);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

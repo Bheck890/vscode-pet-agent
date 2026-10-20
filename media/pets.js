@@ -731,6 +731,7 @@
     r: '#e63946',
     c: '#4fd1ff',
     G: '#3fa34d',
+    P: '#ff9fc4',
   };
 
   /** Glasses frames (or filled shades) generated from the species' eye position. */
@@ -884,6 +885,111 @@
     },
   };
 
+  /**
+   * Holiday costumes, drawn like accessories (same keys) while an event is
+   * on. The user's own accessory wins when both want the same slot.
+   */
+  const COSTUMES = {
+    witchHat: {
+      slot: 'head',
+      color: '#6a3fb5',
+      build: (sp) => ({
+        grid: [
+          '.........AA.....',
+          '........AaA.....',
+          '.......AaaA.....',
+          '......AaaaaA....',
+          '......AaaaaA....',
+          '.....AaaaaaaA...',
+          '.....AyyyyyyA...',
+          'AAAAAaaaaaaaAAAA',
+          '.AAAAAAAAAAAAAA.',
+        ],
+        x: 8,
+        y: sp.headTop - 8,
+      }),
+    },
+    santaHat: {
+      slot: 'head',
+      color: '#e63946',
+      build: (sp) => ({
+        grid: [
+          '.............ww.',
+          '.........AAAAww.',
+          '.......AAaaaA...',
+          '.....AAaaaaaA...',
+          '....AaaaaaaaaA..',
+          '..wwwwwwwwwwwww.',
+          '..wwwwwwwwwwwww.',
+        ],
+        x: 8,
+        y: sp.headTop - 5,
+      }),
+    },
+    bunnyEars: {
+      slot: 'head',
+      color: '#f4eef6',
+      build: (sp) => ({
+        grid: [
+          '.AA......AA.',
+          'AaaA....AaaA',
+          'APaA....APaA',
+          'APaA....APaA',
+          'APaA....APaA',
+          'APaA....APaA',
+          '.AaA....AaA.',
+          '.AaA....AaA.',
+          '.AAAAAAAAAA.',
+        ],
+        x: 10,
+        y: sp.headTop - 8,
+      }),
+    },
+    heartBand: {
+      slot: 'head',
+      color: '#ff4f7b',
+      build: (sp) => ({
+        grid: ['....rr.rr....', '...rrrrrrr...', '....rrrrr....', '.....rrr.....', 'AAAAAAAAAAAAA'],
+        x: 10,
+        y: sp.headTop - 4,
+      }),
+    },
+    pilgrimHat: {
+      slot: 'head',
+      color: '#2a2a38',
+      build: (sp) => ({
+        grid: [
+          '....AAAAAAAA....',
+          '....AaaaaaaA....',
+          '....AaaaaaaA....',
+          '....AaaaaaaA....',
+          '....AYyyyyYA....',
+          '....AaYyyYaA....',
+          'AAAAAAAAAAAAAAAA',
+        ],
+        x: 8,
+        y: sp.headTop - 6,
+      }),
+    },
+    partyCone: {
+      slot: 'head',
+      color: '#4f7bff',
+      build: (sp) => ({
+        grid: [
+          '....y....',
+          '...AaA...',
+          '...AyA...',
+          '..AaaaA..',
+          '..AyyyA..',
+          '.AaaaaaA.',
+          'AyyyyyyyA',
+        ],
+        x: 12,
+        y: sp.headTop - 6,
+      }),
+    },
+  };
+
   // -- Colour helpers ---------------------------------------------------------
 
   /** @param {string} hex */
@@ -1028,7 +1134,7 @@
    * @param {Record<string,string>} pal
    * @param {{ eyes?: string, mouth?: string, frame?: number, look?: number,
    *   twitch?: boolean, pattern?: string, accessory?: string,
-   *   accessoryColor?: string, hide?: string[] }} expr
+   *   accessoryColor?: string, costume?: string, hide?: string[] }} expr
    */
   function compose(species, pal, expr) {
     const sp = SPECIES[species] || SPECIES.cat;
@@ -1083,6 +1189,18 @@
       stamp(px, placed.grid, placed.x, placed.y, accPal, false);
     }
 
+    const costume = expr.costume ? COSTUMES[expr.costume] : null;
+    if (
+      costume &&
+      !(expr.hide || []).includes(costume.slot) &&
+      !(acc && acc.slot === costume.slot)
+    ) {
+      const a = costume.color;
+      const pal2 = Object.assign({ a, A: mix(a, '#000000', 0.45) }, ACC_FIXED);
+      const placed = costume.build(sp);
+      stamp(px, placed.grid, placed.x, placed.y, pal2, false);
+    }
+
     return px;
   }
 
@@ -1134,6 +1252,7 @@
     PROPS,
     PATTERNS,
     ACCESSORIES,
+    COSTUMES,
     speciesIds: Object.keys(SPECIES),
     palette,
     compose,

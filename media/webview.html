@@ -13,6 +13,24 @@
     <button id="care-toggle" class="corner" title="Pet care">🐾</button>
     <button id="bag-toggle" class="corner" title="Toy bag">🎒</button>
     <button id="settings-toggle" class="corner" title="Pet settings">⚙️</button>
+    <button id="trophy-toggle" class="corner" title="Level, challenges and prompt records">
+      🏆
+    </button>
+    <button id="house-toggle" class="corner" title="The pet's house">🏠</button>
+    <div id="trophy-panel" class="panel" hidden>
+      <div class="panel-head"><span id="trophy-title">🏆</span></div>
+      <div id="trophy-tabs" class="tabs"></div>
+      <div id="trophy-view"></div>
+    </div>
+    <div id="house-panel" class="panel" hidden>
+      <div class="panel-head">
+        <span>🏠 House</span>
+        <span id="house-note" class="dim"></span>
+        <button id="house-done" title="Hide this bar; 🏠 leaves the house">Done</button>
+      </div>
+      <div id="house-items" class="food-choices"></div>
+      <div id="house-themes" class="food-choices"></div>
+    </div>
     <div id="bag-panel" class="panel" hidden>
       <div class="panel-head">
         <span id="bag-title">🎒 Bag</span>
@@ -44,6 +62,15 @@
         repo has none</label
       >
       <label><input type="checkbox" data-setting="stateColors" /> 🌈 State colours</label>
+      <label><input type="checkbox" data-setting="holidays" /> 🎃 Holiday events</label>
+      <label><input type="checkbox" data-setting="records" /> 🏆 Weekly prompt records</label>
+      <label
+        ><input type="checkbox" data-setting="recordsShowPrompts" /> 👀 Show prompts on the records
+        board</label
+      >
+      <label><input type="checkbox" data-setting="levels" /> ⭐ Levels and challenges</label>
+      <label><input type="checkbox" data-setting="enemies" /> 🐛 Bugs to squash</label>
+      <label><input type="checkbox" data-setting="house" /> 🏠 The pet's house</label>
       <details>
         <summary>🎭 Actions (untick the ones you don't like)</summary>
         <div id="action-list"></div>
@@ -81,6 +108,9 @@
     <script nonce="<!--NONCE-->" src="<!--MEDIA:play.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:variants.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:scene.js-->"></script>
+    <script nonce="<!--NONCE-->" src="<!--MEDIA:events.js-->"></script>
+    <script nonce="<!--NONCE-->" src="<!--MEDIA:enemies.js-->"></script>
+    <script nonce="<!--NONCE-->" src="<!--MEDIA:house.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:panels.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:webview.js-->"></script>
   </body>

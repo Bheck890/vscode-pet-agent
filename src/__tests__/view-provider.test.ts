@@ -18,6 +18,11 @@ import { PeonViewProvider } from '../PeonViewProvider';
 import { CareStore } from '../pet-care';
 import type { Storage } from '../storage';
 import { BagStore } from '../bag-store';
+import { HouseStore } from '../house-store';
+import { ProgressService } from '../progress-service';
+import { ProgressStore } from '../progress-store';
+import { RecordsService } from '../records-service';
+import { RecordsStore } from '../records-store';
 import { readPetConfig } from '../pet-config';
 import type { StateWatcher } from '../state-watcher';
 import type { ClaudeWatcher, ClaudeUpdate } from '../claude-watcher';
@@ -108,13 +113,21 @@ function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?:
     show: jest.fn(),
   };
   const settings: Record<string, unknown> = { species: 'cat', name: 'Mochi', ...opts.settings };
+  const now = () => new Date(2026, 9, 30, 12);
+  const gameStorage = memory();
+  const records = new RecordsService(new RecordsStore(gameStorage), gameStorage, now);
+  const progress = new ProgressService(new ProgressStore(gameStorage), now);
   const provider = new PeonViewProvider({
     mediaPath: MEDIA,
     peon: watchers.peon,
     claude: watchers.claude,
     getConfig: () => readPetConfig((k) => settings[k]),
+    now,
     care: new CareStore(careStorage),
     bag: new BagStore(bagStorage),
+    records,
+    progress,
+    house: new HouseStore(gameStorage),
     saveSetting,
     log,
   });
@@ -122,7 +135,20 @@ function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?:
   const resolve = (view = v) =>
     provider.resolveWebviewView(view.view as never, { state: opts.state } as never, {} as never);
   resolve();
-  return { provider, v, watchers, careStorage, bagStorage, saveSetting, settings, resolve, log };
+  return {
+    provider,
+    v,
+    watchers,
+    careStorage,
+    bagStorage,
+    gameStorage,
+    records,
+    progress,
+    saveSetting,
+    settings,
+    resolve,
+    log,
+  };
 }
 
 describe('PeonViewProvider', () => {
@@ -332,5 +358,96 @@ describe('PeonViewProvider', () => {
     provider.refresh();
     expect(v.webview.html).not.toBe(before);
     expect(v.webview.html.replace(/[0-9a-f]{32}/g, '')).toBe(before.replace(/[0-9a-f]{32}/g, ''));
+  });
+
+  it('sends the local calendar on ready, with settings changes and every sync', () => {
+    const { v, provider, settings } = setup();
+    v.send({ command: 'ready' });
+    expect(v.last('calendar')).toEqual({
+      command: 'calendar',
+      day: '2026-10-30',
+      events: ['halloween'],
+      season: 'autumn',
+    });
+    settings['hemisphere'] = 'south';
+    v.posted.length = 0;
+    provider.reinit();
+    expect(v.last('calendar')).toMatchObject({ season: 'spring' });
+    v.posted.length = 0;
+    provider.syncShared();
+    expect(v.last('calendar')).toMatchObject({ events: ['halloween'] });
+  });
+
+  it('sends the house, records and level on ready', () => {
+    const { v } = setup();
+    v.send({ command: 'ready' });
+    expect(v.last('house')).toMatchObject({ layout: { items: [], theme: 'cozy' } });
+    expect(v.last('records-update')).toMatchObject({ week: '2026-10-26', records: [] });
+    expect(v.last('progress-update')).toMatchObject({ level: 1, xp: 0 });
+  });
+
+  it('earns XP for care that worked, not for refusals', () => {
+    const { v, careStorage, gameStorage } = setup();
+    careStorage.data['petCare'] = { fullness: 99, fun: 50, clean: 50, updatedAt: Date.now() };
+    v.send({ command: 'care', action: 'kibble' });
+    expect(Object.keys((gameStorage.data['petXp'] as object) ?? {})).toHaveLength(0);
+    v.send({ command: 'care', action: 'pet' });
+    expect(Object.keys(gameStorage.data['petXp'] as object)).toHaveLength(1);
+    expect(v.last('progress-update')).toMatchObject({ xp: 2 });
+  });
+
+  it('saves the house layout, merged with what other windows saved', () => {
+    const { v, gameStorage } = setup();
+    gameStorage.data['petHouse'] = {
+      items: [{ id: 'bed', x: 0.2, y: 0.9, at: 100 }],
+      theme: 'cozy',
+      themeAt: 0,
+    };
+    v.send({
+      command: 'house-save',
+      layout: { items: [{ id: 'lamp', x: 0.5, y: 0.9, at: 200 }], theme: 'mint', themeAt: 5 },
+    });
+    v.send({ command: 'house-save', layout: 'nope' });
+    expect(gameStorage.data['petHouse']).toMatchObject({
+      items: [
+        { id: 'bed', x: 0.2 },
+        { id: 'lamp', x: 0.5 },
+      ],
+      theme: 'mint',
+    });
+  });
+
+  it('cheers new records and hides prompt text unless the user wants it', () => {
+    const { v, records, settings } = setup();
+    const at = (ms: number) => new Date(2026, 9, 30, 11, 0, ms / 1000).toISOString();
+    records.line('s', {
+      type: 'user',
+      promptId: 'p1',
+      timestamp: at(0),
+      message: { content: 'go' },
+    });
+    records.line('s', {
+      type: 'assistant',
+      timestamp: at(9000),
+      message: { stop_reason: 'end_turn', content: [] },
+    });
+    const update = v.last('records-update') as { broken: string[]; records: object[] };
+    expect(update.broken).toContain('marathon');
+    expect(update.records[0]).not.toHaveProperty('preview');
+    settings['recordsShowPrompts'] = true;
+    records.line('s', {
+      type: 'user',
+      promptId: 'p2',
+      timestamp: at(10000),
+      message: { content: 'more' },
+    });
+    records.line('s', {
+      type: 'assistant',
+      timestamp: at(30000),
+      message: { stop_reason: 'end_turn', content: [] },
+    });
+    expect(
+      (v.last('records-update') as { records: Array<{ preview?: string }> }).records[0].preview,
+    ).toBeDefined();
   });
 });

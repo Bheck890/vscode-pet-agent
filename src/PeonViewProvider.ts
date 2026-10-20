@@ -4,6 +4,10 @@ import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
 import { CareStore } from './pet-care';
 import { BagStore } from './bag-store';
+import { calendarFor } from './calendar';
+import { HouseStore } from './house-store';
+import { ProgressService } from './progress-service';
+import { RecordsService } from './records-service';
 import { FromWebview, ToWebview, WebviewState, parseFromWebview } from './protocol';
 import { getNonce, getWebviewOptions, buildHtml } from './webview-html';
 
@@ -19,8 +23,13 @@ export interface PetViewDeps {
   peon: StateWatcher;
   claude: ClaudeWatcher;
   getConfig: () => PetConfig;
+  /** The current time, so tests can pin the date. */
+  now: () => Date;
   care: CareStore;
   bag: BagStore;
+  records: RecordsService;
+  progress: ProgressService;
+  house: HouseStore;
   saveSetting: (key: string, value: unknown) => Thenable<void>;
   log: PetLog;
 }
@@ -89,6 +98,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
           unlocks: bag.getUnlocks(),
         };
         post(webviewView.webview, { command: 'init', config: getConfig(), state });
+        post(webviewView.webview, { command: 'house', layout: this.deps.house.get() });
         const latest = claude.latest();
         if (latest) {
           post(webviewView.webview, { command: 'claude-update', ...latest });
@@ -96,9 +106,17 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
         this.syncShared();
         break;
       }
-      case 'care':
+      case 'care': {
         // The webview only sends this when the agent is not working.
-        post(webviewView.webview, { command: 'care-update', ...care.act(message.action) });
+        const result = care.act(message.action);
+        post(webviewView.webview, { command: 'care-update', ...result });
+        if (result.ok) {
+          this.deps.progress.care(message.action);
+        }
+        break;
+      }
+      case 'house-save':
+        this.deps.house.save(message.layout);
         break;
       case 'log':
         log[message.level](`view: ${message.message}`);
@@ -135,8 +153,12 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
    * returned Disposable removes only this webview's listeners.
    */
   private attachWatchers(webview: vscode.Webview): vscode.Disposable {
-    const { peon, claude } = this.deps;
+    const { peon, claude, records, progress } = this.deps;
     const disposables = [
+      records.onTurns((_turns, broken) => this.sendRecords(webview, broken)),
+      progress.onChange(() =>
+        post(webview, { command: 'progress-update', ...progress.snapshot() }),
+      ),
       // peon-ping reports every agent on the machine; only this workspace's move this pet.
       peon.onPeonEvent((e) => {
         if (claude.ownsDir(e.cwd)) {
@@ -160,6 +182,25 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
     const { care, bag } = this.deps;
     post(this.view.webview, { command: 'care-update', stats: care.get() });
     post(this.view.webview, { command: 'unlocks', unlocks: bag.getUnlocks() });
+    this.sendCalendar(this.view.webview);
+    this.sendRecords(this.view.webview);
+    post(this.view.webview, { command: 'progress-update', ...this.deps.progress.snapshot() });
+    post(this.view.webview, { command: 'house', layout: this.deps.house.get() });
+  }
+
+  /** The records board; `broken` names categories a turn just took, for a cheer. */
+  private sendRecords(webview: vscode.Webview, broken: string[] = []): void {
+    const { records, getConfig } = this.deps;
+    post(webview, {
+      command: 'records-update',
+      ...records.snapshot(getConfig().recordsShowPrompts, broken),
+    });
+  }
+
+  /** Today's holiday events and season; re-sent on every tick so midnight rolls over. */
+  private sendCalendar(webview: vscode.Webview): void {
+    const { getConfig, now } = this.deps;
+    post(webview, { command: 'calendar', ...calendarFor(now(), getConfig().hemisphere) });
   }
 
   /** The settings panel's "Gather debug logs": both sides' state into the log, then show it. */
@@ -205,6 +246,8 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
   reinit(): void {
     if (this.view) {
       post(this.view.webview, { command: 'reinit', config: this.deps.getConfig() });
+      this.sendCalendar(this.view.webview);
+      this.sendRecords(this.view.webview);
     }
   }
 }

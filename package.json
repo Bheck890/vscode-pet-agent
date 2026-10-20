@@ -226,6 +226,49 @@
           "default": true,
           "description": "When no agents are running in this repo, show busy Claude sessions from your other repos (other VS Code windows) as small pets, labelled with their repo. They step aside as soon as an agent starts here, and never take over this window's pet."
         },
+        "pet-agents.holidays": {
+          "type": "boolean",
+          "default": true,
+          "description": "Holiday events: decorations, a costume and a limited-time toy for Halloween, Thanksgiving, Christmas, New Year, Valentine's Day and Easter, by your local date."
+        },
+        "pet-agents.hemisphere": {
+          "type": "string",
+          "default": "north",
+          "enum": [
+            "north",
+            "south"
+          ],
+          "enumDescriptions": [
+            "Northern hemisphere seasons",
+            "Southern hemisphere seasons"
+          ],
+          "description": "Which hemisphere's seasons show through the house window."
+        },
+        "pet-agents.records": {
+          "type": "boolean",
+          "default": true,
+          "description": "Weekly prompt records: the tiniest prompt with the longest run, the busiest prompt and more, worked out from your local Claude Code transcripts."
+        },
+        "pet-agents.recordsShowPrompts": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the start of each record-holding prompt on the records board. Off shows only the numbers and the repo. Prompts never leave your machine either way."
+        },
+        "pet-agents.levels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Earn XP from finished prompts, passing tests and builds, helpers and care; level up to unlock furniture for the pet's house. Three new weekly challenges every Monday."
+        },
+        "pet-agents.enemies": {
+          "type": "boolean",
+          "default": true,
+          "description": "A failing test or build lets a bug or gremlin in, and a long wait for your OK lets a slime creep up. The next passing run squashes them."
+        },
+        "pet-agents.house": {
+          "type": "boolean",
+          "default": true,
+          "description": "A house for your pet (the 🏠 button): furnish it with what you unlock by levelling up."
+        },
         "pet-agents.size": {
           "type": "string",
           "enum": [

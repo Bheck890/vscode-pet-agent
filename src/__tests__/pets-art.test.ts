@@ -9,6 +9,7 @@ interface PetArtApi {
   PROPS: Record<string, { grid: string[]; palette: Record<string, string> }>;
   PATTERNS: string[];
   ACCESSORIES: Record<string, { slot: string; color: string }>;
+  COSTUMES: Record<string, { slot: string; color: string; build(sp: unknown): { grid: string[] } }>;
   speciesIds: string[];
   palette(
     species: string,
@@ -106,6 +107,31 @@ describe('pet art', () => {
       (x) => x !== 'none' && !(sp === 'bird' && x === 'socks'),
     )) {
       expect([pattern, diff(render(sp, { pattern }), plain) > 2]).toEqual([pattern, true]);
+    }
+  });
+
+  it.each(['cat', 'dog', 'bird', 'fox'])('every holiday costume shows on the %s', (sp) => {
+    const plain = render(sp, {});
+    for (const costume of Object.keys(Art.COSTUMES)) {
+      expect([costume, diff(render(sp, { costume }), plain) > 4]).toEqual([costume, true]);
+    }
+  });
+
+  it("gives way to the user's own accessory in the same slot, and to state props", () => {
+    const crowned = render('cat', { accessory: 'crown' });
+    expect(diff(render('cat', { accessory: 'crown', costume: 'witchHat' }), crowned)).toBe(0);
+    const scarfed = render('cat', { accessory: 'scarf' });
+    expect(
+      diff(render('cat', { accessory: 'scarf', costume: 'witchHat' }), scarfed),
+    ).toBeGreaterThan(4);
+    expect(diff(render('cat', { costume: 'santaHat', hide: ['head'] }), render('cat', {}))).toBe(0);
+  });
+
+  it('every costume only uses accessory colour keys', () => {
+    for (const [id, costume] of Object.entries(Art.COSTUMES)) {
+      const keys = new Set(costume.build(Art.SPECIES.cat).grid.join(''));
+      const unknown = [...keys].filter((k) => !'.aAkwyYrcGP'.includes(k));
+      expect([id, unknown]).toEqual([id, []]);
     }
   });
 

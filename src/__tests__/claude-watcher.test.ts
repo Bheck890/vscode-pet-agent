@@ -173,4 +173,82 @@ describe('ClaudeWatcher', () => {
     );
     expect(snapshot(['/work/app'])?.main?.state).toBe('done');
   });
+
+  it('passes main-session lines on and reports test and build outcomes once', () => {
+    const dir = writeSession(
+      'p1',
+      'sess-1',
+      '/work/app',
+      line({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test' } }],
+        },
+      }) +
+        line({
+          type: 'user',
+          message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] },
+        }),
+    );
+    const subDir = path.join(dir, 'sess-1', 'subagents');
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(subDir, 'agent-abc.jsonl'),
+      line({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'npm run build' } },
+          ],
+        },
+      }) +
+        line({
+          type: 'user',
+          message: { content: [{ type: 'tool_result', tool_use_id: 'b1' }] },
+        }) +
+        line({ type: 'assistant', message: { stop_reason: 'end_turn', content: [] } }),
+    );
+    const watcher = new ClaudeWatcher(() => ['/work/app']);
+    const events: Array<Record<string, unknown>> = [];
+    watcher.onEvent((e) => events.push(e as unknown as Record<string, unknown>));
+    watcher.start();
+    // A second tick with nothing new must not repeat anything.
+    (watcher as unknown as { tick(): void }).tick();
+    watcher.dispose();
+
+    expect(events.filter((e) => e.kind === 'line')).toHaveLength(3);
+    expect(events.filter((e) => e.kind === 'line').every((e) => e.sessionId === 'sess-1')).toBe(
+      true,
+    );
+    const outcomes = events.filter((e) => e.kind === 'outcome');
+    expect(outcomes.map((e) => e.outcome)).toEqual([
+      expect.objectContaining({ id: 't1', kind: 'test', ok: false }),
+      expect.objectContaining({ id: 'b1', kind: 'build', ok: true }),
+    ]);
+    expect(outcomes.every((e) => e.sessionId === 'sess-1')).toBe(true);
+    expect(events.filter((e) => e.kind === 'agent-done')).toEqual([
+      { kind: 'agent-done', sessionId: 'sess-1', agentId: 'abc' },
+    ]);
+  });
+
+  it('includes recent outcomes in the main pet update', () => {
+    writeSession(
+      'p1',
+      'sess-1',
+      '/work/app',
+      line({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'pytest' } }],
+        },
+      }) +
+        line({
+          type: 'user',
+          message: { content: [{ type: 'tool_result', tool_use_id: 't1' }] },
+        }),
+    );
+    expect(snapshot(['/work/app'])?.main?.outcomes).toEqual([
+      expect.objectContaining({ id: 't1', kind: 'test', ok: true }),
+    ]);
+  });
 });

@@ -81,6 +81,20 @@ export interface PetConfig {
   otherRepoPets: boolean;
   /** Animations and hobbies switched off, as `state.variant` / `idle.hobby` ids. */
   disabledActions: string[];
+  /** Holiday decorations, costumes and event toys. */
+  holidays: boolean;
+  /** Which way round the seasons go outside the house window. */
+  hemisphere: 'north' | 'south';
+  /** Weekly prompt records board. */
+  records: boolean;
+  /** Show prompt previews on the records board (they never leave this machine). */
+  recordsShowPrompts: boolean;
+  /** XP, levels and weekly challenges. */
+  levels: boolean;
+  /** Failing tests and builds turn up as bugs the pet squashes. */
+  enemies: boolean;
+  /** The pet's house, furnished with level unlocks. */
+  house: boolean;
   size: number;
 }
 
@@ -93,6 +107,12 @@ const PANEL_SWITCHES = [
   'backgroundPets',
   'otherRepoPets',
   'stateColors',
+  'holidays',
+  'records',
+  'recordsShowPrompts',
+  'levels',
+  'enemies',
+  'house',
 ];
 
 /** A list of action ids like `running.zoomies`, or null if it isn't one. */
@@ -162,6 +182,13 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     backgroundPets: get('backgroundPets') !== false,
     otherRepoPets: get('otherRepoPets') !== false,
     disabledActions: actionIds(get('disabledActions')) ?? [],
+    holidays: get('holidays') !== false,
+    hemisphere: get('hemisphere') === 'south' ? 'south' : 'north',
+    records: get('records') !== false,
+    recordsShowPrompts: get('recordsShowPrompts') === true,
+    levels: get('levels') !== false,
+    enemies: get('enemies') !== false,
+    house: get('house') !== false,
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };
 }

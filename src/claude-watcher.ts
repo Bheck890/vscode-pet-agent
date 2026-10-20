@@ -9,6 +9,7 @@ import { TailedFile, firstCwd, readLines, safeReaddir, safeStat } from './transc
 import {
   AgentActivity,
   Job,
+  Outcome,
   PetState,
   applyLine,
   createActivity,
@@ -16,7 +17,7 @@ import {
 } from './transcript-parser';
 
 /** Claude Code writes one JSONL transcript per session (and per sub-agent) under here. */
-const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+export const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 const TICK_MS = 500;
 const SCAN_MS = 3000;
@@ -43,6 +44,8 @@ export interface MainPetUpdate {
   since: number;
   project: string | null;
   jobs: Job[];
+  /** Recent test and build results, oldest first (for the bugs to squash). */
+  outcomes: Outcome[];
 }
 
 export interface SubagentUpdate {
@@ -56,6 +59,8 @@ export interface SubagentUpdate {
   /** Transcript time of the last state change; seeds the animation pick. */
   since: number;
   jobs: Job[];
+  /** Recent test and build results, oldest first (for the bugs to squash). */
+  outcomes: Outcome[];
 }
 
 /**
@@ -73,6 +78,8 @@ export interface BackgroundUpdate {
   /** Transcript time of the last state change; seeds the animation pick. */
   since: number;
   jobs: Job[];
+  /** Recent test and build results, oldest first (for the bugs to squash). */
+  outcomes: Outcome[];
 }
 
 export interface ClaudeUpdate {
@@ -88,17 +95,24 @@ function projectName(cwd: string | null): string | null {
 
 type Listener = (u: ClaudeUpdate) => void;
 
+/**
+ * What happened in any followed transcript, for the records and XP. Lines
+ * are main sessions only; outcomes and finished helpers come from every
+ * session and sub-agent the watcher follows, including other repos'.
+ */
+export type WatchEvent =
+  | { kind: 'line'; sessionId: string; line: unknown }
+  | { kind: 'outcome'; sessionId: string; outcome: Outcome }
+  | { kind: 'agent-done'; sessionId: string; agentId: string }
+  | { kind: 'session-gone'; sessionId: string };
+
+type EventListener = (e: WatchEvent) => void;
+
 interface Tracked extends TailedFile {
   mtime: number;
   act: AgentActivity;
-}
-
-/** Feeds the lines appended to a transcript since the last read into its activity. */
-function readNewLines(t: Tracked, size: number): void {
-  if (readLines(t, size, (line) => applyLine(t.act, line)) === 'restarted') {
-    t.act = createActivity();
-    readLines(t, size, (line) => applyLine(t.act, line));
-  }
+  /** `act.outcomeCount` already reported as events. */
+  reported: number;
 }
 
 interface TrackedSession extends Tracked {
@@ -128,6 +142,7 @@ export class ClaudeWatcher implements vscode.Disposable {
   private sessions = new Map<string, TrackedSession>();
   private subagents = new Map<string, TrackedSubagent>();
   private listeners: Listener[] = [];
+  private eventListeners: EventListener[] = [];
   private timers: ReturnType<typeof setInterval>[] = [];
   private lastJson = '';
 
@@ -154,6 +169,43 @@ export class ClaudeWatcher implements vscode.Disposable {
     return new vscode.Disposable(() => {
       this.listeners = this.listeners.filter((l) => l !== listener);
     });
+  }
+
+  /** Register for transcript events (see {@link WatchEvent}). */
+  onEvent(listener: EventListener): vscode.Disposable {
+    this.eventListeners.push(listener);
+    return new vscode.Disposable(() => {
+      this.eventListeners = this.eventListeners.filter((l) => l !== listener);
+    });
+  }
+
+  private fire(e: WatchEvent): void {
+    for (const l of this.eventListeners) {
+      l(e);
+    }
+  }
+
+  /**
+   * Feeds the lines appended to a transcript since the last read into its
+   * activity, passing main-session lines on, then reports new outcomes.
+   */
+  private read(t: Tracked, size: number, sessionId: string, main: boolean): void {
+    const feed = (line: unknown) => {
+      applyLine(t.act, line);
+      if (main) {
+        this.fire({ kind: 'line', sessionId, line });
+      }
+    };
+    if (readLines(t, size, feed) === 'restarted') {
+      t.act = createActivity();
+      t.reported = 0;
+      readLines(t, size, feed);
+    }
+    const fresh = Math.min(t.act.outcomeCount - t.reported, t.act.outcomes.length);
+    for (const outcome of t.act.outcomes.slice(t.act.outcomes.length - fresh)) {
+      this.fire({ kind: 'outcome', sessionId, outcome });
+    }
+    t.reported = t.act.outcomeCount;
   }
 
   /** The last update sent, so newly opened views don't wait for a change. */
@@ -189,8 +241,9 @@ export class ClaudeWatcher implements vscode.Disposable {
             midLine: st.size > INITIAL_TAIL_BYTES,
             mtime: st.mtimeMs,
             act: createActivity(),
+            reported: 0,
           };
-          readNewLines(s, st.size);
+          this.read(s, st.size, id, true);
           this.sessions.set(id, s);
         }
       }
@@ -235,9 +288,10 @@ export class ClaudeWatcher implements vscode.Disposable {
         midLine: false,
         mtime: st.mtimeMs,
         act: createActivity(),
+        reported: 0,
         doneAt: null,
       };
-      readNewLines(sub, st.size);
+      this.read(sub, st.size, session.id, false);
       this.subagents.set(m[1], sub);
     }
   }
@@ -249,20 +303,22 @@ export class ClaudeWatcher implements vscode.Disposable {
       const st = safeStat(s.file);
       if (!st || now - st.mtimeMs > ACTIVE_MS) {
         this.sessions.delete(id);
+        this.fire({ kind: 'session-gone', sessionId: id });
         continue;
       }
       s.mtime = st.mtimeMs;
-      readNewLines(s, st.size);
+      this.read(s, st.size, id, true);
     }
 
     for (const [id, a] of this.subagents) {
       const st = safeStat(a.file);
       if (st) {
         a.mtime = st.mtimeMs;
-        readNewLines(a, st.size);
+        this.read(a, st.size, a.sessionId, false);
       }
       if (a.act.finished && a.doneAt === null) {
         a.doneAt = now;
+        this.fire({ kind: 'agent-done', sessionId: a.sessionId, agentId: id });
       }
       const lingeredOut = a.doneAt !== null && now - a.doneAt > SUBAGENT_DONE_LINGER_MS;
       const stale = now - Math.max(a.act.lastAt, a.mtime) > SUBAGENT_STALE_MS;

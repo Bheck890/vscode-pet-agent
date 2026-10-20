@@ -12,7 +12,10 @@
     !window.PetPlay ||
     !window.PetPanels ||
     !window.PetVariants ||
-    !window.PetScene
+    !window.PetScene ||
+    !window.PetEvents ||
+    !window.PetEnemies ||
+    !window.PetHouse
   ) {
     acquireVsCodeApi().postMessage({
       command: 'log',
@@ -217,9 +220,19 @@
 
   /** Pattern and accessory come from config; the cache is cleared whenever config changes. */
   function petSprite(o) {
-    const key = ['pet', o.color, o.tint, o.eyes, o.mouth, o.frame, o.look, o.twitch, o.hide].join(
-      '|',
-    );
+    const costume = events.costume();
+    const key = [
+      'pet',
+      o.color,
+      o.tint,
+      o.eyes,
+      o.mouth,
+      o.frame,
+      o.look,
+      o.twitch,
+      o.hide,
+      costume,
+    ].join('|');
     return cached(key, () =>
       Art.compose(config.species, petPalette(o.color, o.tint), {
         eyes: o.eyes,
@@ -230,6 +243,7 @@
         pattern: config.pattern,
         accessory: config.accessory,
         accessoryColor: cssToHex(config.accessoryColor) || '',
+        costume,
         hide: o.hide,
       }),
     );
@@ -663,7 +677,14 @@
     const hobby = !!(p.fidget && p.fidget.hobby && t < p.fidget.until);
     const careSteer = play.target();
     const toySteer = careSteer === null ? scene.target() : null;
-    const steer = careSteer !== null ? careSteer : toySteer;
+    const homeSteer =
+      careSteer === null &&
+      toySteer === null &&
+      !hobby &&
+      (state === 'idle' || state === 'sleeping')
+        ? house.target()
+        : null;
+    const steer = careSteer !== null ? careSteer : toySteer !== null ? toySteer : homeSteer;
     if (def.roam !== 'fly') {
       p.wyTarget = 0;
     }
@@ -678,6 +699,8 @@
       p.wxTarget = p.wx;
     } else if (toySteer !== null) {
       p.wxTarget = toySteer - (p.x + size / 2);
+    } else if (homeSteer !== null && !dragging) {
+      p.wxTarget = homeSteer - (p.x + size / 2);
     } else if (def.roam && !dragging && !reacting) {
       roam(p, def, t, dt, size);
     } else if (state === 'idle' && !reacting && !dragging) {
@@ -2121,6 +2144,9 @@
     scene.setJobs(
       ((msg.main && msg.main.jobs) || []).concat(...subagents.map((sa) => sa.jobs || [])),
     );
+    enemies.setOutcomes(
+      ((msg.main && msg.main.outcomes) || []).concat(...subagents.map((sa) => sa.outcomes || [])),
+    );
     layoutMinis();
   }
 
@@ -2219,13 +2245,25 @@
 
     play.update(t, dt);
     scene.update(t, dt);
+    events.update(t);
+    enemies.update(t, dt);
+    // Work starting pulls the pet out of its house and back to its desk.
+    const busy = isBusy();
+    if (busy && !wasBusy && house.isOpen()) {
+      panels.closeHouse();
+      scene.say(`🛠️ ${main.name} heads back to work!`, '#ffd23f', 2500);
+    }
+    wasBusy = busy;
     panels.tick(t);
+    house.drawBack();
     drawDots(t);
+    events.drawBack();
     scene.drawBack(t);
     // Further back means drawn first, so nearer pets overlap it.
     const bottom = (p) => spriteBox(p).y + spriteBox(p).s + (p.front ? viewH : 0);
     const drawOrder = [...minis.values(), main].sort((a, b) => bottom(a) - bottom(b));
     drawOrder.forEach((p) => drawPet(p, t));
+    enemies.draw(t);
     play.draw(t);
     scene.drawFront(t);
     stepParticles(dt);
@@ -2263,6 +2301,22 @@
       case 'claude-update':
         applyClaude(msg);
         break;
+      case 'calendar':
+        events.set(msg);
+        break;
+      case 'records-update':
+        panels.setRecords(msg);
+        cheerRecords(msg);
+        break;
+      case 'progress-update':
+        cheerProgress(msg);
+        house.setLevel(msg.level);
+        panels.setProgress(msg);
+        break;
+      case 'house':
+        house.setLayout(msg.layout);
+        panels.refreshHouse();
+        break;
       case 'unlocks': {
         // Purchases made in another window.
         const mine = saved.unlocks || [];
@@ -2293,7 +2347,7 @@
   }
 
   function tooltipHtml(x, y) {
-    const thing = scene.hover(x, y);
+    const thing = scene.hover(x, y) || enemies.hover(x, y) || house.hover(x, y);
     if (thing) {
       return `<b>${escapeHtml(thing.title)}</b><br><span class="dim">${escapeHtml(thing.sub)}</span>`;
     }
@@ -2327,7 +2381,8 @@
           ? `<br><span class="dim">${helpers} helper${helpers > 1 ? 's' : ''} working</span>`
           : '') +
         (jobs ? `<br><span class="dim">${jobs} job${jobs > 1 ? 's' : ''} running</span>` : '') +
-        `<br><span class="dim">🎒 ${scene.foundCount()}/${scene.toyTotal} toys in the bag</span>`
+        `<br><span class="dim">🎒 ${scene.foundCount()}/${scene.toyTotal} toys in the bag</span>` +
+        (events.label() ? `<br>${escapeHtml(events.label())}` : '')
       );
     }
     const sessions = allSessions().slice(0, MAX_DOTS);
@@ -2437,7 +2492,99 @@
     onSpent: (spent) => {
       saved.spent = spent;
     },
+    events: () => events.active(),
   });
+
+  const events = window.PetEvents.create({
+    ctx,
+    main: () => main,
+    petPx,
+    view: () => ({ w: viewW, h: viewH }),
+    now,
+    emit,
+    config: () => config,
+    say: (text, color, ms) => scene.say(text, color, ms),
+  });
+
+  const enemies = window.PetEnemies.create({
+    ctx,
+    main: () => main,
+    petPx,
+    view: () => ({ w: viewW, h: viewH }),
+    now,
+    emit,
+    config: () => config,
+    say: (text, color, ms) => scene.say(text, color, ms),
+    waiting: () => !!main && displayState(main) === 'waiting',
+  });
+
+  const house = window.PetHouse.create({
+    ctx,
+    main: () => main,
+    petPx,
+    view: () => ({ w: viewW, h: viewH }),
+    now,
+    config: () => config,
+    season: () => events.season(),
+    save: (layout) => vscodeApi.postMessage({ command: 'house-save', layout }),
+  });
+  let wasBusy = false;
+
+  /** Confetti and a banner, for records and level-ups. */
+  function celebrate(text, color) {
+    scene.say(text, color, 4500);
+    if (!main) {
+      return;
+    }
+    const c = center(main);
+    for (let i = 0; i < 16; i++) {
+      emit({
+        x: c.x,
+        y: c.y - petPx(main) * 0.3,
+        vx: (Math.random() - 0.5) * petPx(main) * 1.4,
+        vy: -petPx(main) * (0.4 + Math.random() * 0.6),
+        g: petPx(main) * 1.6,
+        color: CONFETTI[i % CONFETTI.length],
+        size: petPx(main) * 0.05,
+        life: 1.4,
+        spin: (Math.random() - 0.5) * 8,
+      });
+    }
+  }
+
+  function cheerRecords(msg) {
+    if (!config || config.records === false || !Array.isArray(msg.broken)) {
+      return;
+    }
+    const titles = (msg.records || []).filter((r) => msg.broken.includes(r.id));
+    if (titles.length > 0) {
+      celebrate(`🏆 New weekly record: ${titles.map((r) => r.title).join(', ')}!`, '#ffc93d');
+    }
+  }
+
+  /** The level and XP last shown, so a change can be cheered. Null before the first update. */
+  let shownProgress = null;
+
+  function cheerProgress(msg) {
+    const before = shownProgress;
+    shownProgress = { level: msg.level, xp: msg.xp };
+    if (!before || !config || config.levels === false || !main) {
+      return;
+    }
+    if (msg.level > before.level) {
+      celebrate(`⭐ Level ${msg.level}! New things for the house 🏠`, '#ffd23f');
+    } else if (msg.xp > before.xp) {
+      const c = center(main);
+      emit({
+        x: c.x,
+        y: main.y,
+        vy: -30,
+        text: `+${msg.xp - before.xp} XP`,
+        size: petPx(main) * 0.09,
+        life: 1.4,
+      });
+    }
+  }
 
   const panels = window.PetPanels.create({
     post: (msg) => vscodeApi.postMessage(msg),
@@ -2452,6 +2599,7 @@
     now,
     escapeHtml,
     debugSnapshot,
+    house,
   });
 
   /** What the view is doing right now, for the debug log. No agent text or file paths. */
@@ -2479,6 +2627,8 @@
       lastFrameError: lastFrameError.split('\n')[0],
       careTool: play.tool(),
       toysFound: scene.foundCount(),
+      enemies: enemies.count(),
+      inHouse: house.isOpen(),
       unlocks: (saved.unlocks || []).length,
       config: config && {
         species: config.species,
@@ -2506,6 +2656,11 @@
       e.preventDefault();
       return;
     }
+    if (house.pointerDown(e.offsetX, e.offsetY)) {
+      tooltip.style.display = 'none';
+      e.preventDefault();
+      return;
+    }
     const toy = scene.poke(e.offsetX, e.offsetY);
     if (toy) {
       tooltip.style.display = 'none';
@@ -2527,6 +2682,7 @@
   });
 
   document.addEventListener('mousemove', (e) => {
+    house.pointerMove(e.clientX, e.clientY);
     if (panels.careOn()) {
       play.pointerMove(e.clientX, e.clientY, () => petAt(e.clientX, e.clientY) === main);
     }
@@ -2553,6 +2709,9 @@
   });
 
   document.addEventListener('mouseup', () => {
+    if (house.pointerUp()) {
+      return;
+    }
     if (panels.careOn() && play.pointerUp()) {
       return;
     }

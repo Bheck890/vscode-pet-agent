@@ -11,6 +11,8 @@
     uncommon: { weight: 25, color: '#5ad17a', label: 'Uncommon' },
     rare: { weight: 10, color: '#4fa3ff', label: 'Rare' },
     legendary: { weight: 3, color: '#ffc93d', label: 'Legendary' },
+    // Holiday toys never come up in the normal roll; see find().
+    event: { weight: 0, color: '#ff8c2a', label: 'Holiday' },
   };
 
   /**
@@ -142,7 +144,65 @@
       rarity: 'legendary',
       use: 'admire',
     },
+    // One per holiday event (see events.js). Found only while it is on; kept forever.
+    {
+      id: 'pumpkin',
+      kind: 'object',
+      emoji: '🎃',
+      name: 'jack-o-lantern',
+      rarity: 'event',
+      use: 'admire',
+      event: 'halloween',
+    },
+    {
+      id: 'pie',
+      kind: 'object',
+      emoji: '🥧',
+      name: 'pumpkin pie',
+      rarity: 'event',
+      use: 'sniff',
+      event: 'thanksgiving',
+    },
+    {
+      id: 'snowman',
+      kind: 'object',
+      emoji: '⛄',
+      name: 'little snowman',
+      rarity: 'event',
+      use: 'admire',
+      event: 'christmas',
+    },
+    {
+      id: 'popper',
+      kind: 'toy',
+      emoji: '🎉',
+      name: 'party popper',
+      rarity: 'event',
+      use: 'play',
+      event: 'newyear',
+    },
+    {
+      id: 'chocolates',
+      kind: 'toy',
+      emoji: '💝',
+      name: 'box of chocolates',
+      rarity: 'event',
+      use: 'cuddle',
+      event: 'valentine',
+    },
+    {
+      id: 'egg',
+      kind: 'toy',
+      emoji: '🥚',
+      name: 'painted egg',
+      rarity: 'event',
+      use: 'play',
+      event: 'easter',
+    },
   ];
+
+  /** Chance that a find while a holiday is on is that holiday's toy (higher until you have it). */
+  const EVENT_FIND = { missing: 0.6, owned: 0.2 };
 
   const USE_LABEL = {
     play: 'playing with the',
@@ -221,6 +281,7 @@
    *   playing: () => boolean,
    *   onBag: (bag: Record<string, number>) => void,
    *   onSpent: (spent: Record<string, number>) => void,
+   *   events: () => string[],
    * }} api
    */
   function create(api) {
@@ -358,7 +419,7 @@
     /** A brand-new find: rolls a rarity, adds it to the bag and shows it off. */
     function find(t) {
       const g = geom();
-      const def = rollToy(Math.random);
+      const def = rollEventToy() || rollToy(Math.random);
       const count = (bag.get(def.id) || 0) + 1;
       bag.set(def.id, count);
       saveBag();
@@ -375,6 +436,16 @@
       } else {
         say(`Found another ${def.emoji} ${def.name} (x${count})`, rarity.color || '#ffffff', 3500);
       }
+    }
+
+    /** While a holiday is on, its toy sometimes turns up instead of a normal find. */
+    function rollEventToy() {
+      const live = TOYS.filter((d) => d.event && api.events().includes(d.event));
+      if (live.length === 0) {
+        return null;
+      }
+      const def = live[Math.floor(Math.random() * live.length)];
+      return Math.random() < (bag.has(def.id) ? EVENT_FIND.owned : EVENT_FIND.missing) ? def : null;
     }
 
     function isOut(id) {

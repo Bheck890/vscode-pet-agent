@@ -80,6 +80,15 @@ canvas {
   right: 68px;
 }
 
+/* panels.js closes the row up when some are switched off. */
+#trophy-toggle {
+  right: 98px;
+}
+
+#house-toggle {
+  right: 128px;
+}
+
 .corner.holding {
   outline: 2px solid var(--vscode-focusBorder, #ffd23f);
 }
@@ -412,4 +421,104 @@ canvas {
   margin-top: 6px;
   text-align: center;
   opacity: 0.85;
+}
+
+/* -- Level, challenges and records ----------------------------------------- */
+
+#trophy-view {
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+#trophy-view .group {
+  margin-top: 6px;
+  font-weight: bold;
+  opacity: 0.8;
+}
+
+.level-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: bold;
+}
+
+.xp-track {
+  height: 8px;
+  margin: 3px 0;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.25);
+  overflow: hidden;
+}
+
+.xp-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: #ffc93d;
+}
+
+.challenge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.challenge .what {
+  flex: 1;
+}
+
+.challenge.done .what {
+  opacity: 0.7;
+  text-decoration: line-through;
+}
+
+.record {
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.15);
+}
+
+.record .value {
+  float: right;
+  opacity: 0.85;
+}
+
+.record .prompt {
+  display: block;
+  opacity: 0.65;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dim {
+  opacity: 0.65;
+  font-weight: normal;
+}
+
+/* -- House --------------------------------------------------------------- */
+
+/* A slim strip along the bottom, below the pet's feet, so the room stays in view. */
+#house-panel {
+  padding: 4px 6px;
+}
+
+#house-panel .panel-head {
+  margin-bottom: 3px;
+}
+
+#house-items,
+#house-themes {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+#house-items button.locked {
+  opacity: 0.45;
+  cursor: default;
+}
+
+#house-themes {
+  margin-top: 4px;
 }

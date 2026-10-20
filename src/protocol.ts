@@ -1,9 +1,14 @@
+import type { Calendar } from './calendar';
 import type { ClaudeUpdate } from './claude-watcher';
 import type { PetConfig } from './pet-config';
 import type { CareAction, CareResult, CareStats } from './pet-care';
+import type { HouseLayout } from './house-store';
+import type { ProgressUpdate } from './progress-service';
+import type { RecordsUpdate } from './records-service';
 import type { PeonEvent, SessionUpdate } from './state-watcher';
 import { panelSetting } from './pet-config';
 import { isCareAction } from './pet-care';
+import { parseLayout } from './house-store';
 
 /**
  * The message contract between the extension and the webview (media/*.js).
@@ -36,7 +41,8 @@ export type FromWebview =
   | { command: 'refresh' }
   | { command: 'gather-logs'; snapshot: string | null }
   | { command: 'setting'; key: string; value: unknown }
-  | { command: 'save-state'; state: WebviewState };
+  | { command: 'save-state'; state: WebviewState }
+  | { command: 'house-save'; layout: HouseLayout };
 
 /** Messages the extension sends to the webview. */
 export type ToWebview =
@@ -46,7 +52,11 @@ export type ToWebview =
   | ({ command: 'peon-event' } & PeonEvent)
   | ({ command: 'session-update' } & SessionUpdate)
   | ({ command: 'care-update' } & (CareResult | { stats: CareStats }))
-  | { command: 'unlocks'; unlocks: string[] };
+  | { command: 'unlocks'; unlocks: string[] }
+  | ({ command: 'calendar' } & Calendar)
+  | ({ command: 'records-update' } & RecordsUpdate)
+  | ({ command: 'progress-update' } & ProgressUpdate)
+  | { command: 'house'; layout: HouseLayout };
 
 export function isWebviewState(value: unknown): value is WebviewState {
   if (!value || typeof value !== 'object') {
@@ -95,6 +105,10 @@ export function parseFromWebview(msg: unknown): FromWebview | null {
     }
     case 'save-state':
       return isWebviewState(m['state']) ? { command: 'save-state', state: m['state'] } : null;
+    case 'house-save':
+      return m['layout'] && typeof m['layout'] === 'object'
+        ? { command: 'house-save', layout: parseLayout(m['layout']) }
+        : null;
     default:
       return null;
   }

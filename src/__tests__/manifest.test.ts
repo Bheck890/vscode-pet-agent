@@ -178,7 +178,14 @@ describe('packaging', () => {
     .filter((l) => l && !l.startsWith('#'));
 
   it('leaves sources, scripts and README images out of the VSIX', () => {
-    for (const pattern of ['src/**', 'scripts/**', 'docs/**', 'node_modules/**', '*.vsix']) {
+    for (const pattern of [
+      'src/**',
+      'scripts/**',
+      'docs/**',
+      'node_modules/**',
+      '*.vsix',
+      'coverage/**',
+    ]) {
       expect(ignore).toContain(pattern);
     }
   });

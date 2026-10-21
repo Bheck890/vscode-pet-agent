@@ -8,11 +8,16 @@ import { BagStore } from './bag-store';
 import { HouseStore } from './house-store';
 import { ProgressService } from './progress-service';
 import { ProgressStore } from './progress-store';
+import { LOOK_KEYS, PetLook, Profiles } from './profiles';
 import { RecordsService } from './records-service';
 import { RecordsStore } from './records-store';
+import { SHARE_SITES, SaveFlows, ShareSite } from './save-flows';
+import { Slots } from './slot';
+import { scoped } from './storage';
 import { customizePet } from './customize-menu';
 import { connectGames } from './games';
 import { getConfig, saveSetting } from './settings';
+import { vscodeUi } from './ui';
 
 /**
  * Extension entry point. Called once by VS Code / Cursor when the extension
@@ -33,14 +38,21 @@ export function activate(context: vscode.ExtensionContext): void {
   const log = vscode.window.createOutputChannel('Pet Agents', { log: true });
   log.info(`Pet Agents ${String(context.extension.packageJSON.version)} started`);
 
-  // Records and XP: transcript events -> finished turns -> facts.
+  // The save being played: its stores read and write under the current slot.
   const now = () => new Date();
-  const records = new RecordsService(
-    new RecordsStore(context.globalState),
-    context.globalState,
-    now,
-  );
-  const progress = new ProgressService(new ProgressStore(context.globalState), now);
+  const slots = new Slots(context.globalState, now, () => getConfig().name);
+  const save = scoped(context.globalState, () => slots.current().id);
+  const stores = {
+    bag: new BagStore(save),
+    house: new HouseStore(save),
+    care: new CareStore(save),
+    progress: new ProgressStore(save),
+  };
+
+  // Records and XP: transcript events -> finished turns -> facts. Records are about you, not the save.
+  const recordsStore = new RecordsStore(context.globalState);
+  const records = new RecordsService(recordsStore, context.globalState, now);
+  const progress = new ProgressService(stores.progress, now, () => slots.current());
   context.subscriptions.push(...connectGames(claude, records, progress));
   // Started only now, so the first scan's lines reach the records too.
   claude.start();
@@ -53,20 +65,67 @@ export function activate(context: vscode.ExtensionContext): void {
   }, 5000);
   context.subscriptions.push(new vscode.Disposable(() => clearTimeout(backfill)));
 
+  const look = (): PetLook => {
+    const cfg = getConfig();
+    return Object.fromEntries(LOOK_KEYS.map((k) => [k, cfg[k]])) as unknown as PetLook;
+  };
+  const profiles = new Profiles({
+    storage: context.globalState,
+    dir: path.join(context.globalStorageUri.fsPath, 'profiles'),
+    slots,
+    stores,
+    look,
+    levelsOn: () => getConfig().levels,
+    now,
+  });
+  const flows = new SaveFlows({
+    profiles,
+    progress,
+    records: recordsStore,
+    slots,
+    ui: vscodeUi,
+    look,
+    saveSetting,
+    now,
+    log,
+    saveChanged: () => viewProvider.refresh(),
+    profilesChanged: () => viewProvider.profilesChanged(),
+  });
+
   const viewProvider = new PeonViewProvider({
     mediaPath,
     peon,
     claude,
     getConfig,
     now,
-    care: new CareStore(context.globalState),
-    bag: new BagStore(context.globalState),
-    records,
+    ...stores,
     progress,
-    house: new HouseStore(context.globalState),
+    records,
+    slots,
+    profiles,
+    flows,
     saveSetting,
     log,
   });
+
+  const shareProgress = async () => {
+    const options: Record<string, () => Promise<void>> = {
+      'Copy a summary': () => flows.copySummary(0),
+      ...(getConfig().shareButtons
+        ? Object.fromEntries(
+            (Object.keys(SHARE_SITES) as ShareSite[]).map((site) => [
+              `Post to ${site === 'x' ? 'X' : 'Bluesky'}`,
+              () => flows.post(site, 0),
+            ]),
+          )
+        : {}),
+    };
+    const pick = await vscodeUi.choose('Share your progress', Object.keys(options));
+    if (pick) {
+      await options[pick]();
+    }
+  };
+
   const syncTimer = setInterval(() => viewProvider.syncShared(), 60_000);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(PeonViewProvider.viewId, viewProvider, {
@@ -75,6 +134,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('pet-agents.customize', customizePet),
     vscode.commands.registerCommand('pet-agents.refresh', () => viewProvider.refresh()),
     vscode.commands.registerCommand('pet-agents.showLog', () => log.show()),
+    vscode.commands.registerCommand('pet-agents.newSave', () => flows.newSave()),
+    vscode.commands.registerCommand('pet-agents.shareProgress', shareProgress),
+    vscode.commands.registerCommand('pet-agents.exportProfile', () => flows.exportProfile(null)),
+    vscode.commands.registerCommand('pet-agents.importProfile', () => flows.importProfile()),
+    vscode.commands.registerCommand('pet-agents.movePet', () => flows.moveOut()),
+    vscode.commands.registerCommand('pet-agents.receivePet', () => flows.moveIn()),
     log,
     new vscode.Disposable(() => clearInterval(syncTimer)),
     vscode.workspace.onDidChangeConfiguration((e) => {

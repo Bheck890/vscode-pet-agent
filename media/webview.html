@@ -28,14 +28,23 @@
         <span id="house-note" class="dim"></span>
         <button id="house-done" title="Hide this bar; 🏠 leaves the house">Done</button>
       </div>
+      <div id="house-visit" class="food-choices" hidden></div>
+      <div id="house-picker" class="food-choices"></div>
+      <div id="house-rooms" class="food-choices"></div>
       <div id="house-items" class="food-choices"></div>
       <div id="house-themes" class="food-choices"></div>
+      <div id="house-profiles" class="food-choices"></div>
+    </div>
+    <div id="finish-panel" class="panel" hidden>
+      <div id="finish-body"></div>
+      <div id="finish-actions" class="food-choices"></div>
     </div>
     <div id="bag-panel" class="panel" hidden>
       <div class="panel-head">
         <span id="bag-title">🎒 Bag</span>
         <button id="bag-store-all">Put all away</button>
       </div>
+      <div id="bag-picker" class="food-choices"></div>
       <div id="bag-tabs" class="tabs"></div>
       <div id="bag-view">
         <div id="bag-grid"></div>
@@ -75,6 +84,16 @@
         <summary>🎭 Actions (untick the ones you don't like)</summary>
         <div id="action-list"></div>
       </details>
+      <details>
+        <summary>💾 Saves and sharing</summary>
+        <div id="save-actions">
+          <button data-save="share">📋 Share progress</button>
+          <button data-save="export">📤 Share this profile...</button>
+          <button data-save="new">➕ Start a new save...</button>
+          <button data-save="move-out">🚚 Move my pet to another computer...</button>
+          <button data-save="move-in">📦 Bring my pet here...</button>
+        </div>
+      </details>
       <button id="gather-logs" title="Writes a snapshot to the Pet Agents log and opens it">
         🪵 Gather debug logs
       </button>
@@ -112,6 +131,7 @@
     <script nonce="<!--NONCE-->" src="<!--MEDIA:enemies.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:house.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:panels.js-->"></script>
+    <script nonce="<!--NONCE-->" src="<!--MEDIA:finish.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:webview.js-->"></script>
   </body>
 </html>

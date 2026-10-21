@@ -28,6 +28,17 @@ const ICON = path.join(MEDIA, 'assets', 'icon.png');
 const FRAME_MS = 70;
 const SIDEBAR_BG = [0x18, 0x18, 0x18, 255];
 
+/** The bag ladder from src/bags.ts, as the extension sends it in `init`. */
+const BAG_LEVELS = [
+  ...fs
+    .readFileSync(path.join(ROOT, 'src', 'bags.ts'), 'utf8')
+    .matchAll(/\{ id: '(\w+)', level: (\d+), rooms: \[([^\]]*)\]/g),
+].map((m) => ({
+  id: m[1],
+  level: Number(m[2]),
+  rooms: [...m[3].matchAll(/'(\w+)'/g)].map((r) => r[1]),
+}));
+
 const CHROME_PATHS = [
   process.env.CHROME_PATH,
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -194,10 +205,10 @@ class Panel {
 
   async init({ cfg, state, care, transparent, bare } = {}) {
     await this.frame.evaluate(
-      (c, s, k, tr, b) => {
+      (c, s, k, tr, b, bags) => {
         document.body.classList.toggle('transparent', tr);
         document.body.classList.toggle('bare', b);
-        window.__send({ command: 'init', config: c, state: s });
+        window.__send({ command: 'init', config: c, state: s, bags, slot: 'demo' });
         window.__send({ command: 'care-update', stats: { ...k, updatedAt: Date.now() } });
       },
       config(cfg),
@@ -205,6 +216,7 @@ class Panel {
       { ...CARE, ...care },
       !!transparent,
       !!bare,
+      BAG_LEVELS,
     );
     await this.advance(100);
   }
@@ -396,7 +408,7 @@ async function recordGrid(browser, file, tiles, { cols, seconds, panel }) {
   for (const [i, t] of tiles.entries()) {
     const frame = page.frames().find((f) => f.url().endsWith(`tile=${i}`));
     const p = new Panel(page, frame);
-    await p.init({ cfg: t.cfg, bare: true });
+    await p.init({ cfg: t.cfg, state: t.state, bare: true });
     await p.send(claude('idle'));
     await p.advance(3000);
     if (t.setup) {
@@ -900,6 +912,218 @@ CLIPS.holidays = async (browser) => {
   return writePng(path.join(OUT, 'holidays.png'), grid(shots, 3, 8));
 };
 
+/** A `house` message with one furnished room, where the pet is. Items are [id, x, y]. */
+function houseLayout(house, room, theme, items) {
+  return {
+    command: 'house',
+    layout: {
+      at: { house, room, changedAt: 1 },
+      houses: {
+        [house]: {
+          [room]: { items: items.map(([id, x, y]) => ({ id, x, y, at: 1 })), theme, themeAt: 1 },
+        },
+      },
+    },
+  };
+}
+
+/** A `progress-update` at a level, with no challenges showing. */
+function progressAt(level) {
+  const xp = 50 * (level - 1) * level + 120;
+  return {
+    command: 'progress-update',
+    level,
+    xp,
+    floor: 50 * (level - 1) * level,
+    next: 50 * level * (level + 1),
+    week: '2026-10-19',
+    weekXp: 240,
+    challenges: [],
+    finished: false,
+  };
+}
+
+/** The bag picker on the garden bag, and the garden bag's shop. */
+CLIPS.bags = async (browser) => {
+  const opts = { width: 300, height: 400, scale: 2, cfg: { size: SIZES.small } };
+  const state = {
+    bag: {
+      yarn: 3,
+      sunflower: 27,
+      tulip: 9,
+      snail: 4,
+      ladybug: 6,
+      seedling: 2,
+      mushroom: 2,
+      hedgehog: 1,
+      bee: 3,
+      oaktree: 1,
+    },
+    activeBag: 'garden',
+  };
+  const open = async () => {
+    const panel = await Panel.open(browser, { ...opts, state });
+    await panel.send(progressAt(9));
+    await panel.click('#bag-toggle');
+    await panel.advance(300);
+    return panel;
+  };
+  const toys = await open();
+  const shop = await open();
+  await shop.frame.evaluate(() => document.querySelector('[data-tab="shop"]').click());
+  await shop.advance(300);
+  const shots = [await toys.shot(), await shop.shot()];
+  await Promise.all([toys, shop].map((p) => p.close()));
+  return writePng(path.join(OUT, 'bags.png'), grid(shots, 2, 8));
+};
+
+/** Pets wearing a style from each of several bags. */
+CLIPS.styles = (browser) =>
+  recordGrid(
+    browser,
+    path.join(OUT, 'styles.gif'),
+    [
+      { species: 'cat', name: 'Daisy', style: 'flowerCrown' },
+      { species: 'bird', name: 'Coral', color: '#4aa3df', style: 'snorkel' },
+      { species: 'dog', name: 'Chef', style: 'chefHatPink' },
+      { species: 'fox', name: 'Nova', style: 'spaceHelmet' },
+      { species: 'cat', name: 'Ziggy', color: '#22222a', style: 'rockShadesNeon' },
+      { species: 'dog', name: 'Sir Biscuit', color: '#e0b24f', style: 'knightHelm' },
+      { species: 'fox', name: 'Indy', style: 'explorerHat' },
+      { species: 'bird', name: 'Angel', color: '#e8e8ee', style: 'haloPink' },
+    ].map((cfg) => ({
+      cfg: { ...cfg, size: SIZES.small, stateColors: false, levels: false },
+      // The colour variants are sold in their bags' shops.
+      state: {
+        unlocks: [
+          'kitchen.style.chefHatPink',
+          'music.style.rockShadesNeon',
+          'vault.style.haloPink',
+        ],
+      },
+    })),
+    { cols: 4, seconds: 3, panel: { width: 200, height: 200 } },
+  );
+
+/** A tour of three houses: the greenhouse cottage, the moon base and the castle. */
+CLIPS.houses = async (browser) => {
+  const opts = { width: 320, height: 380, scale: 2 };
+  const rooms = [
+    [
+      { species: 'cat', name: 'Mochi', style: 'flowerCrown' },
+      houseLayout('garden', 'greenhouse', 'leafy', [
+        ['leafbed', 0.18, 0],
+        ['flowerpot', 0.9, 0],
+        ['plant', 0.72, 0],
+        ['ivy', 0.82, 0.15],
+      ]),
+    ],
+    [
+      { species: 'fox', name: 'Rusty', style: 'spaceHelmet' },
+      houseLayout('space', 'observatory', 'starfield', [
+        ['capsulebed', 0.2, 0],
+        ['console', 0.88, 0],
+        ['starmap', 0.7, 0.1],
+        ['telescope', 0.45, 0],
+      ]),
+    ],
+    [
+      { species: 'dog', name: 'Biscuit', style: 'knightHelm' },
+      houseLayout('castle', 'throne', 'stonehall', [
+        ['thronechair', 0.86, 0],
+        ['banquet', 0.2, 0],
+        ['shieldwall', 0.7, 0.1],
+        ['trophy', 0.48, 0],
+      ]),
+    ],
+  ];
+  const panels = [];
+  for (const [cfg, layout] of rooms) {
+    const panel = await Panel.open(browser, {
+      ...opts,
+      cfg: { ...cfg, levels: false, toys: false },
+    });
+    await panel.send({ command: 'calendar', day: '2026-10-21', events: [], season: 'spring' });
+    await panel.send(layout);
+    await panel.click('#house-toggle');
+    await panel.advance(2500);
+    panels.push(panel);
+  }
+  const shots = [];
+  for (const p of panels) {
+    shots.push(await p.shot());
+  }
+  await Promise.all(panels.map((p) => p.close()));
+  return writePng(path.join(OUT, 'houses.png'), grid(shots, 3, 8));
+};
+
+/** The finish screen, and a visit to an earlier save from the house menu. */
+CLIPS.profiles = async (browser) => {
+  const opts = { width: 320, height: 400, scale: 2 };
+  const summary = {
+    days: 412,
+    level: 35,
+    xp: 61240,
+    prompts: 2318,
+    actions: 9870,
+    agentHours: 214,
+    toys: 251,
+    bags: 20,
+    houses: 20,
+    rooms: 57,
+    records: 31,
+  };
+  const finish = await Panel.open(browser, { ...opts, cfg: { style: 'halo', levels: false } });
+  await finish.send({ ...progressAt(35), finished: true });
+  await finish.send({ command: 'finished', summary, finished: true });
+  await finish.advance(1500);
+
+  const pet = {
+    species: 'dog',
+    color: '#e0b24f',
+    accentColor: '',
+    eyeColor: '',
+    pattern: 'patch',
+    accessory: '',
+    accessoryColor: '',
+    name: 'Biscuit',
+    style: 'chefHat',
+  };
+  const old = {
+    version: 1,
+    id: '2025-09-01-biscuit',
+    name: "Biscuit's first save",
+    createdAt: Date.UTC(2025, 8, 1),
+    endedAt: Date.UTC(2026, 7, 20),
+    finished: true,
+    guest: false,
+    pet,
+    progress: { xp: 61240, level: 35 },
+    bag: { found: { bone: 4, cupcake: 2 }, spent: {}, unlocks: [], activeBag: 'kitchen' },
+    house: houseLayout('kitchen', 'shopfloor', 'checkerboard', [
+      ['breadbin', 0.85, 0],
+      ['stove', 0.18, 0],
+      ['kettleshelf', 0.72, 0.15],
+    ]).layout,
+    care: { fullness: 90, fun: 85, clean: 70, updatedAt: 1 },
+    summary,
+  };
+  const friend = {
+    ...old,
+    id: '2026-02-14-pip',
+    guest: true,
+    pet: { ...pet, species: 'bird', name: 'Pip', color: '#5cc9a7', style: 'aviator' },
+  };
+  const visit = await Panel.open(browser, { ...opts, cfg: { size: SIZES.small } });
+  await visit.send({ command: 'calendar', day: '2026-10-21', events: [], season: 'autumn' });
+  await visit.send({ command: 'profiles', profiles: [old, friend] });
+  await visit.send({ command: 'profile', profile: old });
+  await visit.advance(3000);
+  const shots = [await finish.shot(), await visit.shot()];
+  await Promise.all([finish, visit].map((p) => p.close()));
+  return writePng(path.join(OUT, 'profiles.png'), grid(shots, 2, 8));
+};
+
 /** Level and challenges, the prompt records board, and the house with a bug in it. */
 CLIPS.adventure = async (browser) => {
   const opts = { width: 320, height: 380, scale: 2 };
@@ -930,8 +1154,22 @@ CLIPS.adventure = async (browser) => {
     command: 'records-update',
     week: '2026-10-19',
     records: [
-      entry('tinyEpic', '🪄', 'Tiny prompt, epic run', '3 words -> 24m 10s', 'my-app', 'fix the tests'),
-      entry('busiest', '⚙️', 'Busiest prompt', '96 actions in 31m 05s', 'my-app', 'migrate auth to v2'),
+      entry(
+        'tinyEpic',
+        '🪄',
+        'Tiny prompt, epic run',
+        '3 words -> 24m 10s',
+        'my-app',
+        'fix the tests',
+      ),
+      entry(
+        'busiest',
+        '⚙️',
+        'Busiest prompt',
+        '96 actions in 31m 05s',
+        'my-app',
+        'migrate auth to v2',
+      ),
       entry('sniper', '🎯', 'Sniper', 'done in 1 action', 'docs', 'typo in README'),
       entry('litter', '🐣', 'Biggest litter', '5 helpers', 'api', 'audit every endpoint'),
     ],
@@ -956,20 +1194,15 @@ CLIPS.adventure = async (browser) => {
   await board.advance(300);
 
   const home = await withData({ species: 'cat', name: 'Mochi', toys: false });
-  await home.send({
-    command: 'house',
-    layout: {
-      items: [
-        { id: 'bed', x: 0.16, y: 0, at: 1 },
-        { id: 'plant', x: 0.92, y: 0, at: 1 },
-        { id: 'painting', x: 0.62, y: 0.2, at: 1 },
-        { id: 'clock', x: 0.88, y: 0.1, at: 1 },
-        { id: 'sofa', x: 0.78, y: 0, at: 1 },
-      ],
-      theme: 'mint',
-      themeAt: 1,
-    },
-  });
+  await home.send(
+    houseLayout('starter', 'living', 'mint', [
+      ['bed', 0.16, 0],
+      ['plant', 0.92, 0],
+      ['painting', 0.62, 0.2],
+      ['clock', 0.88, 0.1],
+      ['sofa', 0.78, 0],
+    ]),
+  );
   await home.send({ command: 'calendar', day: '2026-10-21', events: [], season: 'autumn' });
   await home.click('#house-toggle');
   const now = await home.frame.evaluate(() => Date.now());

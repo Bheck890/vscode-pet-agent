@@ -1,6 +1,7 @@
 # Plan: themed packs unlocked by level (bags, animations, houses, rooms, styles)
 
-Status: planned, not started. Builds on the levels and house from [Roadmap.md](Roadmap.md)
+Status: built. The open question below was settled on option 3 (bags 6 to 20 every 2 levels,
+the last at level 35). Builds on the levels and house from [Roadmap.md](Roadmap.md)
 (Phases 3 and 5) and the toy bag and shop that exist today. What happens after the last bag (finishing, sharing, new saves) is in
 [Profiles.md](Profiles.md).
 

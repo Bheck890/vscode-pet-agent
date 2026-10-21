@@ -78,6 +78,35 @@ export class RecordsStore {
     return fame;
   }
 
+  /**
+   * Merges records brought from another computer: recent turns join this
+   * week's board and each hall of fame entry is kept if it beats ours.
+   */
+  importAll(turns: unknown, fame: unknown, now: Date): void {
+    const incoming = (Array.isArray(turns) ? turns : [])
+      .map(parseTurn)
+      .filter((t): t is TurnRecord => !!t);
+    this.add(incoming, now);
+    const mine = this.hallOfFame();
+    const raw = fame && typeof fame === 'object' ? (fame as Record<string, unknown>) : {};
+    let changed = false;
+    for (const cat of CATEGORIES) {
+      const t = parseTurn(raw[cat.id]);
+      if (t && counts(t) && cat.eligible(t) && beats(cat, t, mine[cat.id])) {
+        mine[cat.id] = t;
+        changed = true;
+      }
+    }
+    if (changed) {
+      void this.storage.update(FAME_KEY, mine);
+    }
+  }
+
+  /** Every stored turn and the hall of fame, raw, for a move to another computer. */
+  exportAll(): { turns: TurnRecord[]; fame: Record<string, TurnRecord> } {
+    return { turns: this.turns(), fame: this.hallOfFame() };
+  }
+
   add(turns: TurnRecord[], now: Date): RecordsChange {
     const stored = parseTurns(this.storage.get(TURNS_KEY));
     const added = turns.filter((t) => !stored[t.promptId]);

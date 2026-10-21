@@ -25,9 +25,50 @@ describe('parseFromWebview', () => {
       { command: 'setting', key: 'variety', value: 'classic' },
     ],
     [
-      { command: 'save-state', state: { petX: 1, food: 'fish' } },
-      { command: 'save-state', state: { petX: 1, food: 'fish' } },
+      { command: 'save-state', slot: 'one', state: { petX: 1, food: 'fish' } },
+      { command: 'save-state', slot: 'one', state: { petX: 1, food: 'fish' } },
     ],
+    [
+      { command: 'bag-switch', bag: 'garden', slot: 'one' },
+      { command: 'bag-switch', bag: 'garden', slot: 'one' },
+    ],
+    [
+      { command: 'found', bag: 'ocean', toy: 'crab' },
+      { command: 'found', bag: 'ocean', toy: 'crab' },
+    ],
+    [{ command: 'new-save', extra: 1 }, { command: 'new-save' }],
+    [
+      { command: 'visit-profile', id: '2026-10-19-rusty', guest: true },
+      { command: 'visit-profile', id: '2026-10-19-rusty', guest: true },
+    ],
+    [
+      { command: 'visit-profile', id: '2026-10-19-rusty' },
+      { command: 'visit-profile', id: '2026-10-19-rusty', guest: false },
+    ],
+    [
+      { command: 'profile-hide', id: 'a', hidden: true },
+      { command: 'profile-hide', id: 'a', guest: false, hidden: true },
+    ],
+    [
+      { command: 'profile-export', id: null },
+      { command: 'profile-export', id: null },
+    ],
+    [{ command: 'profile-import' }, { command: 'profile-import' }],
+    [{ command: 'finish-open' }, { command: 'finish-open' }],
+    [
+      { command: 'share-copy', toyTotal: 412 },
+      { command: 'share-copy', toyTotal: 412 },
+    ],
+    [
+      { command: 'share-copy', toyTotal: -3 },
+      { command: 'share-copy', toyTotal: 0 },
+    ],
+    [
+      { command: 'share-post', site: 'bluesky', toyTotal: 4 },
+      { command: 'share-post', site: 'bluesky', toyTotal: 4 },
+    ],
+    [{ command: 'move-out' }, { command: 'move-out' }],
+    [{ command: 'move-in' }, { command: 'move-in' }],
   ])('accepts %j', (msg, parsed) => {
     expect(parseFromWebview(msg)).toEqual(parsed);
   });
@@ -45,8 +86,26 @@ describe('parseFromWebview', () => {
     { command: 'log', level: 'info', message: 42 },
     { command: 'setting', key: 'species', value: 'dragon' },
     { command: 'setting', key: 'wander', value: 'yes' },
-    { command: 'save-state', state: { petX: 'left' } },
-    { command: 'save-state' },
+    { command: 'save-state', slot: 'one', state: { petX: 'left' } },
+    { command: 'save-state', slot: 'one' },
+    { command: 'save-state', state: { petX: 1 } },
+    { command: 'save-state', slot: '../evil', state: {} },
+    { command: 'bag-switch', bag: 'dragons', slot: 'one' },
+    { command: 'bag-switch', bag: 'garden' },
+    { command: 'found', bag: 'garden', toy: 'Bad Toy' },
+    { command: 'found', bag: 'nowhere', toy: 'crab' },
+    { command: 'visit-profile', id: '../../etc/passwd' },
+    { command: 'visit-profile' },
+    { command: 'profile-hide', id: 'a' },
+    { command: 'profile-export', id: 'C:/x' },
+    { command: 'share-post', site: 'myspace', toyTotal: 1 },
+    { command: 'share-card', png: 'data:image/jpeg;base64,/9j/' },
+    {
+      command: 'share-card',
+      png: 'data:image/png;base64,' + Buffer.from('GIF89a').toString('base64'),
+    },
+    { command: 'share-card', png: 'data:image/png;base64,' + 'A'.repeat(5 * 1024 * 1024) },
+    { command: 'share-card', png: 42 },
   ])('rejects %j', (msg) => {
     expect(parseFromWebview(msg)).toBeNull();
   });
@@ -57,6 +116,20 @@ describe('parseFromWebview', () => {
     const snap = parseFromWebview({ command: 'gather-logs', snapshot: long });
     expect(log).toMatchObject({ message: 'x'.repeat(2000) });
     expect(snap).toMatchObject({ snapshot: 'x'.repeat(4000) });
+  });
+});
+
+describe('share-card', () => {
+  it('accepts a PNG data URL and hands over the bytes', () => {
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from('rest'),
+    ]);
+    const msg = parseFromWebview({
+      command: 'share-card',
+      png: `data:image/png;base64,${png.toString('base64')}`,
+    });
+    expect(msg).toEqual({ command: 'share-card', png });
   });
 });
 

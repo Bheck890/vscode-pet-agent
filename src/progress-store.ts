@@ -3,6 +3,32 @@ import { Storage } from './storage';
 
 const FACTS_KEY = 'petXp';
 const BANK_KEY = 'petXpBanked';
+const LIFETIME_KEY = 'petLifetime';
+const FINISH_SEEN_KEY = 'petFinishSeen';
+
+/** Running totals for the finish card; facts are folded away after a month or two. */
+export interface Lifetime {
+  prompts: number;
+  actions: number;
+  agentMs: number;
+  records: number;
+}
+
+const LIFETIME_FIELDS: Array<keyof Lifetime> = ['prompts', 'actions', 'agentMs', 'records'];
+
+export function parseLifetime(v: unknown): Lifetime {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const n = (k: keyof Lifetime) =>
+    typeof o[k] === 'number' && Number.isFinite(o[k]) && (o[k] as number) > 0
+      ? (o[k] as number)
+      : 0;
+  return {
+    prompts: n('prompts'),
+    actions: n('actions'),
+    agentMs: n('agentMs'),
+    records: n('records'),
+  };
+}
 
 /** A stored fact map: key -> fact. Anything malformed is dropped. */
 export function parseFacts(v: unknown): Record<string, Fact> {
@@ -28,7 +54,8 @@ export function parseFacts(v: unknown): Record<string, Fact> {
   return out;
 }
 
-function parseBank(v: unknown): Record<string, number> {
+/** Monthly XP totals: "2026-08" -> xp. Anything malformed is dropped. */
+export function parseBank(v: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (v && typeof v === 'object' && !Array.isArray(v)) {
     for (const [month, xp] of Object.entries(v)) {
@@ -51,6 +78,7 @@ function monthOf(ms: number): string {
  * can report the same thing without double counting. Facts older than last
  * month are folded into a per-month total; folding the same month again
  * keeps the larger total, so two windows tidying at once can't add it twice.
+ * The finish fact is never folded: it says the save was finished, for good.
  */
 export class ProgressStore {
   constructor(private readonly storage: Storage) {}
@@ -64,8 +92,53 @@ export class ProgressStore {
   }
 
   total(): number {
-    const banked = Object.values(parseBank(this.storage.get(BANK_KEY))).reduce((a, b) => a + b, 0);
+    const banked = Object.values(this.banked()).reduce((a, b) => a + b, 0);
     return banked + Object.values(this.facts()).reduce((a, f) => a + f.xp, 0);
+  }
+
+  banked(): Record<string, number> {
+    return parseBank(this.storage.get(BANK_KEY));
+  }
+
+  /**
+   * Fills an empty save with one brought from another computer. Merges like
+   * every other write, so bringing a pet back here can only add to what it had.
+   */
+  restore(facts: Record<string, Fact>, banked: Record<string, number>, lifetime: Lifetime): void {
+    void this.storage.update(FACTS_KEY, { ...parseFacts(facts), ...this.facts() });
+    const bank = this.banked();
+    for (const [month, xp] of Object.entries(parseBank(banked))) {
+      bank[month] = Math.max(bank[month] ?? 0, xp);
+    }
+    void this.storage.update(BANK_KEY, bank);
+    const had = this.lifetime();
+    const sum = parseLifetime(lifetime);
+    for (const k of LIFETIME_FIELDS) {
+      sum[k] = Math.max(sum[k], had[k]);
+    }
+    void this.storage.update(LIFETIME_KEY, sum);
+  }
+
+  /** The finish screen has been shown for this save (it shows once, then from the 🏁 button). */
+  finishSeen(): boolean {
+    return this.storage.get(FINISH_SEEN_KEY) === true;
+  }
+
+  markFinishSeen(): void {
+    void this.storage.update(FINISH_SEEN_KEY, true);
+  }
+
+  lifetime(): Lifetime {
+    return parseLifetime(this.storage.get(LIFETIME_KEY));
+  }
+
+  /** Adds to the running totals. Callers only add for facts that were new, so nothing counts twice. */
+  addLifetime(delta: Partial<Lifetime>): void {
+    const sum = this.lifetime();
+    for (const k of LIFETIME_FIELDS) {
+      sum[k] += delta[k] ?? 0;
+    }
+    void this.storage.update(LIFETIME_KEY, sum);
   }
 
   /** Records a fact. False if that key was already there. */
@@ -88,7 +161,7 @@ export class ProgressStore {
     const bank = parseBank(this.storage.get(BANK_KEY));
     const folded: Record<string, number> = {};
     for (const [k, f] of Object.entries(facts)) {
-      if (f.at < keepFrom) {
+      if (f.at < keepFrom && f.kind !== 'finish') {
         folded[monthOf(f.at)] = (folded[monthOf(f.at)] ?? 0) + f.xp;
         delete facts[k];
       }

@@ -1,6 +1,7 @@
 # Plan: finishing, sharing, and save slots (profiles)
 
-Status: planned, not started. Comes after [Bags.md](Bags.md), whose last
+Status: built. Holiday toys carry over into a new save (the open question below). Comes
+after [Bags.md](Bags.md), whose last
 bag unlock is the finish line.
 
 ## The idea

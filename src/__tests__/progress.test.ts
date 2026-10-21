@@ -9,6 +9,7 @@ import {
   weeklyChallenges,
   xpForLevel,
 } from '../progress';
+import { BAG_LEVELS, FINISH_LEVEL, bagsUnlocked } from '../bags';
 import { ProgressService } from '../progress-service';
 import { ProgressStore, parseFacts } from '../progress-store';
 import type { Storage } from '../storage';
@@ -165,10 +166,14 @@ describe('ProgressStore', () => {
 });
 
 describe('ProgressService', () => {
-  function service() {
+  function service(slot = { id: 'one', startedAt: 0 }) {
     const storage = memory();
     const store = new ProgressStore(storage);
-    const svc = new ProgressService(store, () => NOW);
+    const svc = new ProgressService(
+      store,
+      () => NOW,
+      () => slot,
+    );
     const changes = jest.fn();
     svc.onChange(changes);
     return { svc, store, storage, changes };
@@ -261,5 +266,93 @@ describe('ProgressService', () => {
       xp: XP.challenge,
     });
     expect(svc.snapshot().challenges.find((c) => c.id === first.id)?.done).toBe(true);
+  });
+});
+
+describe('bag ladder', () => {
+  it('covers 20 bags, one each for levels 1 to 5, then every 2 levels', () => {
+    expect(BAG_LEVELS).toHaveLength(20);
+    expect(BAG_LEVELS.map((b) => b.level)).toEqual([
+      1, 2, 3, 4, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35,
+    ]);
+    expect(bagsUnlocked(1)).toEqual(['starter']);
+    expect(bagsUnlocked(6)).toHaveLength(5);
+    expect(bagsUnlocked(1, false)).toHaveLength(20);
+  });
+
+  it('gives every house two free rooms and at most four', () => {
+    for (const b of BAG_LEVELS) {
+      expect([b.id, b.rooms.length >= 3 && b.rooms.length <= 4]).toEqual([b.id, true]);
+      expect(b.rooms.every((r) => /^[a-z]+$/.test(r))).toBe(true);
+    }
+  });
+
+  it('finishes at the level of the last bag', () => {
+    expect(FINISH_LEVEL).toBe(BAG_LEVELS[BAG_LEVELS.length - 1].level);
+  });
+});
+
+describe('finishing and saves', () => {
+  function service(slot = { id: 'one', startedAt: 0 }) {
+    const storage = memory();
+    const store = new ProgressStore(storage);
+    return {
+      svc: new ProgressService(
+        store,
+        () => NOW,
+        () => slot,
+      ),
+      store,
+    };
+  }
+
+  it('records the finish once, when the finish level is reached, and keeps it for good', () => {
+    const { svc, store } = service();
+    store.add('big', { xp: 59000, kind: 'test', at: NOW.getTime() }, NOW);
+    svc.agentDone('a');
+    expect(svc.snapshot().finished).toBe(false);
+    store.add('bigger', { xp: 2000, kind: 'test', at: NOW.getTime() }, NOW);
+    svc.agentDone('b');
+    expect(svc.snapshot()).toMatchObject({ level: 35, finished: true });
+    svc.agentDone('c');
+    expect(Object.keys(store.facts()).filter((k) => k.startsWith('finish:'))).toEqual([
+      'finish:one',
+    ]);
+    expect(svc.firstFinish()).toBe(true);
+    expect(svc.firstFinish()).toBe(false);
+    // Two months on, everything else is folded into the bank; the finish stays.
+    const later = new Date(2027, 0, 5);
+    store.add('next', { xp: 1, kind: 'agent', at: later.getTime() }, later);
+    expect(Object.keys(store.facts())).toEqual(expect.arrayContaining(['finish:one', 'next']));
+    expect(store.facts()['big']).toBeUndefined();
+  });
+
+  it('ignores facts dated before the save started, so a replay pays nothing', () => {
+    const { svc, store } = service({ id: 'two', startedAt: NOW.getTime() - 1000 });
+    svc.turns([turn({ promptId: 'old', endedAt: NOW.getTime() - 5000 })]);
+    svc.outcome('s', { kind: 'test', ok: true, id: 't-old', at: NOW.getTime() - 5000 } as never);
+    expect(store.total()).toBe(0);
+    svc.turns([turn({ promptId: 'new' })]);
+    expect(store.total()).toBeGreaterThan(0);
+  });
+
+  it('keeps lifetime totals for the finish card, counting each prompt once', () => {
+    const { svc, store } = service();
+    const t = turn({ promptId: 'a', actions: 4, startedAt: NOW.getTime() - 3600000 });
+    svc.turns([t]);
+    svc.turns([t]);
+    svc.record('marathon');
+    svc.record('marathon');
+    expect(store.lifetime()).toEqual({ prompts: 1, actions: 4, agentMs: 3600000, records: 1 });
+  });
+
+  it('counts first finds from bags past the starter one for the collector challenge', () => {
+    const { svc, store } = service();
+    svc.found('starter', 'yarn');
+    svc.found('garden', 'snail');
+    svc.found('garden', 'snail');
+    svc.found('ocean', 'crab');
+    expect(Object.keys(store.facts()).sort()).toEqual(['find:crab', 'find:snail']);
+    expect(store.total()).toBe(0);
   });
 });

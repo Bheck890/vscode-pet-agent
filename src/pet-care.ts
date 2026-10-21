@@ -114,6 +114,11 @@ export class CareStore {
     return decay(parseStats(this.storage.get(STORAGE_KEY), now), now);
   }
 
+  /** Puts back stats brought from another computer. */
+  restore(stats: CareStats): void {
+    void this.storage.update(STORAGE_KEY, stats);
+  }
+
   act(action: CareAction, now = Date.now()): CareResult {
     const result = applyCare(this.get(now), action, now);
     if (result.ok) {

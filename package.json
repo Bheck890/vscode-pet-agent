@@ -73,6 +73,30 @@
       {
         "command": "pet-agents.showLog",
         "title": "Pet Agents: Show Log"
+      },
+      {
+        "command": "pet-agents.newSave",
+        "title": "Pet Agents: Start a New Save"
+      },
+      {
+        "command": "pet-agents.shareProgress",
+        "title": "Pet Agents: Share Progress"
+      },
+      {
+        "command": "pet-agents.exportProfile",
+        "title": "Pet Agents: Export Profile"
+      },
+      {
+        "command": "pet-agents.importProfile",
+        "title": "Pet Agents: Import Profile"
+      },
+      {
+        "command": "pet-agents.movePet",
+        "title": "Pet Agents: Move Pet to Another Computer"
+      },
+      {
+        "command": "pet-agents.receivePet",
+        "title": "Pet Agents: Bring Pet from Another Computer"
       }
     ],
     "menus": {
@@ -268,6 +292,76 @@
           "type": "boolean",
           "default": true,
           "description": "A house for your pet (the 🏠 button): furnish it with what you unlock by levelling up."
+        },
+        "pet-agents.style": {
+          "type": "string",
+          "default": "none",
+          "enum": [
+            "none",
+            "flowerCrown",
+            "flowerCrownSunny",
+            "flowerCrownBluebell",
+            "snorkel",
+            "snorkelCoral",
+            "snorkelGold",
+            "chefHat",
+            "chefHatPink",
+            "chefHatBlack",
+            "rockShades",
+            "rockShadesGold",
+            "rockShadesNeon",
+            "sweatband",
+            "sweatbandBlue",
+            "sweatbandGreen",
+            "spaceHelmet",
+            "spaceHelmetGold",
+            "spaceHelmetPink",
+            "vampireCape",
+            "vampireCapeBlue",
+            "vampireCapeGreen",
+            "retroVisor",
+            "retroVisorGreen",
+            "retroVisorPink",
+            "strawHat",
+            "strawHatRed",
+            "strawHatBlue",
+            "rangerHat",
+            "rangerHatGreen",
+            "rangerHatRed",
+            "beret",
+            "beretBlue",
+            "beretGreen",
+            "labGoggles",
+            "labGogglesGreen",
+            "labGogglesPink",
+            "earmuffs",
+            "earmuffsBlue",
+            "earmuffsGreen",
+            "explorerHat",
+            "explorerHatGreen",
+            "explorerHatWhite",
+            "knightHelm",
+            "knightHelmGold",
+            "knightHelmBlack",
+            "antenna",
+            "antennaRed",
+            "antennaBlue",
+            "headwrap",
+            "headwrapBlue",
+            "headwrapRed",
+            "aviator",
+            "aviatorRed",
+            "aviatorBlue",
+            "halo",
+            "haloPink",
+            "haloBlue"
+          ],
+          "markdownDescription": "A themed look from a bag's pack (flower crown, snorkel mask, chef hat...). Each bag gives one free and sells colour variants in its shop; easiest to pick in the 🎒 Collection tab. A holiday costume shows over it while the event is on."
+        },
+        "pet-agents.shareButtons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Post to X and Post to Bluesky buttons when sharing your progress. They only open your browser at a pre-filled post when you click them; nothing is sent otherwise."
         },
         "pet-agents.size": {
           "type": "string",

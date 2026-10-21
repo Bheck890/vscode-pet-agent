@@ -36,6 +36,8 @@ const DEFAULTS = {
   levels: true,
   enemies: true,
   house: true,
+  style: '',
+  shareButtons: true,
   size: 200,
 };
 
@@ -83,6 +85,8 @@ describe('readPetConfig', () => {
       levels: false,
       enemies: false,
       house: false,
+      style: 'chefHatPink',
+      shareButtons: false,
       size: 'large',
     };
     expect(readPetConfig((k) => values[k])).toEqual({
@@ -110,6 +114,8 @@ describe('readPetConfig', () => {
       levels: false,
       enemies: false,
       house: false,
+      style: 'chefHatPink',
+      shareButtons: false,
       size: 250,
     });
   });
@@ -138,6 +144,14 @@ describe('panelSetting', () => {
     expect(
       readPetConfig((k) => (k === 'disabledActions' ? 'zoomies' : undefined)).disabledActions,
     ).toEqual([]);
+  });
+
+  it('accepts a pet style picked in the collection, and none', () => {
+    expect(panelSetting('style', 'flowerCrown')).toEqual(['style', 'flowerCrown']);
+    expect(panelSetting('style', 'none')).toEqual(['style', 'none']);
+    expect(panelSetting('style', 'tophat')).toBeNull();
+    expect(panelSetting('style', true)).toBeNull();
+    expect(readPetConfig((k) => (k === 'style' ? 'tophat' : undefined)).style).toBe('');
   });
 
   it('rejects anything else', () => {

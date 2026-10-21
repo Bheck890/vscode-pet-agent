@@ -247,6 +247,23 @@ describe('README', () => {
     }
   });
 
+  it('documents every command', () => {
+    for (const c of commands) {
+      expect([c.command, readme.includes(c.title)]).toEqual([c.command, true]);
+    }
+  });
+
+  it('documents bags, houses, styles and saves', () => {
+    for (const heading of [
+      '### Bags',
+      '### Pet styles',
+      '### The house',
+      '### Finishing, saves and old pets',
+    ]) {
+      expect([heading, readme.includes(heading)]).toEqual([heading, true]);
+    }
+  });
+
   it('tells people how to install it from the marketplace', () => {
     expect(readme).toContain(`ext install ${pkg.publisher}.${pkg.name}`);
   });

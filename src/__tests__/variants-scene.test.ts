@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
+import { BAG_LEVELS, EVENT_TOYS } from '../bags';
 import { PET_STATES } from '../transcript-parser';
 
 interface Variant {
@@ -13,6 +14,9 @@ interface Variant {
   needs?: string;
   fx?: string | null;
   shop?: string;
+  bag?: string;
+  critter?: string;
+  label?: string;
 }
 
 interface VariantsApi {
@@ -26,6 +30,7 @@ interface VariantsApi {
       lastId?: string;
       off?: string[];
       unlocked?: string[];
+      bags?: string[];
       rand?: () => number;
     },
   ): Variant | null;
@@ -36,9 +41,14 @@ interface VariantsApi {
     lastId?: string;
     off?: string[];
     unlocked?: string[];
+    bags?: string[];
     rand?: () => number;
   }): Variant | null;
-  shopActions(): Array<{ id: string; group: string; icon: string; label: string }>;
+  shopActions(
+    bag?: string,
+  ): Array<{ id: string; action: string; group: string; icon: string; label: string }>;
+  bagActions(bag: string): Array<{ action: string; group: string; label: string }>;
+  unlockId(bag: string | undefined, kind: string, id: string): string;
   seeded(key: string): () => number;
 }
 
@@ -52,9 +62,11 @@ interface SceneApi {
   foundCount(): number;
   toyTotal: number;
   setBag(bag: Record<string, number>, spent?: Record<string, number>): void;
-  spares(rarity: string): number;
-  spend(rarity: string, n: number): boolean;
-  bagList(): Array<{ id: string; count: number; out: boolean }>;
+  spares(rarity: string, bag?: string): number;
+  spend(rarity: string, n: number, bag?: string): boolean;
+  bagList(bag?: string): Array<{ id: string; count: number; out: boolean }>;
+  bagCount(bag: string): { found: number; total: number };
+  visit(found: Record<string, number> | null): void;
   takeOut(id: string): boolean;
   putAway(id: string): void;
   canPlay(): boolean;
@@ -78,13 +90,30 @@ const PetStates = sandbox['PetStates'] as {
 };
 const PetScene = sandbox['PetScene'] as {
   create(api: object): SceneApi;
-  TOYS: Array<{ id: string; rarity: string; kind: string; event?: string }>;
+  BAGS: Array<{
+    id: string;
+    name: string;
+    emoji: string;
+    weights?: Record<string, number>;
+    toys: Array<{ id: string; rarity: string; use: string; kind: string }>;
+    styles: Array<{ id: string; name: string }>;
+  }>;
+  TOYS: Array<{
+    id: string;
+    rarity: string;
+    kind: string;
+    event?: string;
+    bag: string;
+    use: string;
+  }>;
   RARITY: Record<string, unknown>;
   PRICES: Record<string, Array<{ rarity: string; n: number }>>;
+  CRITTERS: Record<string, unknown>;
+  SCENERY: string[];
+  USE_LABEL: Record<string, string>;
+  rollToy(rand: () => number, bag: string): { id: string; bag: string; rarity: string };
 };
-
-/** Must match the scenery names handled by scene.js. */
-const SCENERY = ['box', 'bed', 'perch', 'wheel', 'surfboard', 'dish', 'chalkboard', 'books'];
+const SCENERY = PetScene.SCENERY;
 
 describe('agent states', () => {
   it('has a look for exactly the states the extension reports', () => {
@@ -229,9 +258,10 @@ describe('animation variants', () => {
 describe('scene', () => {
   const pet = { x: 0, y: 30, wx: 0, scale: 6 };
 
-  function makeScene(config: Record<string, unknown>, events: string[] = []) {
+  function makeScene(config: Record<string, unknown>, events: string[] = [], bag = 'starter') {
     const saved: Array<Record<string, number>> = [];
     const spent: Array<Record<string, number>> = [];
+    const found: string[] = [];
     const ctx = new Proxy(
       {},
       { get: (_t, key) => (key === 'measureText' ? () => ({ width: 10 }) : () => undefined) },
@@ -247,9 +277,11 @@ describe('scene', () => {
       playing: () => false,
       onBag: (bag: Record<string, number>) => saved.push(bag),
       onSpent: (s: Record<string, number>) => spent.push(s),
+      onFound: (toy: { id: string }) => found.push(toy.id),
       events: () => events,
+      activeBag: () => bag,
     });
-    return { scene, saved, spent };
+    return { scene, saved, spent, found };
   }
 
   it('has toys in every rarity', () => {
@@ -300,7 +332,7 @@ describe('scene', () => {
 
   it('restores the bag, ignoring unknown toys, and takes toys out and back', () => {
     const { scene } = makeScene({ toys: false, machines: true });
-    scene.setBag({ yarn: 3, dragon: 1 });
+    scene.setBag({ yarn: 3, griffin: 1 });
     expect(scene.foundCount()).toBe(1);
     expect(scene.bagList().find((t) => t.id === 'yarn')).toMatchObject({ count: 3, out: false });
     expect(scene.takeOut('crown')).toBe(false);
@@ -429,5 +461,204 @@ describe('scene', () => {
 
     scene.setJobs([{ id: 'b', kind: 'build', label: 'npm run build', background: true }]);
     expect(scene.machineCount()).toBe(1);
+  });
+});
+
+describe('bags', () => {
+  const ALL = [...Object.values(V.VARIANTS).flat(), ...V.IDLE];
+  const NORMAL = ['common', 'uncommon', 'rare', 'legendary'];
+  const pet = { x: 0, y: 30, wx: 0, scale: 6 };
+
+  function makeScene(config: Record<string, unknown>, events: string[] = [], bag = 'starter') {
+    const saved: Array<Record<string, number>> = [];
+    const found: string[] = [];
+    const ctx = new Proxy(
+      {},
+      { get: (_t, key) => (key === 'measureText' ? () => ({ width: 10 }) : () => undefined) },
+    );
+    const scene = PetScene.create({
+      ctx,
+      main: () => pet,
+      petPx: () => 192,
+      view: () => ({ w: 600, h: 600 }),
+      now: () => Date.now(),
+      emit: () => undefined,
+      config: () => config,
+      playing: () => false,
+      onBag: (b: Record<string, number>) => saved.push(b),
+      onSpent: () => undefined,
+      onFound: (toy: { id: string }) => found.push(toy.id),
+      events: () => events,
+      activeBag: () => bag,
+    });
+    return { scene, saved, found };
+  }
+
+  it('has the same bags, in the same order, as the extension', () => {
+    expect(PetScene.BAGS.map((b) => b.id)).toEqual(BAG_LEVELS.map((b) => b.id));
+    expect(PetScene.BAGS).toHaveLength(20);
+  });
+
+  it('keeps toy ids unique across every bag, and the holiday toys under the starter bag', () => {
+    const ids = PetScene.TOYS.map((t) => t.id);
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+    expect(ids.every((id) => /^[a-z]+$/.test(id))).toBe(true);
+    const holiday = PetScene.TOYS.filter((t) => t.rarity === 'event');
+    expect(holiday.map((t) => t.id).sort()).toEqual([...EVENT_TOYS].sort());
+    expect(holiday.every((t) => t.bag === 'starter')).toBe(true);
+  });
+
+  it.each(PetScene.BAGS.map((b) => [b.id, b] as const))(
+    '%s has 12 or more toys across the four rarities, each with a known use',
+    (_id, bag) => {
+      const toys = bag.toys.filter((t) => t.rarity !== 'event');
+      expect(toys.length).toBeGreaterThanOrEqual(12);
+      for (const rarity of NORMAL) {
+        expect([rarity, toys.some((t) => t.rarity === rarity)]).toEqual([rarity, true]);
+      }
+      for (const t of toys) {
+        expect([t.id, t.use in PetScene.USE_LABEL]).toEqual([t.id, true]);
+        expect(['toy', 'object']).toContain(t.kind);
+      }
+    },
+  );
+
+  it('gives every bag past the first a free style and two colour variants', () => {
+    for (const bag of PetScene.BAGS.slice(1)) {
+      expect([bag.id, bag.styles.length]).toEqual([bag.id, 3]);
+    }
+    expect(PetScene.BAGS[0].styles).toEqual([]);
+  });
+
+  it('finds only come from the active bag', () => {
+    const { scene, saved } = makeScene({ toys: true, machines: true }, [], 'garden');
+    for (let i = 0; i < 200; i++) {
+      scene.find();
+    }
+    const bags = new Set(
+      Object.keys(saved[saved.length - 1]).map((id) => PetScene.TOYS.find((t) => t.id === id)?.bag),
+    );
+    expect([...bags]).toEqual(['garden']);
+  });
+
+  it('still turns up holiday toys during their event, whichever bag is active', () => {
+    const { scene, saved } = makeScene({ toys: true, machines: true }, ['halloween'], 'space');
+    for (let i = 0; i < 60; i++) {
+      scene.find();
+    }
+    expect(Object.keys(saved[saved.length - 1])).toContain('pumpkin');
+  });
+
+  it('reports each kind of toy the first time it is found', () => {
+    const { scene, found } = makeScene({ toys: true, machines: true }, [], 'ocean');
+    for (let i = 0; i < 100; i++) {
+      scene.find();
+    }
+    expect(new Set(found).size).toBe(found.length);
+    expect(found.length).toBe(scene.bagCount('ocean').found);
+  });
+
+  it("rolls a toy from the bag's own catalogue whatever the roll", () => {
+    for (const bag of PetScene.BAGS) {
+      for (const r of [0, 0.7, 0.92, 0.999]) {
+        const toy = PetScene.rollToy(() => r, bag.id);
+        expect([bag.id, toy.bag]).toEqual([bag.id, bag.id]);
+        expect(toy.rarity).not.toBe('event');
+      }
+    }
+    // An unknown bag falls back to the starter bag.
+    expect(PetScene.rollToy(() => 0, 'nowhere').bag).toBe('starter');
+  });
+
+  it('boosts legendary finds in the legendary vault', () => {
+    const share = (bag: string) => {
+      let n = 0;
+      for (let i = 0; i < 2000; i++) {
+        n += PetScene.rollToy(Math.random, bag).rarity === 'legendary' ? 1 : 0;
+      }
+      return n / 2000;
+    };
+    expect(share('vault')).toBeGreaterThan(0.12);
+    expect(share('garden')).toBeLessThan(0.08);
+  });
+
+  it("a bag's shop only takes that bag's spares", () => {
+    const { scene } = makeScene({ toys: false, machines: true }, [], 'garden');
+    scene.setBag({ yarn: 30, sunflower: 4 });
+    expect(scene.spares('common', 'starter')).toBe(29);
+    expect(scene.spares('common', 'garden')).toBe(3);
+    expect(scene.spares('common')).toBe(3);
+    expect(scene.spend('common', 20, 'garden')).toBe(false);
+    expect(scene.spend('common', 3, 'garden')).toBe(true);
+    expect(scene.bagList('starter').find((t) => t.id === 'yarn')?.count).toBe(30);
+    expect(scene.bagList('garden').find((t) => t.id === 'sunflower')?.count).toBe(1);
+  });
+
+  it('visits an old bag without finding or spending anything, then comes home', () => {
+    const { scene, saved } = makeScene({ toys: true, machines: true });
+    scene.setBag({ yarn: 2 });
+    scene.visit({ crab: 4, shell: 1 });
+    expect(scene.bagCount('ocean').found).toBe(2);
+    expect(scene.bagList('starter').find((t) => t.id === 'yarn')?.count).toBe(0);
+    scene.find();
+    expect(saved).toHaveLength(0);
+    expect(scene.spend('common', 1, 'ocean')).toBe(false);
+    expect(scene.startToy(Date.now() + 5000)).toBe(true);
+    scene.visit(null);
+    expect(scene.bagCount('ocean').found).toBe(0);
+    expect(scene.bagList('starter').find((t) => t.id === 'yarn')?.count).toBe(2);
+  });
+
+  it('uses only critters scene.js draws', () => {
+    for (const v of ALL.filter((x) => x.critter)) {
+      expect([v.id, v.critter! in PetScene.CRITTERS]).toEqual([v.id, true]);
+    }
+  });
+
+  it('every bag animation belongs to a real bag, never the starter one', () => {
+    for (const v of ALL.filter((x) => x.bag)) {
+      expect([v.id, BAG_LEVELS.some((b) => b.id === v.bag && b.id !== 'starter')]).toEqual([
+        v.id,
+        true,
+      ]);
+    }
+  });
+
+  it.each(PetScene.BAGS.slice(1).map((b) => b.id))(
+    '%s comes with 2 hobbies and a state variant, and sells 2 or more animations',
+    (bag) => {
+      const free = V.bagActions(bag);
+      expect(free.filter((a) => a.group === 'idle')).toHaveLength(2);
+      expect(free.filter((a) => a.group !== 'idle')).toHaveLength(1);
+      const sold = V.shopActions(bag);
+      expect(sold.length).toBeGreaterThanOrEqual(2);
+      expect(sold.every((a) => a.id.startsWith(`${bag}.`))).toBe(true);
+    },
+  );
+
+  it('never plays a bag animation before its bag is open, and a shop one needs buying too', () => {
+    const seen = (bags?: string[], unlocked?: string[]) => {
+      const ids = new Set<string>();
+      for (let i = 0; i < 1500; i++) {
+        ids.add(V.pickIdle({ species: 'cat', wander: true, toys: true, bags, unlocked })?.id ?? '');
+        ids.add(V.pick('thinking', { classic: false, species: 'cat', bags, unlocked })?.id ?? '');
+      }
+      return ids;
+    };
+    const locked = seen(['starter']);
+    expect(ALL.filter((v) => v.bag && locked.has(v.id))).toEqual([]);
+    const open = seen(['starter', 'garden']);
+    expect(open.has('watering')).toBe(true);
+    expect(open.has('flowers')).toBe(true);
+    expect(open.has('buzz')).toBe(false);
+    expect(seen(['starter', 'garden'], ['garden.idle.buzz']).has('buzz')).toBe(true);
+    // Bought, but its bag isn't open (levels went back on): still locked.
+    expect(seen(['starter'], ['garden.idle.buzz']).has('buzz')).toBe(false);
+  });
+
+  it('namespaces unlock ids by bag, keeping the starter bag as it was', () => {
+    expect(V.unlockId('starter', 'idle', 'disco')).toBe('idle.disco');
+    expect(V.unlockId(undefined, 'food', 'fish')).toBe('food.fish');
+    expect(V.unlockId('garden', 'idle', 'buzz')).toBe('garden.idle.buzz');
   });
 });

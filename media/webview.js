@@ -15,7 +15,8 @@
     !window.PetScene ||
     !window.PetEvents ||
     !window.PetEnemies ||
-    !window.PetHouse
+    !window.PetHouse ||
+    !window.PetFinish
   ) {
     acquireVsCodeApi().postMessage({
       command: 'log',
@@ -66,6 +67,27 @@
    */
   /** @type {{petX?: number, petY?: number, bag?: Record<string, number>, spent?: Record<string, number>, unlocks?: string[], food?: string}} */
   let saved = {};
+  /** The save this view is playing, from `init`; save messages carry it. */
+  let slot = '';
+  /** Every bag's id and level, from `init`, in ladder order. */
+  /** @type {Array<{id: string, level: number}>} */
+  let bagLevels = [{ id: 'starter', level: 1 }];
+  /** The bag new finds come from, shared by every window. */
+  let activeBag = 'starter';
+  /** The level last reported, which opens bags. */
+  let level = 1;
+  /**
+   * An old save being visited (read-only), and what to come home to. While
+   * visiting, `config`, `saved` and `care` hold the old save's look,
+   * purchases and frozen stats; updates for the live save go into `home`.
+   */
+  /** @type {any} */
+  let visit = null;
+  /** @type {any} */
+  let home = null;
+  /** Old pets invited over: id -> their name and look. */
+  /** @type {Map<string, {id: string, name: string, look: any}>} */
+  const guests = new Map();
   /** @type {any} */
   let main = null;
   /** @type {Map<string, any>} */
@@ -211,18 +233,46 @@
     return c;
   }
 
-  function petPalette(color, tint) {
-    return Art.palette(config.species, color, tint, tint ? 0.22 : 0, {
-      accent: cssToHex(config.accentColor) || '',
-      eye: cssToHex(config.eyeColor) || '',
+  function petPalette(color, tint, look = config) {
+    return Art.palette(look.species, color, tint, tint ? 0.22 : 0, {
+      accent: cssToHex(look.accentColor) || '',
+      eye: cssToHex(look.eyeColor) || '',
     });
   }
 
-  /** Pattern and accessory come from config; the cache is cleared whenever config changes. */
-  function petSprite(o) {
+  /** The bags open at the current level; with levels switched off, every bag. */
+  function openBags() {
+    return bagLevels.filter((b) => config.levels === false || b.level <= level).map((b) => b.id);
+  }
+
+  function bagLevel(id) {
+    const b = bagLevels.find((x) => x.id === id);
+    return b ? b.level : 1;
+  }
+
+  /** The style to draw: the setting, if its bag is open and (for a colour variant) it was bought. */
+  function styleNow(look) {
+    const id = look.style;
+    const bag = id && window.PetScene.BAGS.find((b) => b.styles.some((st) => st.id === id));
+    if (!bag || !openBags().includes(bag.id)) {
+      return '';
+    }
+    const first = bag.styles[0].id === id;
+    return first || (saved.unlocks || []).includes(Variants.unlockId(bag.id, 'style', id))
+      ? id
+      : '';
+  }
+
+  /**
+   * Pattern, accessory and style come from the look (config, or an invited
+   * guest's); the cache is cleared whenever config changes.
+   */
+  function petSprite(o, look = config) {
     const costume = events.costume();
+    const style = look === config ? styleNow(config) : look.style || '';
     const key = [
       'pet',
+      look === config ? '' : look.name,
       o.color,
       o.tint,
       o.eyes,
@@ -232,18 +282,20 @@
       o.twitch,
       o.hide,
       costume,
+      style,
     ].join('|');
     return cached(key, () =>
-      Art.compose(config.species, petPalette(o.color, o.tint), {
+      Art.compose(look.species, petPalette(o.color, o.tint, look), {
         eyes: o.eyes,
         mouth: o.mouth,
         frame: o.frame,
         look: o.look,
         twitch: o.twitch,
-        pattern: config.pattern,
-        accessory: config.accessory,
-        accessoryColor: cssToHex(config.accessoryColor) || '',
+        pattern: look.pattern,
+        accessory: look.accessory,
+        accessoryColor: cssToHex(look.accessoryColor) || '',
         costume,
+        style,
         hide: o.hide,
       }),
     );
@@ -328,6 +380,7 @@
         lastId: p.syncKey ? undefined : p.lastVariant[state],
         off: config.disabledActions,
         unlocked: saved.unlocks,
+        bags: openBags(),
         rand: p.syncKey ? Variants.seeded(`${p.syncKey}:${state}`) : Math.random,
       });
       p.lastVariant[state] = v ? v.id : '';
@@ -582,10 +635,16 @@
     ['wag', 1500],
   ];
 
-  /** Starts a hobby (variety on, 60% of the time) or a short classic fidget. */
+  /**
+   * Starts a hobby (variety on, 60% of the time) or a short classic fidget.
+   * In a play room the pet plays with its toys whenever it can.
+   */
   function startFidget(p, t) {
-    const hobby =
-      !classic() && Math.random() < 0.6
+    const toyHobby = Variants.IDLE.find((h) => h.needs === 'toy');
+    const playRoom = house.kind() === 'play' && scene.canPlay();
+    const hobby = playRoom
+      ? toyHobby
+      : !classic() && Math.random() < 0.6
         ? Variants.pickIdle({
             species: config.species,
             wander: config.wander,
@@ -593,6 +652,7 @@
             lastId: p.hobbyLast,
             off: config.disabledActions,
             unlocked: saved.unlocks,
+            bags: openBags(),
           })
         : null;
     if (hobby) {
@@ -682,7 +742,7 @@
       toySteer === null &&
       !hobby &&
       (state === 'idle' || state === 'sleeping')
-        ? house.target()
+        ? house.target(state)
         : null;
     const steer = careSteer !== null ? careSteer : toySteer !== null ? toySteer : homeSteer;
     if (def.roam !== 'fly') {
@@ -795,7 +855,8 @@
       panels.note(`🛠️ ${main.name} is busy working! Try again when the task is done.`);
       return;
     }
-    if (p === main && t - lastPetCareAt > 3000) {
+    // A visited old pet loves the attention, but its stats stay as they were.
+    if (p === main && !visit && t - lastPetCareAt > 3000) {
       lastPetCareAt = t;
       vscodeApi.postMessage({ command: 'care', action: 'pet' });
     }
@@ -1739,9 +1800,14 @@
     const tt = (t - p.stateSince) / 1000;
     const s = p.scale;
     const size = petPx(p);
-    const species = config.species;
+    const look = p.look || config;
+    const species = look.species;
     const sp = Art.SPECIES[species];
-    const color = p === main ? baseColor() : Art.rotateHue(baseColor(), p.hue);
+    const color = p.look
+      ? cssToHex(look.color) || sp.defaultColor
+      : p === main
+        ? baseColor()
+        : Art.rotateHue(baseColor(), p.hue);
     const tint = config.stateColors && def.color ? def.color : '';
     const ps = pose(p, def, state, tt, t);
     const frame = ps.wag > 0 ? Math.floor((t / 1000) * ps.wag) % 2 : 0;
@@ -1800,16 +1866,19 @@
     );
     ctx.rotate(m.rot);
     ctx.scale(m.sx * k * dk, m.sy * k * dk);
-    const sprite = petSprite({
-      color,
-      tint,
-      eyes: ps.eyes,
-      mouth: ps.mouth,
-      frame,
-      look: ps.look,
-      twitch: ps.twitch,
-      hide: hide.join(','),
-    });
+    const sprite = petSprite(
+      {
+        color,
+        tint,
+        eyes: ps.eyes,
+        mouth: ps.mouth,
+        frame,
+        look: ps.look,
+        twitch: ps.twitch,
+        hide: hide.join(','),
+      },
+      look,
+    );
     ctx.drawImage(sprite, -size / 2, -size, size, size);
     if (p === main) {
       play.drawOnPet(p, s);
@@ -2135,7 +2204,7 @@
       upsertMini(id, b.id, info, b, t);
     });
     minis.forEach((m, id) => {
-      if (!live.has(id) && !m.leavingAt) {
+      if (!live.has(id) && !m.leavingAt && !m.guest) {
         m.leavingAt = t;
         const c = center(m);
         emit({ x: c.x, y: c.y, text: '💨', size: petPx(m) * 0.5, life: 0.8, vy: -20 });
@@ -2280,13 +2349,22 @@
     }
     switch (msg.command) {
       case 'init':
+        endVisit();
         saved = msg.state && typeof msg.state === 'object' ? msg.state : {};
+        slot = typeof msg.slot === 'string' ? msg.slot : '';
+        bagLevels = Array.isArray(msg.bags) ? msg.bags : bagLevels;
+        activeBag = saved.activeBag || 'starter';
+        delete saved.activeBag;
         scene.setBag(saved.bag, saved.spent);
         applyConfig(msg.config);
         panels.refreshUnlocks();
         break;
       case 'reinit':
-        applyConfig(msg.config);
+        if (visit) {
+          home.config = msg.config;
+        } else {
+          applyConfig(msg.config);
+        }
         break;
       case 'peon-event': {
         const state = PEON_TO_STATE[msg.anim];
@@ -2310,24 +2388,53 @@
         break;
       case 'progress-update':
         cheerProgress(msg);
-        house.setLevel(msg.level);
+        if (visit) {
+          home.level = msg.level;
+        } else {
+          level = msg.level;
+          house.setLevel(msg.level);
+        }
         panels.setProgress(msg);
         break;
       case 'house':
-        house.setLayout(msg.layout);
-        panels.refreshHouse();
+        if (visit) {
+          home.layout = msg.layout;
+        } else {
+          house.setLayout(msg.layout);
+          panels.refreshHouse();
+        }
         break;
       case 'unlocks': {
-        // Purchases made in another window.
-        const mine = saved.unlocks || [];
+        // Purchases and bag switches made in another window.
+        const live = visit ? home.saved : saved;
+        const mine = live.unlocks || [];
         const fresh = (msg.unlocks || []).filter((id) => !mine.includes(id));
+        const switched = typeof msg.activeBag === 'string' && msg.activeBag !== activeBag;
         if (fresh.length > 0) {
-          saved.unlocks = [...mine, ...fresh];
+          live.unlocks = [...mine, ...fresh];
+        }
+        if (switched) {
+          activeBag = msg.activeBag;
+        }
+        if ((fresh.length > 0 || switched) && !visit) {
           panels.refreshUnlocks();
         }
         break;
       }
+      case 'profiles':
+        panels.setProfiles(Array.isArray(msg.profiles) ? msg.profiles : []);
+        break;
+      case 'profile':
+        startVisit(msg.profile);
+        break;
+      case 'finished':
+        finish.show(msg.summary, !!msg.finished);
+        break;
       case 'care-update':
+        if (visit) {
+          home.care = msg.stats;
+          break;
+        }
         care = msg.stats;
         if (main && msg.action && msg.ok === false) {
           panels.note(`${main.name} ${msg.reason}.`);
@@ -2352,6 +2459,12 @@
       return `<b>${escapeHtml(thing.title)}</b><br><span class="dim">${escapeHtml(thing.sub)}</span>`;
     }
     for (const m of minis.values()) {
+      if (!m.leavingAt && m.guest && hit(m, x, y)) {
+        return (
+          `<b>${escapeHtml(m.name)}</b> <span class="dim">(visiting from an earlier save)</span>` +
+          '<br><span class="dim">Send them home from the 🏠 strip</span>'
+        );
+      }
       if (!m.leavingAt && hit(m, x, y)) {
         const def = lookOf(m, displayState(m), now());
         const what = m.otherRepo
@@ -2365,6 +2478,19 @@
           `<span class="dim">${escapeHtml(def.label)}${m.detail ? ': ' + escapeHtml(m.detail) : ''}</span>`
         );
       }
+    }
+    if (main && visit && hit(main, x, y)) {
+      const days = Math.max(1, Math.round((visit.endedAt - visit.createdAt) / 86400000));
+      const seen = new Date(visit.endedAt).toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+      return (
+        `<b>${escapeHtml(main.name)}</b> is ${escapeHtml(lookOf(main, displayState(main), now()).label)}` +
+        `<br>⭐ Level ${visit.progress.level} - with you for ${days} day${days > 1 ? 's' : ''}` +
+        `<br><span class="dim">last seen ${escapeHtml(seen)}</span>`
+      );
     }
     if (main && hit(main, x, y)) {
       const def = lookOf(main, displayState(main), now());
@@ -2381,7 +2507,7 @@
           ? `<br><span class="dim">${helpers} helper${helpers > 1 ? 's' : ''} working</span>`
           : '') +
         (jobs ? `<br><span class="dim">${jobs} job${jobs > 1 ? 's' : ''} running</span>` : '') +
-        `<br><span class="dim">🎒 ${scene.foundCount()}/${scene.toyTotal} toys in the bag</span>` +
+        `<br><span class="dim">🎒 ${scene.foundCount()}/${scene.toyTotal} toys found</span>` +
         (events.label() ? `<br>${escapeHtml(events.label())}` : '')
       );
     }
@@ -2448,7 +2574,8 @@
     main: () => main,
     busy: isBusy,
     care: () => care,
-    sendCare: (action) => vscodeApi.postMessage({ command: 'care', action }),
+    // A visited old pet's stats stay frozen.
+    sendCare: (action) => !visit && vscodeApi.postMessage({ command: 'care', action }),
     emit,
     note: (text, ms) => panels.note(text, ms),
     anim: startCareAnim,
@@ -2461,10 +2588,16 @@
     food: () => saved.food || 'kibble',
   });
 
-  /** Saves position, toy collection and shop purchases where VS Code keeps webview state. */
+  /**
+   * Saves position, toy collection and shop purchases where VS Code keeps
+   * webview state. Nothing is saved while visiting an old save.
+   */
   function persist() {
+    if (visit) {
+      return;
+    }
     vscodeApi.setState(saved);
-    vscodeApi.postMessage({ command: 'save-state', state: saved });
+    vscodeApi.postMessage({ command: 'save-state', state: saved, slot });
   }
 
   const scene = window.PetScene.create({
@@ -2492,7 +2625,9 @@
     onSpent: (spent) => {
       saved.spent = spent;
     },
+    onFound: (toy) => vscodeApi.postMessage({ command: 'found', bag: toy.bag, toy: toy.id }),
     events: () => events.active(),
+    activeBag: () => activeBag,
   });
 
   const events = window.PetEvents.create({
@@ -2526,7 +2661,10 @@
     now,
     config: () => config,
     season: () => events.season(),
-    save: (layout) => vscodeApi.postMessage({ command: 'house-save', layout }),
+    save: (layout) => vscodeApi.postMessage({ command: 'house-save', layout, slot }),
+    bags: () => (config ? openBags() : ['starter']),
+    unlocks: () => saved.unlocks || [],
+    toysOut: () => scene.toysOut(),
   });
   let wasBusy = false;
 
@@ -2572,7 +2710,16 @@
       return;
     }
     if (msg.level > before.level) {
-      celebrate(`⭐ Level ${msg.level}! New things for the house 🏠`, '#ffd23f');
+      const opened = bagLevels
+        .filter((b) => b.level > before.level && b.level <= msg.level)
+        .map((b) => window.PetScene.BAGS.find((x) => x.id === b.id))
+        .filter(Boolean);
+      celebrate(
+        opened.length > 0
+          ? `⭐ Level ${msg.level}! New bag: ${opened.map((b) => `${b.emoji} ${b.name}`).join(', ')}`
+          : `⭐ Level ${msg.level}! New things for the house 🏠`,
+        '#ffd23f',
+      );
     } else if (msg.xp > before.xp) {
       const c = center(main);
       emit({
@@ -2600,7 +2747,158 @@
     escapeHtml,
     debugSnapshot,
     house,
+    activeBag: () => activeBag,
+    openBags: () => (config ? openBags() : ['starter']),
+    bagLevel,
+    switchBag: (id) => {
+      activeBag = id;
+      vscodeApi.postMessage({ command: 'bag-switch', bag: id, slot });
+    },
+    setStyle: (id) => {
+      // Shown straight away; the extension echoes the setting back with a reinit.
+      config.style = id;
+      spriteCache.clear();
+      vscodeApi.postMessage({ command: 'setting', key: 'style', value: id || 'none' });
+    },
+    visiting: () => visit,
+    visit: (id, guest) => vscodeApi.postMessage({ command: 'visit-profile', id, guest }),
+    endVisit: () => {
+      endVisit();
+    },
+    invite,
+    guests: () => [...guests.values()],
+    sendHome,
+    spriteUrl,
+    homeName: () => ((home ? home.config : config) || { name: '' }).name,
   });
+
+  const finish = window.PetFinish.create({
+    post: (msg) => vscodeApi.postMessage(msg),
+    escapeHtml,
+    pet: () => ({ name: config ? config.name : '', species: config ? config.species : '' }),
+    config: () => config,
+    toyTotal: scene.toyTotal,
+    celebrate,
+    sprite: () =>
+      main && config
+        ? petSprite({ color: baseColor(), tint: '', eyes: 'happy', mouth: 'smile' })
+        : null,
+  });
+
+  const spriteUrls = new Map();
+
+  /** A small picture of a pet's look, for the Profiles row. */
+  function spriteUrl(look) {
+    const key = `url|${JSON.stringify(look)}`;
+    let url = spriteUrls.get(key);
+    if (!url) {
+      const pal = petPalette(
+        cssToHex(look.color) || Art.SPECIES[look.species].defaultColor,
+        '',
+        look,
+      );
+      const c = toCanvas(
+        Art.compose(look.species, pal, {
+          pattern: look.pattern,
+          accessory: look.accessory,
+          accessoryColor: cssToHex(look.accessoryColor) || '',
+          style: look.style,
+        }),
+      );
+      url = c.toDataURL('image/png');
+      spriteUrls.set(key, url);
+    }
+    return url;
+  }
+
+  /**
+   * Visits an old save: its pet, alive in its own houses, with its own toys,
+   * hobbies and style. Read-only: furniture can't move, nothing is found,
+   * no XP, and its care stats are frozen as they were.
+   */
+  function startVisit(profile) {
+    if (!profile || !profile.pet || !main) {
+      return;
+    }
+    endVisit();
+    home = { config, saved, care, level, layout: house.layout() };
+    visit = profile;
+    config = Object.assign({}, config, profile.pet, { name: profile.pet.name });
+    saved = { unlocks: profile.bag.unlocks, food: 'kibble' };
+    care = profile.care;
+    level = profile.progress.level;
+    spriteCache.clear();
+    play.setTool(null);
+    house.setReadOnly(true);
+    house.setLevel(level);
+    house.setLayout(profile.house);
+    scene.visit(profile.bag.found);
+    main.name = config.name;
+    main.variant = null;
+    panels.openHouse();
+    panels.visitChanged();
+    scene.say(`👋 Visiting ${profile.pet.name}`, '#ffd23f', 2500);
+  }
+
+  /** Comes home from a visit (a no-op when not visiting). */
+  function endVisit() {
+    if (!visit) {
+      return;
+    }
+    visit = null;
+    const back = home;
+    home = null;
+    saved = back.saved;
+    care = back.care;
+    level = back.level;
+    house.setReadOnly(false);
+    house.setLevel(level);
+    house.setLayout(back.layout);
+    scene.visit(null);
+    // Settings may have changed while away.
+    applyConfig(back.config);
+    panels.visitChanged();
+  }
+
+  /** Brings the visited pet over to play at your house as a mini pet, purely for looks. */
+  function invite() {
+    if (!visit) {
+      return;
+    }
+    const id = `guest:${visit.guest ? 'friend:' : ''}${visit.id}`;
+    const look = Object.assign({}, visit.pet);
+    guests.set(id, { id, name: visit.pet.name, look });
+    endVisit();
+    const c = center(main);
+    const miniScale = Math.max(2, Math.floor(main.scale * 0.45));
+    minis.set(
+      id,
+      makePet({
+        id,
+        name: look.name,
+        scale: miniScale,
+        x: c.x,
+        y: c.y,
+        base: 'idle',
+        background: true,
+        guest: true,
+        look,
+        spawnAt: now(),
+      }),
+    );
+    layoutMinis();
+    scene.say(`🎈 ${look.name} came over to play!`, '#ffd23f', 3000);
+    panels.refreshHouse();
+  }
+
+  function sendHome(id) {
+    const m = minis.get(id);
+    if (m) {
+      m.leavingAt = now();
+    }
+    guests.delete(id);
+    panels.refreshHouse();
+  }
 
   /** What the view is doing right now, for the debug log. No agent text or file paths. */
   function debugSnapshot() {
@@ -2629,6 +2927,9 @@
       toysFound: scene.foundCount(),
       enemies: enemies.count(),
       inHouse: house.isOpen(),
+      visiting: !!visit,
+      guests: guests.size,
+      activeBag,
       unlocks: (saved.unlocks || []).length,
       config: config && {
         species: config.species,

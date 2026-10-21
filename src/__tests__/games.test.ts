@@ -32,7 +32,11 @@ function setup() {
   const storage = memory();
   const records = new RecordsService(new RecordsStore(storage), storage, () => NOW);
   const store = new ProgressStore(storage);
-  const progress = new ProgressService(store, () => NOW);
+  const progress = new ProgressService(
+    store,
+    () => NOW,
+    () => ({ id: 'one', startedAt: 0 }),
+  );
   const subs = connectGames(watcher, records, progress);
   return { fire: (e: WatchEvent) => listener(e), store, records, subs };
 }

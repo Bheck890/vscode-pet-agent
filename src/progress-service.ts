@@ -1,3 +1,4 @@
+import { FINISH_LEVEL, STARTER_BAG } from './bags';
 import { localDay, weekId, weekStart } from './calendar';
 import type { CareAction } from './pet-care';
 import {
@@ -11,6 +12,7 @@ import {
   LevelInfo,
 } from './progress';
 import { ProgressStore } from './progress-store';
+import type { Slot } from './slot';
 import type { Outcome } from './transcript-parser';
 import type { TurnRecord } from './turn-tracker';
 
@@ -28,6 +30,8 @@ export interface ProgressUpdate extends LevelInfo {
   /** XP earned since Monday. */
   weekXp: number;
   challenges: ChallengeState[];
+  /** The save reached {@link FINISH_LEVEL}: its last bag is open. */
+  finished: boolean;
 }
 
 type Listener = () => void;
@@ -36,7 +40,8 @@ type Listener = () => void;
  * Turns what happens (prompts finishing, tests passing, helpers, records,
  * care) into XP facts in the {@link ProgressStore}, and completes the weekly
  * challenges. Every key is the same in every window, so each window can
- * report everything it sees.
+ * report everything it sees. Facts dated before the current save started
+ * belong to an earlier save and are ignored.
  */
 export class ProgressService {
   private listeners: Listener[] = [];
@@ -46,6 +51,7 @@ export class ProgressService {
   constructor(
     private readonly store: ProgressStore,
     private readonly now: () => Date,
+    private readonly slot: () => Slot,
   ) {}
 
   onChange(listener: Listener): { dispose(): void } {
@@ -54,7 +60,7 @@ export class ProgressService {
   }
 
   private add(key: string, fact: Fact): boolean {
-    if (!this.store.add(key, fact, this.now())) {
+    if (fact.at < this.slot().startedAt || !this.store.add(key, fact, this.now())) {
       return false;
     }
     this.changed();
@@ -63,6 +69,7 @@ export class ProgressService {
 
   private changed(): void {
     this.completeChallenges();
+    this.checkFinish();
     for (const l of this.listeners) {
       l();
     }
@@ -73,7 +80,10 @@ export class ProgressService {
    * bring hundreds). Interrupted ones earn nothing.
    */
   turns(turns: TurnRecord[]): void {
-    const done = turns.filter((t) => t.outcome === 'done').sort((a, b) => a.endedAt - b.endedAt);
+    const since = this.slot().startedAt;
+    const done = turns
+      .filter((t) => t.outcome === 'done' && t.endedAt >= since)
+      .sort((a, b) => a.endedAt - b.endedAt);
     const times = Object.values(this.store.facts())
       .filter((f) => f.kind === 'turn')
       .map((f) => f.at);
@@ -86,20 +96,28 @@ export class ProgressService {
       times.push(t.endedAt);
       return [`turn:${t.promptId}`, fact];
     });
-    if (entries.length > 0 && this.store.addMany(entries, this.now()).length > 0) {
-      this.changed();
+    const added = new Set(this.store.addMany(entries, this.now()));
+    if (added.size === 0) {
+      return;
     }
+    const counted = done.filter((t) => added.has(`turn:${t.promptId}`));
+    this.store.addLifetime({
+      prompts: counted.length,
+      actions: counted.reduce((n, t) => n + t.actions, 0),
+      agentMs: counted.reduce((n, t) => n + Math.max(0, t.endedAt - t.startedAt), 0),
+    });
+    this.changed();
   }
 
   outcome(sessionId: string, o: Outcome): void {
-    const slot = `${sessionId}:${o.kind}`;
+    const run = `${sessionId}:${o.kind}`;
     if (!o.ok) {
-      this.failing.set(slot, (this.failing.get(slot) ?? 0) + 1);
+      this.failing.set(run, (this.failing.get(run) ?? 0) + 1);
       return;
     }
     this.add(`${o.kind}:${o.id}`, { xp: XP[o.kind], kind: o.kind, at: o.at });
-    if ((this.failing.get(slot) ?? 0) > 0) {
-      this.failing.delete(slot);
+    if ((this.failing.get(run) ?? 0) > 0) {
+      this.failing.delete(run);
       this.add(`squash:${o.id}`, { xp: XP.squash, kind: 'squash', at: o.at });
     }
   }
@@ -111,11 +129,17 @@ export class ProgressService {
   /** A weekly record category taken this week. */
   record(category: string): void {
     const now = this.now();
-    this.add(`record:${weekId(now)}:${category}`, {
-      xp: XP.record,
-      kind: 'record',
-      at: now.getTime(),
-    });
+    const fact = { xp: XP.record, kind: 'record', at: now.getTime() };
+    if (this.add(`record:${weekId(now)}:${category}`, fact)) {
+      this.store.addLifetime({ records: 1 });
+    }
+  }
+
+  /** A kind of toy found for the first time; ones from bags past the first count for the collector. */
+  found(bag: string, toy: string): void {
+    if (bag !== STARTER_BAG) {
+      this.add(`find:${toy}`, { xp: 0, kind: 'find', at: this.now().getTime() });
+    }
   }
 
   /** A rewarded care action; only the first few each day earn XP. */
@@ -144,6 +168,30 @@ export class ProgressService {
     }
   }
 
+  private finishKey(): string {
+    return `finish:${this.slot().id}`;
+  }
+
+  /** Reaching the finish level once records it; levelling on past it changes nothing. */
+  private checkFinish(): void {
+    if (levelOf(this.store.total()).level >= FINISH_LEVEL && !this.store.has(this.finishKey())) {
+      this.store.add(
+        this.finishKey(),
+        { xp: 0, kind: 'finish', at: this.now().getTime() },
+        this.now(),
+      );
+    }
+  }
+
+  /** True the first time it is asked once the save has finished, so the finish screen shows once. */
+  firstFinish(): boolean {
+    if (!this.store.has(this.finishKey()) || this.store.finishSeen()) {
+      return false;
+    }
+    this.store.markFinishSeen();
+    return true;
+  }
+
   snapshot(): ProgressUpdate {
     const now = this.now();
     const week = weekId(now);
@@ -164,6 +212,7 @@ export class ProgressService {
           done: progress >= c.target,
         };
       }),
+      finished: this.store.has(this.finishKey()),
     };
   }
 }

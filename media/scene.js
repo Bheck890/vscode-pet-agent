@@ -16,8 +16,9 @@
   };
 
   /**
-   * What the shop charges, in spare toys of one rarity: an animation costs
-   * 20 commons or 5 rares, a new food 100 commons.
+   * What a bag's shop charges, in that bag's spare toys of one rarity: an
+   * animation costs 20 commons or 5 rares, a new food 100 commons, and
+   * furniture, room themes, rooms and pet styles are priced in between.
    */
   const PRICES = {
     animation: [
@@ -25,14 +26,32 @@
       { rarity: 'rare', n: 5 },
     ],
     food: [{ rarity: 'common', n: 100 }],
+    furniture: [
+      { rarity: 'common', n: 15 },
+      { rarity: 'rare', n: 4 },
+    ],
+    theme: [
+      { rarity: 'common', n: 15 },
+      { rarity: 'rare', n: 4 },
+    ],
+    room: [
+      { rarity: 'common', n: 30 },
+      { rarity: 'rare', n: 8 },
+    ],
+    style: [
+      { rarity: 'common', n: 25 },
+      { rarity: 'rare', n: 6 },
+    ],
   };
 
   /**
    * `kind` 'toy' things get flicked when clicked and chased; 'object' things
    * stay put and the pet comes over to use them. `use` decides what the pet
-   * does with it; `floats` items hover instead of resting.
+   * does with it; `floats` items hover instead of resting. These are the
+   * starter bag's toys, plus the holiday toys (filed under it, though they
+   * only turn up during their event, whichever bag is active).
    */
-  const TOYS = [
+  const STARTER_TOYS = [
     { id: 'yarn', kind: 'toy', emoji: '🧶', name: 'ball of yarn', rarity: 'common', use: 'play' },
     {
       id: 'box',
@@ -201,6 +220,483 @@
     },
   ];
 
+  /** A toy for a bag's catalogue: see TOYS above for what the fields mean. */
+  function toy(id, kind, emoji, name, rarity, use, floats) {
+    return Object.assign({ id, kind, emoji, name, rarity, use }, floats ? { floats: true } : {});
+  }
+
+  /**
+   * The bags, in level order (the levels are in src/bags.ts). New finds come
+   * from the active bag, and each bag's shop takes only its own spares. The
+   * first style comes with the bag; the others are sold in its shop. A
+   * bag's `weights` override RARITY's for its finds.
+   */
+  const BAGS = [
+    { id: 'starter', name: 'Starter', emoji: '🎒', toys: STARTER_TOYS, styles: [] },
+    {
+      id: 'garden',
+      name: 'Garden',
+      emoji: '🌻',
+      styles: [
+        { id: 'flowerCrown', name: 'flower crown' },
+        { id: 'flowerCrownSunny', name: 'sunny flower crown' },
+        { id: 'flowerCrownBluebell', name: 'bluebell flower crown' },
+      ],
+      toys: [
+        toy('sunflower', 'object', '🌻', 'sunflower', 'common', 'sniff'),
+        toy('tulip', 'object', '🌷', 'tulip', 'common', 'sniff'),
+        toy('snail', 'toy', '🐌', 'snail plush', 'common', 'play'),
+        toy('ladybug', 'toy', '🐞', 'ladybug', 'common', 'play'),
+        toy('seedling', 'object', '🌱', 'seedling', 'common', 'sniff'),
+        toy('mushroom', 'object', '🍄', 'toadstool', 'uncommon', 'sniff'),
+        toy('hedgehog', 'toy', '🦔', 'hedgehog plush', 'uncommon', 'cuddle'),
+        toy('bee', 'toy', '🐝', 'bumblebee', 'uncommon', 'float', true),
+        toy('bucket', 'object', '🪣', 'garden bucket', 'uncommon', 'hide'),
+        toy('oaktree', 'object', '🌳', 'little oak tree', 'rare', 'admire'),
+        toy('butterfly', 'toy', '🦋', 'butterfly kite', 'rare', 'float', true),
+        toy('lotus', 'object', '🪷', 'golden lotus', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'ocean',
+      name: 'Ocean',
+      emoji: '🌊',
+      styles: [
+        { id: 'snorkel', name: 'snorkel mask' },
+        { id: 'snorkelCoral', name: 'coral snorkel mask' },
+        { id: 'snorkelGold', name: 'golden snorkel mask' },
+      ],
+      toys: [
+        toy('shell', 'object', '🐚', 'seashell', 'common', 'admire'),
+        toy('crab', 'toy', '🦀', 'crab', 'common', 'play'),
+        toy('coral', 'object', '🪸', 'coral', 'common', 'sniff'),
+        toy('goldfish', 'toy', '🐠', 'tropical fish', 'common', 'play'),
+        toy('volleyball', 'toy', '🏐', 'beach ball', 'common', 'play'),
+        toy('lifering', 'toy', '🛟', 'rubber ring', 'uncommon', 'ride'),
+        toy('octopus', 'toy', '🐙', 'octopus plush', 'uncommon', 'cuddle'),
+        toy('jellyfish', 'toy', '🪼', 'jellyfish', 'uncommon', 'float', true),
+        toy('anchor', 'object', '⚓', 'anchor', 'uncommon', 'admire'),
+        toy('oyster', 'object', '🦪', 'pearl oyster', 'rare', 'admire'),
+        toy('dolphin', 'toy', '🐬', 'dolphin plush', 'rare', 'cuddle'),
+        toy('trident', 'object', '🔱', 'golden trident', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'kitchen',
+      name: 'Kitchen',
+      emoji: '🍳',
+      styles: [
+        { id: 'chefHat', name: 'chef hat' },
+        { id: 'chefHatPink', name: 'pink chef hat' },
+        { id: 'chefHatBlack', name: 'black chef hat' },
+      ],
+      toys: [
+        toy('spoon', 'toy', '🥄', 'wooden spoon', 'common', 'chew'),
+        toy('teapot', 'object', '🫖', 'teapot', 'common', 'sniff'),
+        toy('cupcake', 'object', '🧁', 'cupcake', 'common', 'sniff'),
+        toy('pan', 'object', '🍳', 'frying pan', 'common', 'sniff'),
+        toy('donut', 'toy', '🍩', 'donut ring', 'common', 'play'),
+        toy('cookie', 'toy', '🍪', 'giant cookie', 'uncommon', 'chew'),
+        toy('pretzel', 'toy', '🥨', 'pretzel', 'uncommon', 'chew'),
+        toy('honey', 'object', '🍯', 'honey pot', 'uncommon', 'sniff'),
+        toy('baguette', 'toy', '🥖', 'baguette', 'uncommon', 'chew'),
+        toy('birthdaycake', 'object', '🎂', 'birthday cake', 'rare', 'admire'),
+        toy('pizza', 'toy', '🍕', 'pizza slice plush', 'rare', 'chew'),
+        toy('croissant', 'object', '🥐', 'golden croissant', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'music',
+      name: 'Music',
+      emoji: '🎵',
+      styles: [
+        { id: 'rockShades', name: 'rock-star shades' },
+        { id: 'rockShadesGold', name: 'gold rock-star shades' },
+        { id: 'rockShadesNeon', name: 'neon rock-star shades' },
+      ],
+      toys: [
+        toy('maracas', 'toy', '🪇', 'maracas', 'common', 'play'),
+        toy('notes', 'toy', '🎶', 'floating notes', 'common', 'float', true),
+        toy('banjo', 'object', '🪕', 'banjo', 'common', 'music'),
+        toy('flute', 'object', '🪈', 'flute', 'common', 'music'),
+        toy('bell', 'toy', '🔔', 'jingle bell', 'common', 'play'),
+        toy('trumpet', 'object', '🎺', 'trumpet', 'uncommon', 'music'),
+        toy('vinyl', 'toy', '💿', 'vinyl record', 'uncommon', 'play'),
+        toy('microphone', 'object', '🎤', 'microphone', 'uncommon', 'music'),
+        toy('violin', 'object', '🎻', 'violin', 'uncommon', 'music'),
+        toy('saxophone', 'object', '🎷', 'saxophone', 'rare', 'music'),
+        toy('accordion', 'object', '🪗', 'accordion', 'rare', 'music'),
+        toy('goldmic', 'object', '🎙️', 'golden microphone', 'legendary', 'music'),
+      ],
+    },
+    {
+      id: 'sports',
+      name: 'Sports',
+      emoji: '⚽',
+      styles: [
+        { id: 'sweatband', name: 'sweatband' },
+        { id: 'sweatbandBlue', name: 'blue sweatband' },
+        { id: 'sweatbandGreen', name: 'green sweatband' },
+      ],
+      toys: [
+        toy('soccerball', 'toy', '⚽', 'soccer ball', 'common', 'play'),
+        toy('tennisball', 'toy', '🎾', 'tennis ball', 'common', 'play'),
+        toy('baseball', 'toy', '⚾', 'baseball', 'common', 'play'),
+        toy('shuttlecock', 'toy', '🏸', 'shuttlecock', 'common', 'play'),
+        toy('football', 'toy', '🏈', 'football', 'common', 'chew'),
+        toy('paddle', 'toy', '🏓', 'ping-pong paddle', 'uncommon', 'play'),
+        toy('bowling', 'object', '🎳', 'bowling pins', 'uncommon', 'admire'),
+        toy('hockey', 'toy', '🏒', 'hockey stick', 'uncommon', 'play'),
+        toy('glove', 'toy', '🥊', 'boxing glove', 'uncommon', 'chew'),
+        toy('medal', 'object', '🏅', 'gold medal', 'rare', 'admire'),
+        toy('skis', 'toy', '🎿', 'skis', 'rare', 'ride'),
+        toy('goldcup', 'object', '🏆', 'champion cup', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'space',
+      name: 'Space',
+      emoji: '🪐',
+      styles: [
+        { id: 'spaceHelmet', name: 'space helmet' },
+        { id: 'spaceHelmetGold', name: 'golden space helmet' },
+        { id: 'spaceHelmetPink', name: 'pink space helmet' },
+      ],
+      toys: [
+        toy('planet', 'toy', '🪐', 'ringed planet', 'common', 'float', true),
+        toy('moon', 'object', '🌙', 'crescent moon', 'common', 'admire'),
+        toy('star', 'toy', '⭐', 'shooting star', 'common', 'float', true),
+        toy('comet', 'toy', '☄️', 'comet', 'common', 'float', true),
+        toy('alien', 'toy', '👽', 'alien plush', 'common', 'cuddle'),
+        toy('satellite', 'toy', '🛰️', 'satellite', 'uncommon', 'float', true),
+        toy('galaxy', 'object', '🌌', 'pocket galaxy', 'uncommon', 'admire'),
+        toy('meteor', 'toy', '🌠', 'meteor', 'uncommon', 'float', true),
+        toy('moonrock', 'object', '🪨', 'moon rock', 'uncommon', 'sniff'),
+        toy('earth', 'toy', '🌍', 'tiny Earth', 'rare', 'play'),
+        toy('sun', 'object', '☀️', 'pocket sun', 'rare', 'admire'),
+        toy('blackhole', 'object', '🕳️', 'black hole', 'legendary', 'hide'),
+      ],
+    },
+    {
+      id: 'spooky',
+      name: 'Spooky',
+      emoji: '👻',
+      styles: [
+        { id: 'vampireCape', name: 'vampire cape' },
+        { id: 'vampireCapeBlue', name: 'midnight vampire cape' },
+        { id: 'vampireCapeGreen', name: 'goblin vampire cape' },
+      ],
+      toys: [
+        toy('candle', 'object', '🕯️', 'candle', 'common', 'sniff'),
+        toy('bat', 'toy', '🦇', 'bat plush', 'common', 'float', true),
+        toy('spider', 'toy', '🕷️', 'toy spider', 'common', 'play'),
+        toy('skull', 'object', '💀', 'grinning skull', 'common', 'admire'),
+        toy('web', 'object', '🕸️', 'cobweb', 'common', 'admire'),
+        toy('potion', 'object', '🧪', 'bubbling potion', 'uncommon', 'sniff'),
+        toy('ghost', 'toy', '👻', 'friendly ghost', 'uncommon', 'float', true),
+        toy('coffin', 'object', '⚰️', 'comfy coffin', 'uncommon', 'nap'),
+        toy('broom', 'toy', '🧹', 'witch broom', 'uncommon', 'ride'),
+        toy('crystalball', 'object', '🔮', 'crystal ball', 'rare', 'admire'),
+        toy('wand', 'toy', '🪄', 'magic wand', 'rare', 'play'),
+        toy('tombstone', 'object', '🪦', 'haunted tombstone', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'retro',
+      name: 'Retro tech',
+      emoji: '💾',
+      styles: [
+        { id: 'retroVisor', name: 'retro visor' },
+        { id: 'retroVisorGreen', name: 'green-screen visor' },
+        { id: 'retroVisorPink', name: 'synthwave visor' },
+      ],
+      toys: [
+        toy('floppy', 'toy', '💾', 'floppy disk', 'common', 'play'),
+        toy('cassette', 'toy', '📼', 'cassette tape', 'common', 'play'),
+        toy('pager', 'toy', '📟', 'pager', 'common', 'chew'),
+        toy('abacus', 'object', '🧮', 'abacus', 'common', 'game'),
+        toy('dvd', 'toy', '📀', 'shiny disc', 'common', 'play'),
+        toy('gamepad', 'object', '🎮', 'game pad', 'uncommon', 'game'),
+        toy('crt', 'object', '📺', 'CRT telly', 'uncommon', 'game'),
+        toy('rotary', 'object', '☎️', 'rotary phone', 'uncommon', 'admire'),
+        toy('camera', 'object', '📷', 'film camera', 'uncommon', 'admire'),
+        toy('desktop', 'object', '🖥️', 'retro computer', 'rare', 'game'),
+        toy('minidisc', 'toy', '💽', 'minidisc', 'rare', 'play'),
+        toy('trackball', 'object', '🖲️', 'golden trackball', 'legendary', 'game'),
+      ],
+    },
+    {
+      id: 'farm',
+      name: 'Farm',
+      emoji: '🚜',
+      styles: [
+        { id: 'strawHat', name: 'straw hat' },
+        { id: 'strawHatRed', name: 'red-band straw hat' },
+        { id: 'strawHatBlue', name: 'blue-band straw hat' },
+      ],
+      toys: [
+        toy('chick', 'toy', '🐤', 'chick plush', 'common', 'cuddle'),
+        toy('hay', 'object', '🌾', 'hay bale', 'common', 'nap'),
+        toy('corn', 'toy', '🌽', 'corn cob', 'common', 'chew'),
+        toy('carrot', 'toy', '🥕', 'carrot', 'common', 'chew'),
+        toy('apple', 'toy', '🍎', 'apple', 'common', 'play'),
+        toy('tractor', 'toy', '🚜', 'toy tractor', 'uncommon', 'ride'),
+        toy('piglet', 'toy', '🐖', 'piglet plush', 'uncommon', 'cuddle'),
+        toy('milkcan', 'object', '🥛', 'milk can', 'uncommon', 'sniff'),
+        toy('sheep', 'toy', '🐑', 'woolly sheep', 'uncommon', 'cuddle'),
+        toy('cow', 'toy', '🐄', 'cow plush', 'rare', 'cuddle'),
+        toy('horse', 'toy', '🐴', 'rocking horse', 'rare', 'ride'),
+        toy('rooster', 'object', '🐓', 'golden rooster', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'camping',
+      name: 'Camping',
+      emoji: '🏕️',
+      styles: [
+        { id: 'rangerHat', name: 'ranger hat' },
+        { id: 'rangerHatGreen', name: 'forest ranger hat' },
+        { id: 'rangerHatRed', name: 'red ranger hat' },
+      ],
+      toys: [
+        toy('sausage', 'toy', '🌭', 'campfire sausage', 'common', 'chew'),
+        toy('lantern', 'object', '🏮', 'paper lantern', 'common', 'admire'),
+        toy('compass', 'toy', '🧭', 'compass', 'common', 'play'),
+        toy('chestnut', 'toy', '🌰', 'chestnut', 'common', 'chew'),
+        toy('log', 'object', '🪵', 'log seat', 'common', 'sit'),
+        toy('canoe', 'toy', '🛶', 'canoe', 'uncommon', 'ride'),
+        toy('backpack', 'object', '🎒', 'big backpack', 'uncommon', 'hide'),
+        toy('campfire', 'object', '🔥', 'campfire', 'uncommon', 'admire'),
+        toy('fishingrod', 'toy', '🎣', 'fishing rod', 'uncommon', 'play'),
+        toy('map', 'object', '🗺️', 'treasure map', 'rare', 'admire'),
+        toy('flashlight', 'toy', '🔦', 'flashlight', 'rare', 'play'),
+        toy('bear', 'toy', '🐻', 'golden bear plush', 'legendary', 'cuddle'),
+      ],
+    },
+    {
+      id: 'art',
+      name: 'Art studio',
+      emoji: '🎨',
+      styles: [
+        { id: 'beret', name: 'beret' },
+        { id: 'beretBlue', name: 'blue beret' },
+        { id: 'beretGreen', name: 'green beret' },
+      ],
+      toys: [
+        toy('crayon', 'toy', '🖍️', 'crayon', 'common', 'chew'),
+        toy('paintbrush', 'toy', '🖌️', 'paintbrush', 'common', 'play'),
+        toy('pencil', 'toy', '✏️', 'pencil', 'common', 'chew'),
+        toy('scissors', 'object', '✂️', 'safety scissors', 'common', 'admire'),
+        toy('palette', 'object', '🎨', 'paint palette', 'common', 'admire'),
+        toy('framed', 'object', '🖼️', 'framed sketch', 'uncommon', 'admire'),
+        toy('vase', 'object', '🏺', 'clay pot', 'uncommon', 'admire'),
+        toy('thread', 'toy', '🧵', 'spool of thread', 'uncommon', 'play'),
+        toy('sketchbook', 'object', '📓', 'sketchbook', 'uncommon', 'admire'),
+        toy('sculpture', 'object', '🗿', 'stone head', 'rare', 'admire'),
+        toy('masks', 'object', '🎭', 'theatre masks', 'rare', 'admire'),
+        toy('masterpiece', 'object', '🌅', 'sunset masterpiece', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'lab',
+      name: 'Science lab',
+      emoji: '🔬',
+      styles: [
+        { id: 'labGoggles', name: 'lab goggles' },
+        { id: 'labGogglesGreen', name: 'green lab goggles' },
+        { id: 'labGogglesPink', name: 'pink lab goggles' },
+      ],
+      toys: [
+        toy('testtube', 'toy', '🧪', 'test tube', 'common', 'play'),
+        toy('magnet', 'toy', '🧲', 'magnet', 'common', 'play'),
+        toy('petri', 'object', '🧫', 'petri dish', 'common', 'sniff'),
+        toy('goggles', 'toy', '🥽', 'safety goggles', 'common', 'play'),
+        toy('atom', 'toy', '⚛️', 'atom model', 'common', 'float', true),
+        toy('microscope', 'object', '🔬', 'microscope', 'uncommon', 'admire'),
+        toy('dna', 'object', '🧬', 'DNA model', 'uncommon', 'admire'),
+        toy('thermometer', 'object', '🌡️', 'thermometer', 'uncommon', 'admire'),
+        toy('lightbulb', 'object', '💡', 'bright idea', 'uncommon', 'admire'),
+        toy('brain', 'toy', '🧠', 'squishy brain', 'rare', 'cuddle'),
+        toy('microbe', 'toy', '🦠', 'microbe plush', 'rare', 'float', true),
+        toy('lightning', 'object', '⚡', 'bottled lightning', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'winter',
+      name: 'Winter',
+      emoji: '❄️',
+      styles: [
+        { id: 'earmuffs', name: 'earmuffs' },
+        { id: 'earmuffsBlue', name: 'icy earmuffs' },
+        { id: 'earmuffsGreen', name: 'pine earmuffs' },
+      ],
+      toys: [
+        toy('snowflake', 'toy', '❄️', 'snowflake', 'common', 'float', true),
+        toy('mittens', 'toy', '🧤', 'mittens', 'common', 'chew'),
+        toy('cocoa', 'object', '☕', 'hot cocoa', 'common', 'sniff'),
+        toy('knitscarf', 'toy', '🧣', 'knitted scarf', 'common', 'play'),
+        toy('icecube', 'toy', '🧊', 'ice cube', 'common', 'play'),
+        toy('sled', 'toy', '🛷', 'sled', 'uncommon', 'ride'),
+        toy('skates', 'toy', '⛸️', 'ice skates', 'uncommon', 'ride'),
+        toy('snowcloud', 'toy', '🌨️', 'snow cloud', 'uncommon', 'float', true),
+        toy('penguin', 'toy', '🐧', 'penguin plush', 'uncommon', 'cuddle'),
+        toy('mountain', 'object', '🏔️', 'snowy peak', 'rare', 'admire'),
+        toy('reindeer', 'toy', '🦌', 'reindeer plush', 'rare', 'cuddle'),
+        toy('frostgem', 'object', '💠', 'frost crystal', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'jungle',
+      name: 'Jungle',
+      emoji: '🌴',
+      styles: [
+        { id: 'explorerHat', name: 'explorer hat' },
+        { id: 'explorerHatGreen', name: 'jungle-green explorer hat' },
+        { id: 'explorerHatWhite', name: 'white explorer hat' },
+      ],
+      toys: [
+        toy('banana', 'toy', '🍌', 'banana', 'common', 'chew'),
+        toy('coconut', 'toy', '🥥', 'coconut', 'common', 'play'),
+        toy('leaf', 'object', '🌿', 'big leaf', 'common', 'sniff'),
+        toy('monkey', 'toy', '🐒', 'monkey plush', 'common', 'cuddle'),
+        toy('frog', 'toy', '🐸', 'tree frog', 'common', 'play'),
+        toy('parrot', 'toy', '🦜', 'parrot', 'uncommon', 'float', true),
+        toy('palm', 'object', '🌴', 'palm tree', 'uncommon', 'admire'),
+        toy('snake', 'toy', '🐍', 'snake plush', 'uncommon', 'cuddle'),
+        toy('pineapple', 'toy', '🍍', 'pineapple', 'uncommon', 'play'),
+        toy('tiger', 'toy', '🐅', 'tiger plush', 'rare', 'cuddle'),
+        toy('bongo', 'object', '🪘', 'bongo drum', 'rare', 'music'),
+        toy('sloth', 'toy', '🦥', 'golden sloth', 'legendary', 'cuddle'),
+      ],
+    },
+    {
+      id: 'castle',
+      name: 'Castle',
+      emoji: '🏰',
+      styles: [
+        { id: 'knightHelm', name: 'knight helm' },
+        { id: 'knightHelmGold', name: 'golden knight helm' },
+        { id: 'knightHelmBlack', name: 'black knight helm' },
+      ],
+      toys: [
+        toy('shield', 'object', '🛡️', 'shield', 'common', 'admire'),
+        toy('sword', 'toy', '🗡️', 'wooden sword', 'common', 'play'),
+        toy('banner', 'object', '🚩', 'banner', 'common', 'admire'),
+        toy('parchment', 'object', '📜', 'royal decree', 'common', 'admire'),
+        toy('oldkey', 'toy', '🗝️', 'old key', 'common', 'play'),
+        toy('bowarrow', 'toy', '🏹', 'bow and arrow', 'uncommon', 'play'),
+        toy('swords', 'object', '⚔️', 'crossed swords', 'uncommon', 'admire'),
+        toy('horn', 'object', '📯', 'herald horn', 'uncommon', 'music'),
+        toy('chess', 'object', '♟️', 'chess set', 'uncommon', 'game'),
+        toy('dragonegg', 'object', '🥚', 'dragon egg', 'rare', 'admire'),
+        toy('goblet', 'object', '🍵', 'royal goblet', 'rare', 'sniff'),
+        toy('dragon', 'toy', '🐉', 'dragon plush', 'legendary', 'cuddle'),
+      ],
+    },
+    {
+      id: 'robots',
+      name: 'Robots',
+      emoji: '🤖',
+      styles: [
+        { id: 'antenna', name: 'robot antenna' },
+        { id: 'antennaRed', name: 'red robot antenna' },
+        { id: 'antennaBlue', name: 'blue robot antenna' },
+      ],
+      toys: [
+        toy('gear', 'toy', '⚙️', 'gear', 'common', 'play'),
+        toy('bolt', 'toy', '🔩', 'nut and bolt', 'common', 'chew'),
+        toy('battery', 'object', '🔋', 'battery', 'common', 'admire'),
+        toy('spanner', 'toy', '🔧', 'spanner', 'common', 'play'),
+        toy('plug', 'toy', '🔌', 'plug', 'common', 'play'),
+        toy('robot', 'toy', '🤖', 'robot pal', 'uncommon', 'cuddle'),
+        toy('radar', 'object', '📡', 'radar dish', 'uncommon', 'admire'),
+        toy('robotarm', 'object', '🦾', 'robot arm', 'uncommon', 'admire'),
+        toy('toolbox', 'object', '🧰', 'toolbox', 'uncommon', 'hide'),
+        toy('controls', 'object', '🎛️', 'control panel', 'rare', 'game'),
+        toy('robotleg', 'object', '🦿', 'robot leg', 'rare', 'admire'),
+        toy('goldbot', 'toy', '🤖', 'golden robot', 'legendary', 'cuddle'),
+      ],
+    },
+    {
+      id: 'desert',
+      name: 'Desert',
+      emoji: '🌵',
+      styles: [
+        { id: 'headwrap', name: 'desert headwrap' },
+        { id: 'headwrapBlue', name: 'indigo headwrap' },
+        { id: 'headwrapRed', name: 'red headwrap' },
+      ],
+      toys: [
+        toy('cactus', 'object', '🌵', 'cactus', 'common', 'sniff'),
+        toy('hourglass', 'object', '⏳', 'sand timer', 'common', 'admire'),
+        toy('scarab', 'toy', '🪲', 'scarab beetle', 'common', 'play'),
+        toy('lizard', 'toy', '🦎', 'lizard', 'common', 'play'),
+        toy('scorpion', 'toy', '🦂', 'scorpion plush', 'common', 'play'),
+        toy('camel', 'toy', '🐫', 'camel plush', 'uncommon', 'cuddle'),
+        toy('oillamp', 'object', '🪔', 'magic lamp', 'uncommon', 'admire'),
+        toy('sunhat', 'toy', '👒', 'sun hat', 'uncommon', 'play'),
+        toy('pot', 'object', '🫙', 'sand jar', 'uncommon', 'sniff'),
+        toy('mirage', 'object', '🏜️', 'mirage', 'rare', 'admire'),
+        toy('sandcastle', 'object', '🏯', 'sand palace', 'rare', 'hide'),
+        toy('goldlion', 'object', '🦁', 'golden lion', 'legendary', 'admire'),
+      ],
+    },
+    {
+      id: 'sky',
+      name: 'Sky',
+      emoji: '☁️',
+      styles: [
+        { id: 'aviator', name: 'aviator cap' },
+        { id: 'aviatorRed', name: 'red aviator cap' },
+        { id: 'aviatorBlue', name: 'blue aviator cap' },
+      ],
+      toys: [
+        toy('cloud', 'toy', '☁️', 'cloud pillow', 'common', 'float', true),
+        toy('plane', 'toy', '✈️', 'paper plane', 'common', 'float', true),
+        toy('feather', 'toy', '🪶', 'feather', 'common', 'play'),
+        toy('windchime', 'object', '🎐', 'wind chime', 'common', 'music'),
+        toy('umbrella', 'toy', '☂️', 'umbrella', 'common', 'float', true),
+        toy('parachute', 'toy', '🪂', 'parachute', 'uncommon', 'float', true),
+        toy('eagle', 'toy', '🦅', 'eagle', 'uncommon', 'float', true),
+        toy('tornado', 'object', '🌪️', 'tiny tornado', 'uncommon', 'admire'),
+        toy('swan', 'toy', '🦢', 'swan plush', 'uncommon', 'cuddle'),
+        toy('helicopter', 'toy', '🚁', 'toy helicopter', 'rare', 'float', true),
+        toy('thundercloud', 'object', '⛈️', 'thundercloud', 'rare', 'admire'),
+        toy('skywhale', 'toy', '🐋', 'sky whale', 'legendary', 'float', true),
+      ],
+    },
+    {
+      id: 'vault',
+      name: 'Legendary vault',
+      emoji: '💎',
+      weights: { common: 30, uncommon: 26, rare: 24, legendary: 20 },
+      styles: [
+        { id: 'halo', name: 'golden halo' },
+        { id: 'haloPink', name: 'rose halo' },
+        { id: 'haloBlue', name: 'sapphire halo' },
+      ],
+      toys: [
+        toy('coin', 'toy', '🪙', 'gold coin', 'common', 'play'),
+        toy('moneybag', 'object', '💰', 'bag of gold', 'common', 'admire'),
+        toy('vaultkey', 'toy', '🔑', 'vault key', 'common', 'play'),
+        toy('ring', 'object', '💍', 'diamond ring', 'common', 'admire'),
+        toy('necklace', 'object', '📿', 'pearl necklace', 'common', 'admire'),
+        toy('ticket', 'object', '🎫', 'golden ticket', 'uncommon', 'admire'),
+        toy('giftbox', 'object', '🎁', 'jewel box', 'uncommon', 'hide'),
+        toy('ribbon', 'object', '🎖️', 'hero ribbon', 'uncommon', 'admire'),
+        toy('servicebell', 'object', '🛎️', 'golden bell', 'uncommon', 'music'),
+        toy('starjewel', 'object', '🌟', 'star jewel', 'rare', 'admire'),
+        toy('goldcarp', 'toy', '🎏', 'golden carp kite', 'rare', 'float', true),
+        toy('diamondheart', 'object', '💖', 'diamond heart', 'legendary', 'admire'),
+        toy('goldsun', 'object', '🌞', 'golden sun', 'legendary', 'admire'),
+        toy('phoenix', 'toy', '🐦', 'phoenix plush', 'legendary', 'cuddle'),
+      ],
+    },
+  ];
+
+  /** Every toy in every bag, in bag then catalogue order, each knowing its bag. */
+  const TOYS = BAGS.flatMap((bag) => bag.toys.map((t) => Object.assign({ bag: bag.id }, t)));
+
   /** Chance that a find while a holiday is on is that holiday's toy (higher until you have it). */
   const EVENT_FIND = { missing: 0.6, owned: 0.2 };
 
@@ -238,6 +734,48 @@
     server: 'server rack',
   };
 
+  /**
+   * Critters idle hobbies chase or watch. `passes` ones fly straight across
+   * the sky; `ground` ones creep along the floor at that speed; the rest
+   * flutter round the pet.
+   */
+  const CRITTERS = {
+    butterfly: { emoji: '🦋', flap: true },
+    bee: { emoji: '🐝', flap: true },
+    bat: { emoji: '🦇', flap: true },
+    bird: { emoji: '🐦', passes: true },
+    parrot: { emoji: '🦜', passes: true },
+    snail: { emoji: '🐌', ground: 0.25 },
+    crab: { emoji: '🦀', ground: 1 },
+    chick: { emoji: '🐤', ground: 0.6 },
+  };
+
+  /** Themed scenery drawn as a big emoji beside the pet (see scenery()). */
+  const EMOJI_SCENERY = {
+    planter: '🪴',
+    sandcastle: '🏰',
+    drumkit: '🥁',
+    goal: '🥅',
+    cauldron: '🫕',
+    campfire: '🔥',
+    easel: '🖼️',
+    snowman: '⛄',
+    robotarm: '🦾',
+  };
+
+  /** Every scenery name scenery() draws; animation variants may only use these. */
+  const SCENERY = [
+    'box',
+    'bed',
+    'perch',
+    'wheel',
+    'surfboard',
+    'dish',
+    'chalkboard',
+    'books',
+    ...Object.keys(EMOJI_SCENERY),
+  ];
+
   /** At most this many toys are out of the bag at once. */
   const MAX_OUT = 3;
   const MAX_MACHINES = 4;
@@ -252,21 +790,39 @@
     return Math.max(lo, Math.min(hi, v));
   }
 
-  /** Weighted rarity roll, then a toy of that rarity. */
-  function rollToy(rand) {
-    const tiers = Object.entries(RARITY);
-    const total = tiers.reduce((n, [, r]) => n + r.weight, 0);
+  function bagOf(id) {
+    return BAGS.find((b) => b.id === id) || BAGS[0];
+  }
+
+  /**
+   * Weighted rarity roll (with the bag's own weights, if it has them), then
+   * one of the bag's toys of that rarity. A bag with none of that rarity
+   * gives one of its lowest rarity instead.
+   */
+  function rollToy(rand, bagId) {
+    const bag = bagOf(bagId);
+    const tiers = Object.entries(RARITY).map(([name, r]) => [
+      name,
+      (bag.weights && bag.weights[name]) || r.weight,
+    ]);
+    const total = tiers.reduce((n, [, w]) => n + w, 0);
     let r = rand() * total;
     let tier = tiers[0][0];
-    for (const [name, info] of tiers) {
-      r -= info.weight;
+    for (const [name, w] of tiers) {
+      r -= w;
       if (r < 0) {
         tier = name;
         break;
       }
     }
-    const pool = TOYS.filter((toy) => toy.rarity === tier);
-    return pool[Math.floor(rand() * pool.length)];
+    const mine = bag.toys.filter((t) => t.rarity !== 'event');
+    let pool = mine.filter((t) => t.rarity === tier);
+    if (pool.length === 0) {
+      const lowest = tiers.find(([name]) => mine.some((t) => t.rarity === name));
+      pool = mine.filter((t) => t.rarity === lowest[0]);
+    }
+    const pick = pool[Math.floor(rand() * pool.length)];
+    return TOYS.find((t) => t.id === pick.id);
   }
 
   /**
@@ -281,7 +837,9 @@
    *   playing: () => boolean,
    *   onBag: (bag: Record<string, number>) => void,
    *   onSpent: (spent: Record<string, number>) => void,
+   *   onFound: (toy: any) => void,
    *   events: () => string[],
+   *   activeBag: () => string,
    * }} api
    */
   function create(api) {
@@ -302,6 +860,9 @@
     /** Toy id -> how many were traded in at the shop. Both counts only grow. */
     /** @type {Map<string, number>} */
     const spent = new Map();
+    /** While visiting an old save: its bag, which the pet plays from. Nothing is found or saved. */
+    /** @type {Map<string, number> | null} */
+    let visiting = null;
     let nextFind = api.now() + rnd(8000, 15000);
     let toysWereOn = true;
     let pose = null;
@@ -341,29 +902,34 @@
       api.onBag(Object.fromEntries(bag));
     }
 
-    function have(id) {
-      return (bag.get(id) || 0) - (spent.get(id) || 0);
+    /** The bag being shown: the live one, or an old save's while visiting it. */
+    function inv() {
+      return visiting || bag;
     }
 
-    /** Toys of a rarity beyond the first of each kind; only these can be traded in. */
-    function spareOf(rarity) {
-      return TOYS.filter((d) => d.rarity === rarity).map((d) => ({
+    function have(id) {
+      return visiting ? visiting.get(id) || 0 : (bag.get(id) || 0) - (spent.get(id) || 0);
+    }
+
+    /** Toys of a rarity from one bag, beyond the first of each kind; only these can be traded in. */
+    function spareOf(rarity, bagId) {
+      return TOYS.filter((d) => d.rarity === rarity && d.bag === bagId).map((d) => ({
         id: d.id,
         n: Math.max(0, have(d.id) - 1),
       }));
     }
 
-    function spares(rarity) {
-      return spareOf(rarity).reduce((sum, d) => sum + d.n, 0);
+    function spares(rarity, bagId = api.activeBag()) {
+      return spareOf(rarity, bagId).reduce((sum, d) => sum + d.n, 0);
     }
 
-    /** Trades in `n` spare toys of a rarity, most plentiful kind first. False if short. */
-    function spend(rarity, n) {
-      if (spares(rarity) < n) {
+    /** Trades in `n` spare toys of a rarity from one bag, most plentiful kind first. False if short. */
+    function spend(rarity, n, bagId = api.activeBag()) {
+      if (visiting || spares(rarity, bagId) < n) {
         return false;
       }
       for (let i = 0; i < n; i++) {
-        const most = spareOf(rarity).reduce((a, b) => (b.n > a.n ? b : a));
+        const most = spareOf(rarity, bagId).reduce((a, b) => (b.n > a.n ? b : a));
         spent.set(most.id, (spent.get(most.id) || 0) + 1);
       }
       api.onSpent(Object.fromEntries(spent));
@@ -416,10 +982,19 @@
       return toy;
     }
 
-    /** A brand-new find: rolls a rarity, adds it to the bag and shows it off. */
+    /** Kinds of toy found from one bag, and how many kinds it has. */
+    function bagCount(bagId) {
+      const all = TOYS.filter((d) => d.bag === bagId);
+      return { found: all.filter((d) => inv().has(d.id)).length, total: all.length };
+    }
+
+    /** A brand-new find from the active bag: rolls a rarity, adds it to the bag and shows it off. */
     function find(t) {
+      if (visiting) {
+        return;
+      }
       const g = geom();
-      const def = rollEventToy() || rollToy(Math.random);
+      const def = rollEventToy() || rollToy(Math.random, api.activeBag());
       const count = (bag.get(def.id) || 0) + 1;
       bag.set(def.id, count);
       saveBag();
@@ -428,8 +1003,11 @@
       }
       const rarity = RARITY[def.rarity];
       if (count === 1) {
+        api.onFound(def);
+        const from = bagOf(def.bag);
+        const { found, total } = bagCount(from.id);
         say(
-          `New find! ${def.emoji} ${def.name} (${rarity.label}) - ${bag.size}/${TOYS.length} in the bag`,
+          `New find! ${def.emoji} ${def.name} (${rarity.label}) - ${found}/${total} in the ${from.emoji} ${from.name} bag`,
           rarity.color || '#ffffff',
           5000,
         );
@@ -464,7 +1042,7 @@
 
     function takeOut(id) {
       const def = TOYS.find((d) => d.id === id);
-      if (!def || !bag.has(id) || isOut(id) || !api.main()) {
+      if (!def || !inv().has(id) || isOut(id) || !api.main()) {
         return false;
       }
       const g = geom();
@@ -555,7 +1133,7 @@
 
     /** Something to play with: a toy on the floor, or (with toys on) one in the bag. */
     function canPlay() {
-      return toys.some((o) => !o.storing) || (api.config().toys && bag.size > 0);
+      return toys.some((o) => !o.storing) || (api.config().toys && inv().size > 0);
     }
 
     /**
@@ -577,7 +1155,7 @@
       const g = geom();
       let floor = toys.filter((o) => !o.storing);
       if (floor.length === 0) {
-        const ids = [...bag.keys()];
+        const ids = [...inv().keys()];
         const id = ids[Math.floor(Math.random() * ids.length)];
         const def = TOYS.find((d) => d.id === id);
         const x = clamp(
@@ -747,11 +1325,17 @@
       const g = geom();
       const w = api.view().w;
       const fromLeft = Math.random() < 0.5;
+      const info = CRITTERS[kind] || CRITTERS.butterfly;
       critter = {
         kind,
+        info,
         until,
         x: fromLeft ? -20 : w + 20,
-        y: kind === 'bird' ? rnd(20, Math.max(30, g.p.y)) : g.floor - g.size * 0.8,
+        y: info.passes
+          ? rnd(20, Math.max(30, g.p.y))
+          : info.ground
+            ? g.floor - g.size * 0.04
+            : g.floor - g.size * 0.8,
         tx: g.cx,
         ty: g.floor - g.size * rnd(0.5, 1),
         dir: fromLeft ? 1 : -1,
@@ -762,7 +1346,23 @@
     function stepCritter(g, t, dt) {
       const c = critter;
       const w = api.view().w;
-      if (c.kind === 'bird') {
+      if (c.info.ground) {
+        // Creeps up to the pet and back, then wanders off once the hobby ends.
+        if (t > c.until) {
+          c.tx = c.dir > 0 ? w + 60 : -60;
+        } else if (t > c.retarget) {
+          c.retarget = t + rnd(1500, 3000);
+          c.tx = clamp(g.cx + rnd(-g.size, g.size), 20, w - 20);
+        }
+        const step = g.size * c.info.ground * dt;
+        c.x += clamp(c.tx - c.x, -step, step);
+        c.dir = c.tx >= c.x ? 1 : -1;
+        if (c.x < -50 || c.x > w + 50) {
+          critter = null;
+        }
+        return;
+      }
+      if (c.info.passes) {
         c.x += c.dir * w * 0.12 * dt;
         c.y += Math.sin(t / 300) * 0.6;
         if (c.x < -40 || c.x > w + 40) {
@@ -791,10 +1391,10 @@
       ctx.save();
       ctx.translate(c.x, c.y);
       // Emoji face left; mirror them when heading right.
-      const flap = c.kind === 'butterfly' ? 0.4 + 0.6 * Math.abs(Math.sin(t / 70)) : 1;
+      const flap = c.info.flap ? 0.4 + 0.6 * Math.abs(Math.sin(t / 70)) : 1;
       ctx.scale(-c.dir * flap, 1);
-      ctx.font = `${Math.round(g.size * (c.kind === 'bird' ? 0.13 : 0.11))}px sans-serif`;
-      ctx.fillText(c.kind === 'bird' ? '🐦' : '🦋', 0, 0);
+      ctx.font = `${Math.round(g.size * (c.info.passes ? 0.13 : 0.11))}px sans-serif`;
+      ctx.fillText(c.info.emoji, 0, 0);
       ctx.restore();
     }
 
@@ -1319,6 +1919,11 @@
         ctx.fillText('📚', x + size * 0.5, y + s);
         ctx.fillText('📚', x + size * 0.5, y - size * 0.16);
         ctx.fillText('📚', x - size * 0.52, y + s);
+      } else if (EMOJI_SCENERY[name] && layer === 'front') {
+        ctx.font = `${Math.round(size * 0.4)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(EMOJI_SCENERY[name], x + size * 0.55, y + s);
       }
       ctx.restore();
     }
@@ -1567,24 +2172,39 @@
           nextFind = api.now() + rnd(60000, 120000);
         }
       },
-      /** Every toy in catalogue order, with how many are in the bag and whether one is out. */
-      bagList: () =>
-        TOYS.map((d) => ({
+      /**
+       * One bag's toys (or every toy) in catalogue order, with how many are
+       * in the bag and whether one is out.
+       */
+      bagList: (bagId) =>
+        TOYS.filter((d) => !bagId || d.bag === bagId).map((d) => ({
           id: d.id,
           emoji: d.emoji,
           name: d.name,
           rarity: RARITY[d.rarity].label,
           color: RARITY[d.rarity].color,
-          count: bag.has(d.id) ? have(d.id) : 0,
+          count: inv().has(d.id) ? have(d.id) : 0,
           out: isOut(d.id),
         })),
       takeOut,
       putAway,
       putAllAway,
-      foundCount: () => bag.size,
+      foundCount: () => inv().size,
+      bagCount,
       spares,
       spend,
       toyTotal: TOYS.length,
+      /** Where toys are out on the floor, for a play room to steer the pet to. */
+      toysOut: () => toys.filter((o) => !o.storing).map((o) => o.x),
+      /**
+       * Visits an old save's bag (null comes home). The floor is cleared
+       * either way, and nothing is found while visiting.
+       */
+      visit: (found) => {
+        toys = [];
+        use = null;
+        visiting = found ? new Map(Object.entries(found).filter(([, n]) => n > 0)) : null;
+      },
       /** Where the toy hobby wants the pet's centre to go, or null. */
       target: () => target,
       /** Pose overrides while playing with a toy. */
@@ -1596,5 +2216,5 @@
     };
   }
 
-  root.PetScene = { create, TOYS, RARITY, PRICES };
+  root.PetScene = { create, BAGS, TOYS, RARITY, PRICES, CRITTERS, SCENERY, USE_LABEL, rollToy };
 })(this);

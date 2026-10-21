@@ -134,16 +134,17 @@ A new find shows off on the floor for a minute (rarer ones glow and sparkle, and
 
 A napping pet wakes up to play. While the agent is working, toys still fly but your pet stays at work. Right-click a toy or object to put it back in the bag.
 
-Click 🎒 to see the bag: all 24 slots, with ❔ for ones you haven't found yet. Click a toy to take it out, click again to put it away. The bag is shared by every VS Code window and survives reloads and reinstalls.
+Click 🎒 to see the active bag: every slot, with ❔ for ones you haven't found yet. Click a toy to take it out, click again to put it away. Bags are shared by every VS Code window and survive reloads and reinstalls. As you level up, more themed bags open (see [Bags](#bags)).
 
 ### The shop
 
-The bag has three tabs: **🧸 Toys** (your finds), **✨ Collection** (what you've bought) and **🛒 Shop**. In the shop you trade spare toys for new things. Only spares are traded in, so you always keep one of each toy you've found.
+The bag has three tabs: **🧸 Toys** (your finds), **✨ Collection** (what you've bought) and **🛒 Shop**. In the shop you trade spare toys for new things. Only spares are traded in, so you always keep one of each toy you've found. Every bag has its own shop, paid for with that bag's spares; the starter bag's sells:
 
 | For sale   | Price                   | What you get                                                                                                                                                   |
 | ---------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Animations | 20 common **or** 5 rare | 🪩 disco dancing, 🎩 magic tricks, 🫧 blowing bubbles, 🔭 stargazing, 🌀 spinning, 🎉 party (idle hobbies), 💤 sweet dreams (napping), 🎊 victory party (done) |
 | Foods      | 100 common              | 🐟 fresh fish, 🥩 steak, 🍓 strawberries, 🍰 cake                                                                                                              |
+| Rooms      | 30 common **or** 8 rare | the 🏡 cozy home's kitchen and yard                                                                                                                            |
 
 Bought animations join the random mix (and the ⚙️ action list, where locked ones show 🔒). In ✨ Collection you pick which food 🍖 Feed drops, and switch each bought animation on or off. Bought foods can also be picked under the care buttons.
 
@@ -203,9 +204,52 @@ The 🏆 button shows your level and this week's records:
 
 A failing test run lets a 🐛 bug into the panel and a failing build a 👾 gremlin; the next passing run of the same kind squashes them, for XP. Leave the agent waiting for your OK for a minute and a 🦠 slime creeps up until you answer (`pet-agents.enemies`).
 
+### Bags
+
+![The bag picker on the Garden bag with its toys, and the Garden bag's shop](docs/images/bags.png)
+
+Levels open new **bags**, 20 in all: one at each of levels 1 to 5, then one every 2 levels up to 35. Each is a themed pack: 🌻 Garden, 🌊 Ocean, 🍳 Kitchen, 🎵 Music, ⚽ Sports, 🪐 Space, 👻 Spooky, 💾 Retro tech, 🚜 Farm, 🏕️ Camping, 🎨 Art studio, 🔬 Science lab, ❄️ Winter, 🌴 Jungle, 🏰 Castle, 🤖 Robots, 🌵 Desert, ☁️ Sky and the 💎 Legendary vault, where legendary finds turn up far more often. Pick the active bag at the top of the 🎒 panel (locked ones show the level that opens them). New finds come from its catalogue of 12 or more toys, and its 🛒 shop sells its goodies for its own spares. Switching never loses anything, every window follows the switch, and holiday toys still turn up during their event whichever bag is active. With `pet-agents.levels` off, every bag is open.
+
+Every bag after the first is a whole pack:
+
+| Part           | Comes with the bag                                                                                               | Sold in its shop  |
+| -------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------- |
+| 🧸 Toys        | its catalogue starts dropping                                                                                    |                   |
+| 🎭 Animations  | 2 idle hobbies and a themed look for an agent state, e.g. watering the plants, chasing a snail, sniffing flowers | 2 more            |
+| 🏠 House       | a new house with 2 rooms                                                                                         | 1 or 2 more rooms |
+| 🛋️ Furniture   | 3 pieces                                                                                                         | 3 more            |
+| 🎨 Room themes | 1 wallpaper and floor set                                                                                        | 2 more            |
+| 🍽️ Food        |                                                                                                                  | 1 themed food     |
+| 🐾 Pet style   | 1 themed look for your pet                                                                                       | 2 colour variants |
+
+A new challenge joins the weekly pool: 🧸 find 3 toys in a new bag.
+
+### Pet styles
+
+![Pets wearing a flower crown, a snorkel mask, a chef hat, a space helmet, rock-star shades, a knight helm, an explorer hat and a halo](docs/images/styles.gif)
+
+Each bag gives your pet a themed look: a flower crown, a snorkel mask, a chef hat, rock-star shades, a space helmet, a knight helm and more, with two colour variants each in the bag's shop. Pick one (or none) in the bag's ✨ Collection tab, or with `pet-agents.style`. Your own accessory wins its spot, and a holiday costume shows over a style while the event is on.
+
 ### The house
 
-The 🏠 button takes your pet home: a room with a window onto the season, and furniture you unlock as you level up, from a bed at level 1 to a disco ball at 20. Click a piece in the strip at the bottom to put it in or take it out, drag it to move it, and pick a wallpaper. When idle, your pet heads for its bed for a nap. The room is the same in every window, and an agent starting work calls your pet back to its desk (`pet-agents.house`).
+![The greenhouse cottage, the moon base observatory and the castle throne room](docs/images/houses.png)
+
+The 🏠 button takes your pet home. Starter furniture unlocks as you level up, from a bed at level 1 to a disco ball at 20, and each bag brings a house of its own (a greenhouse cottage, a beach hut, a bakery, a moon base, a haunted manor, a castle...) with its own window onto the season or the stars. Pick a house and a room in the strip at the bottom (`◀ Bedroom ▶`), click a piece to put it in or take it out, drag it to move it, and pick each room's theme. Furniture from any bag can go in any room.
+
+Rooms have a job: in a bedroom your pet naps in its bed, in a kitchen it waits by its bowl, in a yard it plays with its toys, and anywhere else it wanders about. The rooms are the same in every window, and an agent starting work calls your pet back to its desk (`pet-agents.house`).
+
+### Finishing, saves and old pets
+
+![The finish screen, and a visit to Biscuit's finished save with friends in the Profiles row](docs/images/profiles.png)
+
+- **You finished!** When the last bag opens at level 35, your pet throws a party and a finish screen sums up the save: days, level, XP, prompts, actions, toys, houses, rooms and records. It shows once, then from the 🏁 button in the level panel. XP keeps counting after.
+- **Share it.** Copy a summary, save a 1200x630 share card, or open a pre-filled post on X or Bluesky (only when you click, and `pet-agents.shareButtons` hides those buttons). Only numbers, your pet's name and look and the bags are shared: never prompt text, file names or repo names. **Pet Agents: Share Progress** does the same any time.
+- **Start a new save** from the finish screen, ⚙️ **💾 Saves and sharing**, or **Pet Agents: Start a New Save**. Everything that belongs to the save (level, bags, purchases, houses, care) is written to a profile file and a fresh save starts at level 1. Your prompt records, settings and holiday toys carry over, and every finished save adds a 🏅 to the level panel.
+- **Visit your old pets** from the **Profiles** row in the 🏠 strip. Each earlier pet is alive in its own houses, with its own toys, hobbies and style: pet it, look round, or 🎈 invite it over to play at your house as a mini pet. Visits are read-only: nothing moves, no XP, no finds, and its care stats stay as they were. 🏠 (or an agent starting work) brings you home. Profiles can be renamed and hidden.
+- **Swap profiles with friends.** **📤 Share this profile...** (or **Pet Agents: Export Profile**) writes a `.petprofile.json` with no prompts, paths or repo names. A friend adds it with **➕ Add a friend's profile...** (or **Pet Agents: Import Profile**) and it appears under 👋 Friends. Send a newer copy and it replaces the old one.
+- **Move your pet to another computer.** **🚚 Move my pet to another computer...** (or **Pet Agents: Move Pet to Another Computer**) writes a `.petsave` file with your live save, your prompt records and, if you like, your old profiles and friends. Give it a password and the file is encrypted (scrypt and AES-256-GCM); without one, prompt previews stay behind. There is no password reset. Once the file is written and checked, the pet here becomes a "moved" profile you can still visit. On the other computer, **📦 Bring my pet here...** (or **Pet Agents: Bring Pet from Another Computer**) brings it in, look and all, and asks before replacing a save that has progress.
+
+Nothing is uploaded: you carry the files however you like.
 
 ## Where the activity comes from
 
@@ -222,11 +266,17 @@ Tests, builds and background jobs are recognised from the shell command (`npm te
 
 ## Commands
 
-| Command                     | Description                                                   |
-| --------------------------- | ------------------------------------------------------------- |
-| `Pet Agents: Customize Pet` | Menu for species, colours, pattern, accessory, name and more  |
-| `Pet Agents: Refresh Pet`   | Rebuilds the pet view (also the ⟳ button in the panel header) |
-| `Pet Agents: Show Log`      | Opens the Pet Agents output channel                           |
+| Command                                       | Description                                                                   |
+| --------------------------------------------- | ----------------------------------------------------------------------------- |
+| `Pet Agents: Customize Pet`                   | Menu for species, colours, pattern, accessory, name and more                  |
+| `Pet Agents: Refresh Pet`                     | Rebuilds the pet view (also the ⟳ button in the panel header)                 |
+| `Pet Agents: Show Log`                        | Opens the Pet Agents output channel                                           |
+| `Pet Agents: Start a New Save`                | Stores this save as a profile you can visit and starts a fresh one at level 1 |
+| `Pet Agents: Share Progress`                  | Copies a summary, or opens a pre-filled post on X or Bluesky                  |
+| `Pet Agents: Export Profile`                  | Saves your pet's profile to a `.petprofile.json` to send to a friend          |
+| `Pet Agents: Import Profile`                  | Adds a friend's profile to 👋 Friends in the house menu                       |
+| `Pet Agents: Move Pet to Another Computer`    | Writes your live save to a `.petsave` file, with an optional password         |
+| `Pet Agents: Bring Pet from Another Computer` | Brings a pet in from a `.petsave` file                                        |
 
 If the panel ever says **"Pet Agents was updated"**, the extension was updated but the window is still running the old version: run **Developer: Reload Window**.
 
@@ -262,9 +312,11 @@ All settings apply instantly, no reload needed. Every colour setting takes any C
 | `pet-agents.recordsShowPrompts` | `false`   | Show the start of record-holding prompts on the board. Prompts never leave your machine                  |
 | `pet-agents.levels`             | `true`    | XP, levels and three weekly challenges                                                                   |
 | `pet-agents.enemies`            | `true`    | Failing tests and builds let bugs in; the next passing run squashes them                                 |
-| `pet-agents.house`              | `true`    | The pet's house (🏠), furnished with level unlocks                                                       |
+| `pet-agents.house`              | `true`    | The pet's houses (🏠), furnished with level and bag unlocks                                              |
+| `pet-agents.style`              | `none`    | A themed look from a bag, e.g. `flowerCrown`, `chefHat`, `spaceHelmet`. Easiest to pick in 🎒 Collection |
+| `pet-agents.shareButtons`       | `true`    | Show Post to X and Post to Bluesky when sharing. They only open your browser when clicked                |
 
-Your settings live in your VS Code user settings. The toy bag, shop purchases and care stats are kept in VS Code's extension storage.
+Your settings live in your VS Code user settings. The toy bags, shop purchases, houses and care stats are kept in VS Code's extension storage, and earlier saves as profile files in its storage folder.
 
 ---
 

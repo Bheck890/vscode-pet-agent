@@ -10,6 +10,7 @@ interface PetArtApi {
   PATTERNS: string[];
   ACCESSORIES: Record<string, { slot: string; color: string }>;
   COSTUMES: Record<string, { slot: string; color: string; build(sp: unknown): { grid: string[] } }>;
+  STYLES: Record<string, { slot: string; color: string; build(sp: unknown): { grid: string[] } }>;
   speciesIds: string[];
   palette(
     species: string,
@@ -151,5 +152,49 @@ describe('pet art', () => {
     const px = render('cat', {}, { eye: '#00ff00', accent: '#ff00ff' }).flat();
     expect(px).toContain('#00ff00');
     expect(px).toContain('#ff00ff');
+  });
+
+  it('style names match the extension setting', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+    const enumOf = pkg.contributes.configuration.properties['pet-agents.style'].enum;
+    expect(enumOf).toEqual(['none', ...Object.keys(Art.STYLES)]);
+    expect([...petConfig.STYLES]).toEqual(['none', ...Object.keys(Art.STYLES)]);
+  });
+
+  it.each(['cat', 'dog', 'bird', 'fox'])('every pet style shows on the %s', (sp) => {
+    const plain = render(sp, {});
+    for (const style of Object.keys(Art.STYLES)) {
+      expect([style, diff(render(sp, { style }), plain) > 4]).toEqual([style, true]);
+    }
+  });
+
+  it('colour variants of a style differ only in colour', () => {
+    const base = render('cat', { style: 'chefHat' });
+    const pink = render('cat', { style: 'chefHatPink' });
+    expect(diff(base, pink)).toBeGreaterThan(4);
+    const shape = (px: (string | null)[][]) => px.flat().map((c) => c !== null);
+    expect(shape(base)).toEqual(shape(pink));
+  });
+
+  it("gives way to the user's own accessory and to a holiday costume in its slot", () => {
+    const crowned = render('dog', { accessory: 'crown' });
+    expect(diff(render('dog', { accessory: 'crown', style: 'beret' }), crowned)).toBe(0);
+    const witch = render('dog', { costume: 'witchHat' });
+    expect(diff(render('dog', { costume: 'witchHat', style: 'beret' }), witch)).toBe(0);
+    // A style in another slot still shows beside them.
+    expect(
+      diff(render('dog', { accessory: 'crown', style: 'labGoggles' }), crowned),
+    ).toBeGreaterThan(4);
+    expect(diff(render('dog', { style: 'beret', hide: ['head'] }), render('dog', {}))).toBe(0);
+  });
+
+  it('every style only uses accessory colour keys', () => {
+    for (const [id, style] of Object.entries(Art.STYLES)) {
+      for (const sp of ['cat', 'dog', 'bird', 'fox']) {
+        const keys = new Set(style.build(Art.SPECIES[sp]).grid.join(''));
+        const unknown = [...keys].filter((k) => !'.aAkwyYrcGP'.includes(k));
+        expect([id, sp, unknown]).toEqual([id, sp, []]);
+      }
+    }
   });
 });

@@ -14,13 +14,35 @@
     [16, 27],
   ];
 
-  /** Kibble is free; the rest are bought in the shop. `emoji` null draws the kibble pellet. */
+  /**
+   * Kibble is free; the rest are bought in a bag's shop (the starter bag's
+   * if no `bag`). `emoji` null draws the kibble pellet.
+   */
   const FOODS = [
     { id: 'kibble', emoji: null, name: 'kibble' },
     { id: 'fish', emoji: '🐟', name: 'fresh fish' },
     { id: 'steak', emoji: '🥩', name: 'steak' },
     { id: 'berries', emoji: '🍓', name: 'strawberries' },
     { id: 'cake', emoji: '🍰', name: 'cake' },
+    { id: 'salad', emoji: '🥗', name: 'garden salad', bag: 'garden' },
+    { id: 'sushi', emoji: '🍣', name: 'sushi', bag: 'ocean' },
+    { id: 'pancakes', emoji: '🥞', name: 'pancakes', bag: 'kitchen' },
+    { id: 'popcorn', emoji: '🍿', name: 'popcorn', bag: 'music' },
+    { id: 'orange', emoji: '🍊', name: 'half-time orange', bag: 'sports' },
+    { id: 'mooncake', emoji: '🥮', name: 'mooncake', bag: 'space' },
+    { id: 'candy', emoji: '🍬', name: 'spooky candy', bag: 'spooky' },
+    { id: 'taco', emoji: '🌮', name: 'taco', bag: 'retro' },
+    { id: 'milk', emoji: '🥛', name: 'fresh milk', bag: 'farm' },
+    { id: 'dango', emoji: '🍡', name: 'toasted dango', bag: 'camping' },
+    { id: 'lollipop', emoji: '🍭', name: 'rainbow lollipop', bag: 'art' },
+    { id: 'pudding', emoji: '🍮', name: 'lab pudding', bag: 'lab' },
+    { id: 'soup', emoji: '🍲', name: 'hot soup', bag: 'winter' },
+    { id: 'mango', emoji: '🥭', name: 'mango', bag: 'jungle' },
+    { id: 'drumstick', emoji: '🍗', name: 'feast drumstick', bag: 'castle' },
+    { id: 'fries', emoji: '🍟', name: 'circuit fries', bag: 'robots' },
+    { id: 'flatbread', emoji: '🫓', name: 'flatbread', bag: 'desert' },
+    { id: 'icecream', emoji: '🍦', name: 'cloud ice cream', bag: 'sky' },
+    { id: 'goldapple', emoji: '🍏', name: 'golden apple', bag: 'vault' },
   ];
 
   const HINTS = {

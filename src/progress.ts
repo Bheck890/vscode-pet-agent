@@ -103,6 +103,7 @@ export const CHALLENGES: Challenge[] = [
     days: true,
   },
   { id: 'squash', emoji: '🐛', text: 'Squash 3 bugs', kind: 'squash', target: 3 },
+  { id: 'collector', emoji: '🧸', text: 'Find 3 toys in a new bag', kind: 'find', target: 3 },
 ];
 
 /** A small string hash, so every window picks the same challenges for a week. */

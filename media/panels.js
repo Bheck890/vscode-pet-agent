@@ -1,6 +1,7 @@
 // @ts-check
 // The DOM around the canvas: the corner buttons and their panels (care,
-// toy bag with collection and shop, settings). webview.js creates one
+// toy bags with collection and shop, settings, trophies, and the house
+// strip with its houses, rooms and profiles). webview.js creates one
 // instance and hands it a small API into the renderer, like play.js and
 // scene.js; this file owns the panels and what they show.
 (function (root) {
@@ -21,12 +22,31 @@
    *   escapeHtml: (s: string) => string,
    *   debugSnapshot: () => string,
    *   house: any,
+   *   activeBag: () => string,
+   *   openBags: () => string[],
+   *   bagLevel: (id: string) => number,
+   *   switchBag: (id: string) => void,
+   *   setStyle: (id: string) => void,
+   *   visiting: () => any,
+   *   visit: (id: string, guest: boolean) => void,
+   *   endVisit: () => void,
+   *   invite: () => void,
+   *   guests: () => Array<{id: string, name: string}>,
+   *   sendHome: (id: string) => void,
+   *   spriteUrl: (look: any) => string,
+   *   homeName: () => string,
    * }} api
    */
   function create(api) {
     const { play, scene, now, persist, escapeHtml } = api;
     const isBusy = api.busy;
     const { STATES } = root.PetStates;
+    const { BAGS } = root.PetScene;
+    const { unlockId } = root.PetVariants;
+    const bagDef = (id) => BAGS.find((b) => b.id === id) || BAGS[0];
+    const owns = (id) => (api.saved().unlocks || []).includes(id);
+    const foodOwned = (f) => !f.emoji || owns(unlockId(f.bag, 'food', f.id));
+    const SPECIES_EMOJI = { cat: '🐱', dog: '🐶', bird: '🐦', fox: '🦊' };
     let noteUntil = 0;
 
     const careToggle = /** @type {HTMLButtonElement} */ (document.getElementById('care-toggle'));
@@ -86,6 +106,15 @@
     const houseDone = byId('house-done');
     const houseItems = byId('house-items');
     const houseThemes = byId('house-themes');
+    const housePicker = byId('house-picker');
+    const houseRooms = byId('house-rooms');
+    const houseProfiles = byId('house-profiles');
+    const houseVisit = byId('house-visit');
+    const bagPicker = byId('bag-picker');
+    const saveActions = byId('save-actions');
+    /** Earlier saves and friends' profiles, from the extension. */
+    let profiles = [];
+    let showHidden = false;
     /** The latest level and records from the extension, or null before the first. */
     let progress = null;
     let records = null;
@@ -102,7 +131,10 @@
       ]),
     ];
 
-    /** One checkbox per variant and hobby; ticked means it can happen. Unbought ones show locked. */
+    /**
+     * One checkbox per variant and hobby; ticked means it can happen. Ones
+     * whose bag isn't open yet, or that aren't bought, show locked.
+     */
     function renderActions() {
       const off = new Set(api.config().disabledActions || []);
       const unlocked = api.saved().unlocks || [];
@@ -114,9 +146,13 @@
               const id = root.PetVariants.actionId(group, v);
               const name = v.id === 'classic' ? 'classic look' : v.label;
               const only = v.species ? ` (${v.species.join(', ')}s)` : '';
-              if (v.shop && !unlocked.includes(id)) {
+              if (!root.PetVariants.owned(group, v, unlocked, api.openBags())) {
+                const bag = bagDef(v.bag || 'starter');
+                const why = !api.openBags().includes(bag.id)
+                  ? `Comes with the ${bag.emoji} ${bag.name} bag at level ${api.bagLevel(bag.id)}`
+                  : `Unlock it in the ${bag.emoji} ${bag.name} bag's shop (🎒 then 🛒)`;
                 return (
-                  `<label class="locked" title="Unlock it in the shop (🎒 then 🛒)">` +
+                  `<label class="locked" title="${escapeHtml(why)}">` +
                   `<input type="checkbox" disabled /> 🔒 ${escapeHtml(name)}</label>`
                 );
               }
@@ -156,11 +192,25 @@
       updateCareUi(now());
     }
 
+    /** A row of bag buttons; locked ones show 🔒 and the level that opens them. */
+    function renderPicker() {
+      const open = api.openBags();
+      bagPicker.innerHTML = BAGS.map((b) =>
+        open.includes(b.id)
+          ? `<button data-bag="${b.id}"${b.id === api.activeBag() ? ' class="active"' : ''}` +
+            ` title="${escapeHtml(b.name)} bag">${b.emoji}</button>`
+          : `<button class="locked" disabled` +
+            ` title="${escapeHtml(`${b.emoji} ${b.name} bag: unlocks at level ${api.bagLevel(b.id)}`)}">` +
+            `🔒<small>${api.bagLevel(b.id)}</small></button>`,
+      ).join('');
+    }
+
     function renderBag() {
       if (bagPanel.hidden) {
         return;
       }
       bagDrawnAt = now();
+      renderPicker();
       bagTabs.innerHTML = BAG_TABS.map(
         ([id, label]) =>
           `<button data-tab="${id}"${id === bagTab ? ' class="active"' : ''}>${label}</button>`,
@@ -177,9 +227,13 @@
         renderShop();
         return;
       }
-      bagTitle.textContent = `🎒 Bag - ${scene.foundCount()}/${scene.toyTotal} found`;
+      const bag = bagDef(api.activeBag());
+      const { found, total } = scene.bagCount(bag.id);
+      bagTitle.textContent =
+        `${bag.emoji} ${bag.name} - ${found}/${total} found - ` +
+        `${api.openBags().length}/${BAGS.length} bags`;
       bagGrid.innerHTML = scene
-        .bagList()
+        .bagList(bag.id)
         .map((toy) =>
           toy.count === 0
             ? '<span class="toy unknown" title="Not found yet">❔</span>'
@@ -191,30 +245,78 @@
         .join('');
     }
 
-    /** Everything for sale: unlockable animations, then foods. */
-    function shopItems() {
+    /** The groups a shop sells, in display order. */
+    const SHOP_GROUPS = [
+      ['animation', '🎭 Animations'],
+      ['food', '🍽️ Foods'],
+      ['furniture', '🛋️ Furniture'],
+      ['theme', '🎨 Room themes'],
+      ['room', '🚪 Rooms'],
+      ['style', '🐾 Pet styles'],
+    ];
+
+    /** Everything a bag's shop sells: animations, foods, then its house's furniture, themes, rooms and styles. */
+    function shopItems(bagId = api.activeBag()) {
       const prices = root.PetScene.PRICES;
+      const id = (kind, thing) => unlockId(bagId, kind, thing);
+      const house = root.PetHouse.HOUSES.find((h) => h.id === bagId);
       return [
-        ...root.PetVariants.shopActions().map((a) => ({
+        ...root.PetVariants.shopActions(bagId).map((a) => ({
           id: a.id,
+          action: a.action,
+          kind: 'animation',
           icon: a.icon,
           label: a.group === 'idle' ? a.label : `${a.label} (when ${STATES[a.group].label})`,
           prices: prices.animation,
         })),
-        ...root.PetPlay.FOODS.filter((f) => f.emoji).map((f) => ({
-          id: `food.${f.id}`,
+        ...root.PetPlay.FOODS.filter((f) => f.emoji && (f.bag || 'starter') === bagId).map((f) => ({
+          id: id('food', f.id),
+          food: f.id,
+          kind: 'food',
           icon: f.emoji,
           label: f.name,
           prices: prices.food,
         })),
+        ...root.PetHouse.FURNITURE.filter((f) => f.bag === bagId && !f.free).map((f) => ({
+          id: id('furniture', f.id),
+          kind: 'furniture',
+          icon: f.emoji,
+          label: f.name,
+          prices: prices.furniture,
+        })),
+        ...root.PetHouse.THEMES.filter((t) => t.bag === bagId && !t.free).map((t) => ({
+          id: id('theme', t.id),
+          kind: 'theme',
+          icon: '🎨',
+          label: `${t.name} room theme`,
+          prices: prices.theme,
+        })),
+        ...house.rooms.slice(2).map((r) => ({
+          id: id('room', r.id),
+          kind: 'room',
+          icon: '🚪',
+          label: `${r.name} for the ${house.name.toLowerCase()}`,
+          prices: prices.room,
+        })),
+        ...bagDef(bagId)
+          .styles.slice(1)
+          .map((st) => ({
+            id: id('style', st.id),
+            style: st.id,
+            kind: 'style',
+            icon: '🐾',
+            label: st.name,
+            prices: prices.style,
+          })),
       ];
     }
 
     function renderShop() {
       const rarity = root.PetScene.RARITY;
       const owned = new Set(api.saved().unlocks || []);
+      const bag = bagDef(api.activeBag());
       const spares = ['common', 'rare'].map(
-        (r) => `${scene.spares(r)} ${rarity[r].label.toLowerCase()}`,
+        (r) => `${scene.spares(r, bag.id)} ${rarity[r].label.toLowerCase()}`,
       );
       const row = (item) =>
         `<div class="shop-item"><span class="what">${item.icon} ${escapeHtml(item.label)}</span>` +
@@ -224,39 +326,57 @@
               .map(
                 (p) =>
                   `<button data-buy="${escapeHtml(item.id)}" data-rarity="${p.rarity}" data-n="${p.n}"` +
-                  `${scene.spares(p.rarity) < p.n ? ' disabled' : ''}` +
+                  `${scene.spares(p.rarity, bag.id) < p.n ? ' disabled' : ''}` +
                   ` style="border-bottom-color:${rarity[p.rarity].color || 'rgba(127,127,127,0.5)'}">` +
                   `${p.n} ${rarity[p.rarity].label.toLowerCase()}</button>`,
               )
               .join('')) +
         '</div>';
-      const items = shopItems();
-      bagTitle.textContent = '🛒 Shop';
+      const items = shopItems(bag.id);
+      bagTitle.textContent = `🛒 ${bag.emoji} ${bag.name} shop`;
       shopView.innerHTML =
         (shopMsg ? `<div class="shop-msg">${escapeHtml(shopMsg)}</div>` : '') +
         `<div class="shop-spares">Spare toys: ${spares.join(' - ')}</div>` +
-        '<div class="group">🎭 Animations</div>' +
-        items
-          .filter((i) => !i.id.startsWith('food.'))
-          .map(row)
-          .join('') +
-        '<div class="group">🍽️ Foods</div>' +
-        items
-          .filter((i) => i.id.startsWith('food.'))
-          .map(row)
-          .join('') +
-        '<div class="panel-note">Only spares are traded in: you always keep one of each toy.</div>';
+        SHOP_GROUPS.map(([kind, title]) => {
+          const list = items.filter((i) => i.kind === kind);
+          return list.length > 0
+            ? `<div class="group">${title}</div>${list.map(row).join('')}`
+            : '';
+        }).join('') +
+        `<div class="panel-note">Paid with this bag's spares only: you always keep one of each toy.</div>`;
     }
 
-    /** What has been bought: pick the food to feed and switch animations on or off. */
+    /** Pet styles you can wear: the first of each open bag's, and the ones bought. */
+    function stylesOwned() {
+      return BAGS.filter((b) => api.openBags().includes(b.id)).flatMap((b) =>
+        b.styles.filter((st, i) => i === 0 || owns(unlockId(b.id, 'style', st.id))),
+      );
+    }
+
+    /**
+     * What this bag has given and sold you: pick the food to feed and the
+     * pet's style, and switch the bag's animations on or off.
+     */
     function renderCollection() {
       const owned = new Set(api.saved().unlocks || []);
       const off = new Set((api.config() && api.config().disabledActions) || []);
-      const items = shopItems();
-      const anims = items.filter((i) => !i.id.startsWith('food.') && owned.has(i.id));
-      const foods = root.PetPlay.FOODS.filter((f) => !f.emoji || owned.has(`food.${f.id}`));
+      const bag = bagDef(api.activeBag());
+      const items = shopItems(bag.id);
+      const anims = [
+        ...root.PetVariants.bagActions(bag.id).map((a) => ({
+          action: a.action,
+          icon: '🎁',
+          label: a.label,
+        })),
+        ...items.filter((i) => i.kind === 'animation' && owned.has(i.id)),
+      ];
+      const foods = root.PetPlay.FOODS.filter(foodOwned);
       const current = api.saved().food || 'kibble';
-      bagTitle.textContent = `✨ Collection - ${items.filter((i) => owned.has(i.id)).length}/${items.length} unlocked`;
+      const style = (api.config() && api.config().style) || '';
+      const styles = stylesOwned();
+      bagTitle.textContent =
+        `✨ ${bag.emoji} ${bag.name} collection - ` +
+        `${items.filter((i) => owned.has(i.id)).length}/${items.length} unlocked`;
       collectionView.innerHTML =
         '<div class="group">🍽️ Food to feed</div>' +
         '<div class="food-choices">' +
@@ -268,15 +388,25 @@
           )
           .join('') +
         '</div>' +
+        '<div class="group">🐾 Pet style</div>' +
+        '<div class="food-choices">' +
+        [{ id: '', name: 'none' }, ...styles]
+          .map(
+            (st) =>
+              `<button data-style="${escapeHtml(st.id || 'none')}"${st.id === style ? ' class="active"' : ''}>` +
+              `${escapeHtml(st.name)}</button>`,
+          )
+          .join('') +
+        '</div>' +
         '<div class="group">🎭 Animations</div>' +
         (anims.length === 0
           ? '<div class="panel-note">None yet. Trade spare toys for some in the 🛒 Shop.</div>'
           : anims
               .map((a) => {
-                const on = !off.has(a.id);
+                const on = !off.has(a.action);
                 return (
                   `<div class="shop-item"><span class="what">${a.icon} ${escapeHtml(a.label)}</span>` +
-                  `<button data-anim="${escapeHtml(a.id)}"${on ? ' class="on"' : ''}` +
+                  `<button data-anim="${escapeHtml(a.action)}"${on ? ' class="on"' : ''}` +
                   ` title="Click to switch it ${on ? 'off' : 'on'}">${on ? 'On' : 'Off'}</button></div>`
                 );
               })
@@ -305,9 +435,7 @@
 
     /** Food choices in the care panel, once there is more than kibble. */
     function renderFoods() {
-      const owned = root.PetPlay.FOODS.filter(
-        (f) => !f.emoji || (api.saved().unlocks || []).includes(`food.${f.id}`),
-      );
+      const owned = root.PetPlay.FOODS.filter(foodOwned);
       const current = api.saved().food || 'kibble';
       foodPicker.hidden = owned.length < 2;
       foodPicker.innerHTML = owned
@@ -339,11 +467,25 @@
       shopMsg = '';
       renderBag();
     });
+    bagPicker.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-bag]');
+      const id = el && /** @type {HTMLElement} */ (el).dataset.bag;
+      if (id && api.openBags().includes(id)) {
+        shopMsg = '';
+        api.switchBag(id);
+        renderBag();
+      }
+    });
     collectionView.addEventListener('click', (e) => {
       const target = /** @type {HTMLElement} */ (e.target);
       const food = target.closest('[data-food]');
       const anim = target.closest('[data-anim]');
-      if (food) {
+      const style = target.closest('[data-style]');
+      if (style) {
+        const id = /** @type {HTMLElement} */ (style).dataset.style || 'none';
+        api.setStyle(id === 'none' ? '' : id);
+        renderBag();
+      } else if (food) {
         pickFood(/** @type {HTMLElement} */ (food).dataset.food);
       } else if (anim && api.config()) {
         const id = /** @type {HTMLElement} */ (anim).dataset.anim || '';
@@ -359,17 +501,21 @@
       }
       const { buy, rarity, n } = /** @type {HTMLElement} */ (el).dataset;
       const item = shopItems().find((i) => i.id === buy);
-      if (!item || !rarity || !scene.spend(rarity, Number(n))) {
+      if (!item || !rarity || !scene.spend(rarity, Number(n), api.activeBag())) {
         return;
       }
       api.saved().unlocks = [...(api.saved().unlocks || []), item.id];
-      if (item.id.startsWith('food.')) {
-        api.saved().food = item.id.slice('food.'.length);
+      if (item.food) {
+        api.saved().food = item.food;
       }
       persist();
+      if (item.style) {
+        api.setStyle(item.style);
+      }
       shopMsg = `Unlocked ${item.icon} ${item.label}!`;
       renderBag();
       renderFoods();
+      renderHouse();
       if (api.config()) {
         renderActions();
       }
@@ -385,6 +531,12 @@
     trophyToggle.addEventListener('click', () => togglePanel(trophyPanel));
     // The house stays open with its furniture bar hidden; 🏠 again leaves it.
     houseToggle.addEventListener('click', () => {
+      // Visiting an old save, 🏠 brings you home to your own house.
+      if (api.visiting()) {
+        api.endVisit();
+        renderHouse();
+        return;
+      }
       if (api.house.isOpen()) {
         leaveHouse();
         return;
@@ -397,6 +549,77 @@
     });
     houseDone.addEventListener('click', () => {
       housePanel.hidden = true;
+    });
+    housePicker.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-house]');
+      const id = el && /** @type {HTMLElement} */ (el).dataset.house;
+      if (id && api.house.goTo(id)) {
+        renderHouse();
+      }
+    });
+    houseRooms.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-room], [data-step]');
+      const { room, step } = el ? /** @type {HTMLElement} */ (el).dataset : {};
+      if (step) {
+        api.house.step(Number(step));
+      } else if (room) {
+        api.house.goTo(api.house.catalogue().house.id, room);
+      }
+      renderHouse();
+    });
+    houseProfiles.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-profile], [data-profiles]');
+      if (!el) {
+        return;
+      }
+      const { profile, guest, profiles: what } = /** @type {HTMLElement} */ (el).dataset;
+      if (what === 'home') {
+        api.endVisit();
+      } else if (what === 'import') {
+        api.post({ command: 'profile-import' });
+      } else if (what === 'hidden') {
+        showHidden = !showHidden;
+      } else if (profile) {
+        api.visit(profile, guest === '1');
+      }
+      renderHouse();
+    });
+    houseVisit.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-visit]');
+      const what = el && /** @type {HTMLElement} */ (el).dataset.visit;
+      const v = api.visiting();
+      if (what === 'invite') {
+        api.invite();
+      } else if (what && what.startsWith('home:')) {
+        api.sendHome(what.slice('home:'.length));
+      } else if (v && what === 'rename') {
+        api.post({ command: 'profile-rename', id: v.id, guest: !!v.guest });
+      } else if (v && what === 'hide') {
+        api.post({ command: 'profile-hide', id: v.id, guest: !!v.guest, hidden: !v.hidden });
+        api.endVisit();
+      } else if (v && what === 'share') {
+        api.post({ command: 'profile-export', id: v.id });
+      }
+      renderHouse();
+    });
+    saveActions.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-save]');
+      const what = el && /** @type {HTMLElement} */ (el).dataset.save;
+      const commands = {
+        share: { command: 'share-copy', toyTotal: scene.toyTotal },
+        export: { command: 'profile-export', id: null },
+        new: { command: 'new-save' },
+        'move-out': { command: 'move-out' },
+        'move-in': { command: 'move-in' },
+      };
+      if (what && commands[what]) {
+        api.post(commands[what]);
+      }
+    });
+    trophyView.addEventListener('click', (e) => {
+      if (/** @type {HTMLElement} */ (e.target).closest('[data-finish]')) {
+        api.post({ command: 'finish-open' });
+      }
     });
     trophyTabs.addEventListener('click', (e) => {
       const el = /** @type {HTMLElement} */ (e.target).closest('[data-tab]');
@@ -465,13 +688,15 @@
       careToggle.textContent = held ? TOOL_ICONS[held] || '🐾' : '🐾';
       careToggle.title = held ? 'Care tool in hand. Esc puts it away' : 'Pet care';
       careToggle.classList.toggle('holding', !!held);
+      const visiting = api.visiting();
       careButtons.forEach((b) => {
-        b.disabled = busy || !api.main();
+        b.disabled = busy || !api.main() || !!visiting;
         b.className = play.tool() === b.dataset.care ? 'active' : '';
       });
       if (t > noteUntil) {
-        careNote.textContent =
-          busy && api.main()
+        careNote.textContent = visiting
+          ? `${visiting.pet.name} is happy just to see you 💖`
+          : busy && api.main()
             ? `🛠️ ${api.main().name} is working. Care unlocks when the task is done.`
             : '';
       }
@@ -488,7 +713,12 @@
     careToggle.addEventListener('click', () => {
       togglePanel(carePanel);
       if (!carePanel.hidden && api.main() && !isBusy()) {
-        showNote(`Pick a tool, or hold and stroke ${api.main().name} 💖`, 4000);
+        showNote(
+          api.visiting()
+            ? `${api.main().name} is happy just to see you 💖`
+            : `Pick a tool, or hold and stroke ${api.main().name} 💖`,
+          4000,
+        );
       }
     });
 
@@ -545,7 +775,9 @@
       }
       const span = Math.max(1, progress.next - progress.floor);
       const pct = Math.round(((progress.xp - progress.floor) / span) * 100);
-      const next = root.PetHouse.FURNITURE.find((f) => f.level > progress.level);
+      const next = root.PetHouse.FURNITURE.find((f) => !f.bag && f.level > progress.level);
+      const nextBag = BAGS.find((b) => api.bagLevel(b.id) > progress.level);
+      const medals = profiles.filter((p) => !p.guest && p.finished).length;
       const challenges = progress.challenges
         .map(
           (c) =>
@@ -560,7 +792,14 @@
         `<div class="xp-track"><div class="xp-fill" style="width:${pct}%"></div></div>` +
         `<div class="dim">+${progress.weekXp} XP this week` +
         (next ? ` - next: ${next.emoji} ${escapeHtml(next.name)} at level ${next.level}` : '') +
+        (nextBag
+          ? ` - ${nextBag.emoji} ${escapeHtml(nextBag.name)} bag at level ${api.bagLevel(nextBag.id)}`
+          : '') +
         '</div>' +
+        (progress.finished
+          ? '<div class="food-choices"><button data-finish="1">🏁 Finished</button></div>'
+          : '') +
+        (medals > 0 ? `<div title="Finished saves">${'🏅'.repeat(medals)}</div>` : '') +
         `<div class="group">📅 This week's challenges</div>${challenges}` +
         '<div class="panel-note">XP comes from finished prompts, passing tests and builds, ' +
         'helpers, records and care. Every challenge is worth 100.</div>'
@@ -595,33 +834,123 @@
       );
     }
 
+    /** "Aug 2027" */
+    function monthYear(ms) {
+      return new Date(ms).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+
+    /** The Profiles row: this save, then earlier saves newest first, then 👋 friends. */
+    function profilesHtml() {
+      const v = api.visiting();
+      const list = profiles.filter((p) => showHidden || !p.hidden);
+      const button = (p) => {
+        const img = api.spriteUrl(p.pet);
+        const pic = img ? `<img src="${img}" alt="" />` : SPECIES_EMOJI[p.pet.species] || '🐾';
+        const marks =
+          (p.finished ? '🏁' : '') +
+          (p.summary.toys >= scene.toyTotal ? '💯' : '') +
+          (p.moved ? '🚚' : '') +
+          (p.hidden ? '🙈' : '');
+        const on = v && v.id === p.id && !!v.guest === !!p.guest;
+        return (
+          `<button data-profile="${escapeHtml(p.id)}" data-guest="${p.guest ? '1' : '0'}"` +
+          `${on ? ' class="active"' : ''} title="${escapeHtml(`${p.name} - visit ${p.pet.name}`)}">` +
+          `${pic} ${escapeHtml(p.pet.name)}${marks}</button>`
+        );
+      };
+      const own = list.filter((p) => !p.guest);
+      const friends = list.filter((p) => p.guest);
+      return (
+        '<span class="group">Profiles:</span>' +
+        `<button data-profiles="home"${v ? '' : ' class="active"'}` +
+        ` title="The save you are playing">🏠 ${escapeHtml(api.homeName())}</button>` +
+        own.map(button).join('') +
+        (friends.length > 0
+          ? '<span class="group">👋 Friends:</span>' + friends.map(button).join('')
+          : '') +
+        `<button data-profiles="import" title="Add a friend's profile from a .petprofile.json file">` +
+        "➕ Add a friend's profile...</button>" +
+        (profiles.some((p) => p.hidden)
+          ? `<button data-profiles="hidden">${showHidden ? 'Hide hidden' : 'Show hidden'}</button>`
+          : '')
+      );
+    }
+
     function renderHouse() {
       if (housePanel.hidden) {
         return;
       }
       const cat = api.house.catalogue();
-      houseNote.textContent = cat.levelsOn ? `Level ${cat.level}` : '';
+      const v = api.visiting();
+      houseNote.textContent = v
+        ? `Visiting ${v.name} (${v.moved ? 'moved' : v.finished ? 'finished' : 'ended'} ` +
+          `${monthYear(v.endedAt)}). 🏠 to come home`
+        : cat.levelsOn
+          ? `Level ${cat.level}`
+          : '';
+      const guests = api.guests();
+      houseVisit.hidden = !v && guests.length === 0;
+      houseVisit.innerHTML =
+        (v
+          ? `<button data-visit="invite" title="${escapeHtml(v.pet.name)} comes to play at your house">` +
+            `🎈 Invite ${escapeHtml(v.pet.name)} over</button>` +
+            (v.guest ? '' : `<button data-visit="share">📤 Share this profile...</button>`) +
+            `<button data-visit="rename">✏️ Rename</button>` +
+            `<button data-visit="hide">${v.hidden ? '👀 Show' : '🙈 Hide'}</button>`
+          : '') +
+        guests
+          .map(
+            (g) =>
+              `<button data-visit="home:${escapeHtml(g.id)}">👋 Send ${escapeHtml(g.name)} home</button>`,
+          )
+          .join('');
+      housePicker.innerHTML = cat.houses
+        .map((h) =>
+          h.open
+            ? `<button data-house="${h.id}"${h.active ? ' class="active"' : ''}` +
+              ` title="${escapeHtml(h.name)}">${h.emoji}</button>`
+            : `<button class="locked" disabled` +
+              ` title="${escapeHtml(`${h.name}: comes with the ${bagDef(h.id).emoji} ${bagDef(h.id).name} bag at level ${api.bagLevel(h.id)}`)}">🔒</button>`,
+        )
+        .join('');
+      houseRooms.innerHTML =
+        '<button data-step="-1" title="Previous room">◀</button>' +
+        cat.rooms
+          .map((r) =>
+            r.unlocked
+              ? `<button data-room="${r.id}"${r.active ? ' class="active"' : ''}>${escapeHtml(r.name)}</button>`
+              : `<button class="locked" disabled title="${escapeHtml(`${r.name}: ${r.how}`)}">` +
+                `🔒 ${escapeHtml(r.name)}</button>`,
+          )
+          .join('') +
+        '<button data-step="1" title="Next room">▶</button>';
       houseItems.innerHTML = cat.furniture
         .map((f) =>
           f.unlocked
-            ? `<button data-furniture="${f.id}"${f.placed ? ' class="active"' : ''}` +
+            ? `<button data-furniture="${f.id}"${f.placed ? ' class="active"' : ''}${cat.readOnly ? ' disabled' : ''}` +
               ` title="${escapeHtml(f.name)} - click to ${f.placed ? 'take it out' : 'put it in'}">` +
               `${f.emoji}</button>`
             : `<button class="locked" disabled` +
-              ` title="${escapeHtml(f.name)}: unlocks at level ${f.level}">🔒</button>`,
+              ` title="${escapeHtml(`${f.name}: ${f.how}`)}">🔒</button>`,
         )
         .join('');
       houseThemes.innerHTML = cat.themes
         .map((t) =>
           t.unlocked
-            ? `<button data-theme="${t.id}"${t.active ? ' class="active"' : ''}>` +
+            ? `<button data-theme="${t.id}"${t.active ? ' class="active"' : ''}${cat.readOnly ? ' disabled' : ''}>` +
               `${escapeHtml(t.name)}</button>`
-            : `<button disabled title="Unlocks at level ${t.level}">🔒 ${escapeHtml(t.name)}</button>`,
+            : `<button disabled title="${escapeHtml(t.how.charAt(0).toUpperCase() + t.how.slice(1))}">` +
+              `🔒 ${escapeHtml(t.name)}</button>`,
         )
         .join('');
+      houseProfiles.innerHTML = profilesHtml();
     }
 
+    /** Leaves the house, and any old save being visited. */
     function leaveHouse() {
+      if (api.visiting()) {
+        api.endVisit();
+      }
       api.house.setOpen(false);
       housePanel.hidden = true;
       houseToggle.classList.toggle('holding', false);
@@ -632,7 +961,7 @@
       const cfg = api.config() || {};
       const shown = [
         [careToggle, true],
-        [bagToggle, true],
+        [bagToggle, !api.visiting()],
         [settingsToggle, true],
         [trophyToggle, cfg.levels !== false || cfg.records !== false],
         [houseToggle, cfg.house !== false],
@@ -649,6 +978,9 @@
       }
       if (houseToggle.hidden && api.house.isOpen()) {
         leaveHouse();
+      }
+      if (bagToggle.hidden && !bagPanel.hidden) {
+        togglePanel(bagPanel);
       }
     }
 
@@ -684,6 +1016,25 @@
       refreshHouse: renderHouse,
       /** Leaves the house (agent work pulls the pet back to its desk). */
       closeHouse: leaveHouse,
+      /** Opens the house strip, e.g. on arriving at an old save. */
+      openHouse() {
+        api.house.setOpen(true);
+        if (housePanel.hidden) {
+          togglePanel(housePanel);
+        }
+        houseToggle.classList.toggle('holding', api.house.isOpen());
+      },
+      /** A visit started or ended: the buttons and panels change with it. */
+      visitChanged() {
+        layoutCorners();
+        renderHouse();
+        updateCareUi(now());
+      },
+      setProfiles(list) {
+        profiles = list;
+        renderHouse();
+        renderTrophy();
+      },
       /** Purchases changed (here or in another window). */
       refreshUnlocks() {
         renderFoods();

@@ -13,6 +13,8 @@ jest.mock(
   { virtual: true },
 );
 
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { PeonViewProvider } from '../PeonViewProvider';
 import { CareStore } from '../pet-care';
@@ -24,6 +26,9 @@ import { ProgressStore } from '../progress-store';
 import { RecordsService } from '../records-service';
 import { RecordsStore } from '../records-store';
 import { readPetConfig } from '../pet-config';
+import { LOOK_KEYS, PetLook, Profiles } from '../profiles';
+import { PetUi, SaveFlows } from '../save-flows';
+import { Slots } from '../slot';
 import type { StateWatcher } from '../state-watcher';
 import type { ClaudeWatcher, ClaudeUpdate } from '../claude-watcher';
 
@@ -99,8 +104,43 @@ function fakeView() {
 }
 
 const MEDIA = path.join(process.cwd(), 'media');
+/** The save every setup() plays: today's date and the pet's name. */
+const SLOT = '2026-10-30-mochi';
 
-function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?: object } = {}) {
+/** Dialogs that answer as told; `asked` records every prompt. */
+function fakeUi(
+  answers: { confirm?: boolean; ask?: string[]; choose?: string; file?: string } = {},
+) {
+  const asked: string[] = [];
+  const ui: PetUi & { asked: string[] } = {
+    asked,
+    confirm: jest.fn(async (m: string) => {
+      asked.push(m);
+      return answers.confirm ?? true;
+    }),
+    ask: jest.fn(async (m: string) => {
+      asked.push(m);
+      return (answers.ask ?? []).shift();
+    }),
+    choose: jest.fn(async () => answers.choose),
+    saveFile: jest.fn(async () => answers.file),
+    openFile: jest.fn(async () => answers.file),
+    copy: jest.fn(async () => undefined),
+    openUrl: jest.fn(async () => true),
+    info: jest.fn(),
+    error: jest.fn(),
+  };
+  return ui;
+}
+
+function setup(
+  opts: {
+    latest?: ClaudeUpdate | null;
+    state?: unknown;
+    settings?: object;
+    ui?: Parameters<typeof fakeUi>[0];
+  } = {},
+) {
   const watchers = fakeWatchers(opts.latest ?? null);
   const careStorage = memory();
   const bagStorage = memory();
@@ -115,19 +155,57 @@ function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?:
   const settings: Record<string, unknown> = { species: 'cat', name: 'Mochi', ...opts.settings };
   const now = () => new Date(2026, 9, 30, 12);
   const gameStorage = memory();
-  const records = new RecordsService(new RecordsStore(gameStorage), gameStorage, now);
-  const progress = new ProgressService(new ProgressStore(gameStorage), now);
+  const recordsStore = new RecordsStore(gameStorage);
+  const records = new RecordsService(recordsStore, gameStorage, now);
+  const slots = new Slots(gameStorage, now, () => 'Mochi');
+  const progressStore = new ProgressStore(gameStorage);
+  const progress = new ProgressService(progressStore, now, () => slots.current());
+  const getConfig = () => readPetConfig((k) => settings[k]);
+  const look = () =>
+    Object.fromEntries(LOOK_KEYS.map((k) => [k, getConfig()[k]])) as unknown as PetLook;
+  const stores = {
+    bag: new BagStore(bagStorage),
+    house: new HouseStore(gameStorage),
+    care: new CareStore(careStorage),
+    progress: progressStore,
+  };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-profiles-'));
+  const profiles = new Profiles({
+    storage: gameStorage,
+    dir,
+    slots,
+    stores,
+    look,
+    levelsOn: () => getConfig().levels,
+    now,
+  });
+  const ui = fakeUi(opts.ui);
+  const refresh = jest.fn();
+  const flows = new SaveFlows({
+    profiles,
+    progress,
+    records: recordsStore,
+    slots,
+    ui,
+    look,
+    saveSetting,
+    now,
+    log,
+    saveChanged: refresh,
+    profilesChanged: refresh,
+  });
   const provider = new PeonViewProvider({
     mediaPath: MEDIA,
     peon: watchers.peon,
     claude: watchers.claude,
-    getConfig: () => readPetConfig((k) => settings[k]),
+    getConfig,
     now,
-    care: new CareStore(careStorage),
-    bag: new BagStore(bagStorage),
+    ...stores,
     records,
     progress,
-    house: new HouseStore(gameStorage),
+    slots,
+    profiles,
+    flows,
     saveSetting,
     log,
   });
@@ -148,6 +226,13 @@ function setup(opts: { latest?: ClaudeUpdate | null; state?: unknown; settings?:
     settings,
     resolve,
     log,
+    slots,
+    profiles,
+    progressStore,
+    stores,
+    ui,
+    dir,
+    refresh,
   };
 }
 
@@ -189,7 +274,11 @@ describe('PeonViewProvider', () => {
     const { v, bagStorage } = setup();
     bagStorage.data['petBag'] = { yarn: 3, box: 1 };
 
-    v.send({ command: 'save-state', state: { petX: 80, petY: 90, bag: { yarn: 1, crown: 1 } } });
+    v.send({
+      command: 'save-state',
+      slot: SLOT,
+      state: { petX: 80, petY: 90, bag: { yarn: 1, crown: 1 } },
+    });
     v.send({ command: 'ready' });
 
     expect(bagStorage.data['petBag']).toEqual({ yarn: 3, box: 1, crown: 1 });
@@ -202,6 +291,7 @@ describe('PeonViewProvider', () => {
     const { v, bagStorage } = setup();
     v.send({
       command: 'save-state',
+      slot: SLOT,
       state: { bag: { yarn: 21 }, spent: { yarn: 20 }, unlocks: ['idle.disco'], food: 'fish' },
     });
     v.send({ command: 'ready' });
@@ -223,7 +313,7 @@ describe('PeonViewProvider', () => {
     ['no state at all', null],
   ])('ignores save-state with %s', (_label, state) => {
     const { v, bagStorage } = setup({ state: { petX: 1, petY: 2 } });
-    v.send({ command: 'save-state', state });
+    v.send({ command: 'save-state', slot: SLOT, state });
     v.send({ command: 'ready' });
     expect(v.last('init')).toMatchObject({ state: { petX: 1, petY: 2 } });
     expect(bagStorage.data['petBag']).toBeUndefined();
@@ -262,7 +352,11 @@ describe('PeonViewProvider', () => {
     const { v, provider, bagStorage } = setup();
     bagStorage.data['petUnlocks'] = ['idle.disco'];
     provider.syncShared();
-    expect(v.last('unlocks')).toEqual({ command: 'unlocks', unlocks: ['idle.disco'] });
+    expect(v.last('unlocks')).toEqual({
+      command: 'unlocks',
+      unlocks: ['idle.disco'],
+      activeBag: 'starter',
+    });
   });
 
   it('applies care actions and reports refusals', () => {
@@ -381,7 +475,9 @@ describe('PeonViewProvider', () => {
   it('sends the house, records and level on ready', () => {
     const { v } = setup();
     v.send({ command: 'ready' });
-    expect(v.last('house')).toMatchObject({ layout: { items: [], theme: 'cozy' } });
+    expect(v.last('house')).toMatchObject({
+      layout: { at: { house: 'starter', room: 'living' }, houses: {} },
+    });
     expect(v.last('records-update')).toMatchObject({ week: '2026-10-26', records: [] });
     expect(v.last('progress-update')).toMatchObject({ level: 1, xp: 0 });
   });
@@ -405,15 +501,22 @@ describe('PeonViewProvider', () => {
     };
     v.send({
       command: 'house-save',
+      slot: SLOT,
       layout: { items: [{ id: 'lamp', x: 0.5, y: 0.9, at: 200 }], theme: 'mint', themeAt: 5 },
     });
-    v.send({ command: 'house-save', layout: 'nope' });
+    v.send({ command: 'house-save', slot: SLOT, layout: 'nope' });
     expect(gameStorage.data['petHouse']).toMatchObject({
-      items: [
-        { id: 'bed', x: 0.2 },
-        { id: 'lamp', x: 0.5 },
-      ],
-      theme: 'mint',
+      houses: {
+        starter: {
+          living: {
+            items: [
+              { id: 'bed', x: 0.2 },
+              { id: 'lamp', x: 0.5 },
+            ],
+            theme: 'mint',
+          },
+        },
+      },
     });
   });
 
@@ -449,5 +552,107 @@ describe('PeonViewProvider', () => {
     expect(
       (v.last('records-update') as { records: Array<{ preview?: string }> }).records[0].preview,
     ).toBeDefined();
+  });
+});
+
+describe('bags and saves in the view', () => {
+  it('starts the view with every bag level, the active bag and the save it plays', () => {
+    const { v } = setup();
+    v.send({ command: 'ready' });
+    const init = v.last('init') as { bags: Array<{ id: string }>; slot: string; state: object };
+    expect(init.bags).toHaveLength(20);
+    expect(init.slot).toBe(SLOT);
+    expect(init.state).toMatchObject({ activeBag: 'starter' });
+  });
+
+  it('switches to an unlocked bag and echoes it; a locked one is ignored', () => {
+    const { v, bagStorage, progressStore } = setup();
+    v.send({ command: 'ready' });
+    v.send({ command: 'bag-switch', bag: 'garden', slot: SLOT });
+    expect(bagStorage.data['petActiveBag']).toBeUndefined();
+    progressStore.add('xp', { xp: 300, kind: 'test', at: Date.now() }, new Date());
+    v.send({ command: 'bag-switch', bag: 'garden', slot: SLOT });
+    expect(bagStorage.data['petActiveBag']).toBe('garden');
+    expect(v.last('unlocks')).toMatchObject({ activeBag: 'garden' });
+    v.send({ command: 'bag-switch', bag: 'vault', slot: SLOT });
+    expect(bagStorage.data['petActiveBag']).toBe('garden');
+  });
+
+  it('opens every bag with levels switched off', () => {
+    const { v, bagStorage } = setup({ settings: { levels: false } });
+    v.send({ command: 'bag-switch', bag: 'vault', slot: SLOT });
+    expect(bagStorage.data['petActiveBag']).toBe('vault');
+  });
+
+  it('drops a change from an earlier save and restarts that view', () => {
+    const { v, bagStorage } = setup();
+    v.send({ command: 'save-state', slot: '2025-01-01-mochi', state: { bag: { yarn: 50 } } });
+    v.send({ command: 'house-save', slot: 'old', layout: { items: [] } });
+    v.send({ command: 'bag-switch', bag: 'starter', slot: 'old' });
+    expect(bagStorage.data['petBag']).toBeUndefined();
+    expect(v.posted.filter((m) => m.command === 'init')).toHaveLength(3);
+  });
+
+  it('rebuilds the view on the sync tick after a new save starts in another window', () => {
+    const { v, provider, slots } = setup();
+    v.send({ command: 'ready' });
+    v.webview.html = '';
+    slots.start({ id: 'elsewhere', startedAt: 5 });
+    provider.syncShared();
+    expect(v.webview.html).toContain('Content-Security-Policy');
+  });
+
+  it('shows the finish screen once, at the finish level, then on asking', () => {
+    const { v, progress, progressStore } = setup();
+    v.send({ command: 'ready' });
+    progressStore.add('xp', { xp: 59500, kind: 'test', at: Date.now() }, new Date());
+    progress.agentDone('a');
+    const finished = () => v.posted.filter((m) => m.command === 'finished');
+    expect(finished()).toHaveLength(1);
+    expect(finished()[0]).toMatchObject({ finished: true, summary: { level: 35 } });
+    progress.agentDone('b');
+    expect(finished()).toHaveLength(1);
+    v.send({ command: 'finish-open' });
+    expect(finished()).toHaveLength(2);
+  });
+
+  it('sends an old save to visit without its fact history; unknown ids get nothing', () => {
+    const { v, profiles, slots, stores } = setup();
+    stores.bag.save({ yarn: 2 });
+    const p = profiles.startNewSave(false);
+    expect(slots.current().id).not.toBe(p.id);
+    v.send({ command: 'visit-profile', id: p.id });
+    const sent = v.last('profile') as { profile: { id: string; progress: object; bag: object } };
+    expect(sent.profile).toMatchObject({ id: p.id, bag: { found: { yarn: 2 } }, guest: false });
+    expect(sent.profile.progress).toEqual({ xp: 0, level: 1 });
+    v.posted.length = 0;
+    v.send({ command: 'visit-profile', id: 'never-was' });
+    expect(v.last('profile')).toBeUndefined();
+  });
+
+  it('lists the profiles on the sync tick, and after hiding one', () => {
+    const { v, provider, profiles, stores } = setup();
+    stores.bag.save({ yarn: 2 });
+    const p = profiles.startNewSave(false);
+    provider.syncShared();
+    expect(v.last('profiles')).toMatchObject({ profiles: [{ id: p.id }] });
+    v.send({ command: 'profile-hide', id: p.id, hidden: true });
+    expect(v.last('profiles')).toMatchObject({ profiles: [{ id: p.id, hidden: true }] });
+  });
+
+  it('only opens post links when the share buttons are on', async () => {
+    const off = setup({ settings: { shareButtons: false } });
+    off.v.send({ command: 'share-post', site: 'x', toyTotal: 1 });
+    const on = setup();
+    on.v.send({ command: 'share-post', site: 'x', toyTotal: 1 });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(off.ui.openUrl).not.toHaveBeenCalled();
+    expect(on.ui.openUrl).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/x\.com\//));
+  });
+
+  it('counts a first find from a new bag for the collector challenge', () => {
+    const { v, progressStore } = setup();
+    v.send({ command: 'found', bag: 'garden', toy: 'snail' });
+    expect(progressStore.facts()['find:snail']).toMatchObject({ kind: 'find' });
   });
 });

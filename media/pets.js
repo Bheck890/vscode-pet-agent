@@ -638,6 +638,60 @@
         '..oooooo..',
       ],
     },
+    wateringCan: {
+      palette: { o: '#1f3a2a', g: '#4caf6a', c: '#7fd3ff' },
+      grid: [
+        '.....oo.....',
+        '....o..o....',
+        'oo.oggggo...',
+        'ogoogggggo..',
+        '.oggggggggoc',
+        '..oggggggo.c',
+        '..oggggggo..',
+        '...oooooo..c',
+      ],
+    },
+    periscope: {
+      palette: { o: '#1c1f26', g: '#8a96a8', c: '#7fd3ff' },
+      grid: [
+        'oooooo',
+        'ocgggo',
+        'oooggo',
+        '...ogo',
+        '...ogo',
+        '...ogo',
+        '...ogo',
+        '...ogo',
+        '...ooo',
+      ],
+    },
+    whisk: {
+      palette: { o: '#5a6270', w: '#cfd6e0', b: '#8a5a2b' },
+      grid: [
+        '..oww..',
+        '.ow.wo.',
+        'ow...wo',
+        'ow...wo',
+        '.ow.wo.',
+        '..owo..',
+        '...o...',
+        '...b...',
+        '...b...',
+        '...b...',
+      ],
+    },
+    mic: {
+      palette: { o: '#2b2b33', g: '#9aa3ad', w: '#ffffff', k: '#1c1c22' },
+      grid: ['.ooo.', 'ogwgo', 'ogggo', '.ooo.', '..k..', '..k..', '..k..', '..k..'],
+    },
+    flask: {
+      palette: { o: '#2b2b33', w: '#dff6ff', p: '#b44fff', g: '#e0b0ff' },
+      grid: ['..oo..', '..oo..', '..ww..', '.owwo.', 'ogpgpo', 'oppppo', 'oppppo', '.oooo.'],
+    },
+    brush: {
+      palette: { o: '#5a5a5a', w: '#c0c0c0', r: '#ff4f7b', b: '#a0522d' },
+      grid: ['......rr', '.....rr.', '....ow..', '...ow...', '..bo....', '.bb.....', 'bb......'],
+    },
   };
 
   /** Fill patterns, applied to the key grid before colouring. Only fur cells change. */
@@ -990,6 +1044,367 @@
     },
   };
 
+  // -- Pet styles ---------------------------------------------------------------
+  // Themed looks from the bags' packs, drawn like holiday costumes (the same
+  // keys). The user's own accessory wins its slot, then a holiday costume,
+  // then the style.
+
+  /** Lens glasses from the species' eye position, lenses filled with `lens`. */
+  function goggles(sp, lens) {
+    const g = eyewear(sp, false);
+    const grid = g.grid.map((row, y) =>
+      y === 0 || y === g.grid.length - 1
+        ? row
+        : row.replace(/a(...)a/g, (_m, inner) => `a${inner.replace(/\./g, lens)}a`),
+    );
+    return { grid, x: g.x, y: g.y };
+  }
+
+  /** A snorkel tube up the right side of a mask. */
+  function withTube(placed) {
+    const w = Math.max(...placed.grid.map((r) => r.length));
+    const tube = Array.from({ length: 5 }, (_v, i) => '.'.repeat(w) + (i === 0 ? 'kk' : '.k'));
+    const body = placed.grid.map((r, i) => r.padEnd(w, '.') + (i < 2 ? '.k' : ''));
+    return { grid: [...tube, ...body], x: placed.x, y: placed.y - 5 };
+  }
+
+  const STYLE_LOOKS = {
+    flowerCrown: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: ['.a...a...a...a.', 'aya.aya.aya.aya', '.aGGGaGGGaGGGa.'],
+        x: 9,
+        y: sp.headTop - 2,
+      }),
+    },
+    snorkel: { slot: 'face', build: (sp) => withTube(goggles(sp, 'c')) },
+    chefHat: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '...AAA..AAA...',
+          '..AaaaAAaaaA..',
+          '.AaaaaaaaaaaA.',
+          '.AaaaaaaaaaaA.',
+          '..AaaaaaaaaA..',
+          '..AaaaaaaaaA..',
+          '..AAAAAAAAAA..',
+        ],
+        x: 9,
+        y: sp.headTop - 6,
+      }),
+    },
+    rockShades: {
+      slot: 'face',
+      build: (sp) => {
+        const g = eyewear(sp, true);
+        return {
+          grid: g.grid.map((r) => r.replace(/[kA]/g, (k) => (k === 'k' ? 'a' : 'k'))),
+          x: g.x,
+          y: g.y,
+        };
+      },
+    },
+    sweatband: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: ['AAAAAAAAAAAAAAAA', 'aawaawaawaawaawa', 'AAAAAAAAAAAAAAAA'],
+        x: 8,
+        y: sp.headTop + 1,
+      }),
+    },
+    spaceHelmet: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '.....cccccc.....',
+          '...cc......cc...',
+          '..c..w.......c..',
+          '.c..w.........c.',
+          '.c............c.',
+          'aaaaaaaaaaaaaaaa',
+        ],
+        x: 8,
+        y: sp.headTop - 5,
+      }),
+    },
+    vampireCape: {
+      slot: 'neck',
+      build: (sp) => ({
+        grid: [
+          'A..................A',
+          'aA................Aa',
+          'aaA..............Aaa',
+          'aaaAkkkkkkkkkkkkAaaa',
+          '.aaakrrrrrrrrrrkaaa.',
+          '..AAkkkkkkkkkkkkAA..',
+        ],
+        x: 6,
+        y: sp.neckY - 3,
+      }),
+    },
+    retroVisor: {
+      slot: 'face',
+      build: (sp) => ({
+        grid: ['AAAAAAAAAAAAAAAAAA', 'AaawaaaaaaaaaaaaaA', 'AAAAAAAAAAAAAAAAAA'],
+        x: 7,
+        y: sp.eyeY,
+      }),
+    },
+    strawHat: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '.....YyyyyyyY....',
+          '....YyyyyyyyyY...',
+          '....YaaaaaaaaY...',
+          'YYYYyyyyyyyyyyYYY',
+          '.YYYYYYYYYYYYYYY.',
+        ],
+        x: 7,
+        y: sp.headTop - 4,
+      }),
+    },
+    rangerHat: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '......AAAA......',
+          '.....AaAAaA.....',
+          '....AaaaaaaA....',
+          '....AkkkkkkA....',
+          'AAAAaaaaaaaaAAAA',
+          '.AAAAAAAAAAAAAA.',
+        ],
+        x: 8,
+        y: sp.headTop - 5,
+      }),
+    },
+    beret: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '........A.......',
+          '....AAAAAAAA....',
+          '..AAaaaaaaaaAA..',
+          '.Aaaaaaaaaaaaaa.',
+          'AaaaaaaaaaaaaaA.',
+          '.AAAAAAAAAAAAA..',
+        ],
+        x: 7,
+        y: sp.headTop - 4,
+      }),
+    },
+    labGoggles: {
+      slot: 'face',
+      build: (sp) => {
+        const g = goggles(sp, 'c');
+        const grid = g.grid.map((r, y) => (y === 2 ? `kk${r}kk` : `..${r}`));
+        return { grid, x: g.x - 2, y: g.y };
+      },
+    },
+    earmuffs: {
+      slot: 'head',
+      build: (sp) => {
+        const h = headphones(sp);
+        return { grid: h.grid.map((r) => r.replace(/k/g, 'w')), x: h.x, y: h.y };
+      },
+    },
+    explorerHat: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '.....AAAAAA.....',
+          '....AaaaaaaA....',
+          '...AaaaaaaaaA...',
+          '...AYYYYYYYYA...',
+          '.AAaaaaaaaaaaAA.',
+          'AAAAAAAAAAAAAAAA',
+        ],
+        x: 8,
+        y: sp.headTop - 5,
+      }),
+    },
+    knightHelm: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '.......rr.......',
+          '......rrrr......',
+          '.......rr.......',
+          '....AAAAAAAA....',
+          '...AaaaaaaaaA...',
+          '..AaaaaaaaaaaA..',
+          '..AaAAAAAAAAaA..',
+          '..Aa........aA..',
+        ],
+        x: 8,
+        y: sp.headTop - 6,
+      }),
+    },
+    antenna: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '.y..........y.',
+          '.A..........A.',
+          '..A........A..',
+          '..A........A..',
+          'AAAAAAAAAAAAAA',
+          'aaaaaaaaaaaaaa',
+        ],
+        x: 9,
+        y: sp.headTop - 5,
+      }),
+    },
+    headwrap: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '....AAAAAAAA....',
+          '..AAaaaaaaaaAA..',
+          '.AaaAAaaaaAAaaA.',
+          'AaaaaaayYaaaaaaA',
+          'AAAAAAAAAAAAAAAA',
+        ],
+        x: 8,
+        y: sp.headTop - 4,
+      }),
+    },
+    aviator: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: [
+          '....AAAAAAAA....',
+          '..AAaaaaaaaaAA..',
+          '.AaccAaaaaAccaA.',
+          '.AakkAaaaaAkkaA.',
+          'AaaaaaaaaaaaaaaA',
+          'Aa............aA',
+          'Aa............aA',
+          '.A............A.',
+        ],
+        x: 8,
+        y: sp.headTop - 4,
+      }),
+    },
+    halo: {
+      slot: 'head',
+      build: (sp) => ({
+        grid: ['....aaaaaaaa....', '..aaw.......aa..', '..aa........aa..', '....aaaaaaaa....'],
+        x: 8,
+        y: Math.max(0, sp.headTop - 6),
+      }),
+    },
+  };
+
+  /** Each look in three colours: the one its bag gives, then the two its shop sells. */
+  const STYLE_COLORS = {
+    flowerCrown: [
+      ['flowerCrown', '#ff8fb8'],
+      ['flowerCrownSunny', '#ffd23f'],
+      ['flowerCrownBluebell', '#6f8cff'],
+    ],
+    snorkel: [
+      ['snorkel', '#ffb02e'],
+      ['snorkelCoral', '#ff6f61'],
+      ['snorkelGold', '#e0b24f'],
+    ],
+    chefHat: [
+      ['chefHat', '#f4f4f4'],
+      ['chefHatPink', '#ffb3d1'],
+      ['chefHatBlack', '#3a3a44'],
+    ],
+    rockShades: [
+      ['rockShades', '#ff4f7b'],
+      ['rockShadesGold', '#ffd23f'],
+      ['rockShadesNeon', '#39ff88'],
+    ],
+    sweatband: [
+      ['sweatband', '#e63946'],
+      ['sweatbandBlue', '#4f7bff'],
+      ['sweatbandGreen', '#3fa34d'],
+    ],
+    spaceHelmet: [
+      ['spaceHelmet', '#c0c8d8'],
+      ['spaceHelmetGold', '#ffd23f'],
+      ['spaceHelmetPink', '#ff9fc4'],
+    ],
+    vampireCape: [
+      ['vampireCape', '#2a2a38'],
+      ['vampireCapeBlue', '#2b3a8f'],
+      ['vampireCapeGreen', '#2f7a3a'],
+    ],
+    retroVisor: [
+      ['retroVisor', '#4fd1ff'],
+      ['retroVisorGreen', '#39ff88'],
+      ['retroVisorPink', '#ff5fd2'],
+    ],
+    strawHat: [
+      ['strawHat', '#5a3a1a'],
+      ['strawHatRed', '#e63946'],
+      ['strawHatBlue', '#4f7bff'],
+    ],
+    rangerHat: [
+      ['rangerHat', '#a0784a'],
+      ['rangerHatGreen', '#4a6b3a'],
+      ['rangerHatRed', '#b33a3a'],
+    ],
+    beret: [
+      ['beret', '#e63946'],
+      ['beretBlue', '#2b3a8f'],
+      ['beretGreen', '#3a7a3a'],
+    ],
+    labGoggles: [
+      ['labGoggles', '#9aa3ad'],
+      ['labGogglesGreen', '#3fa34d'],
+      ['labGogglesPink', '#ff8fb8'],
+    ],
+    earmuffs: [
+      ['earmuffs', '#ff8fb8'],
+      ['earmuffsBlue', '#9fd4ff'],
+      ['earmuffsGreen', '#7fd38a'],
+    ],
+    explorerHat: [
+      ['explorerHat', '#d9c39a'],
+      ['explorerHatGreen', '#6b8f4a'],
+      ['explorerHatWhite', '#f4f4ee'],
+    ],
+    knightHelm: [
+      ['knightHelm', '#a8b0bc'],
+      ['knightHelmGold', '#ffd23f'],
+      ['knightHelmBlack', '#2a2a38'],
+    ],
+    antenna: [
+      ['antenna', '#a8b0bc'],
+      ['antennaRed', '#e63946'],
+      ['antennaBlue', '#4f7bff'],
+    ],
+    headwrap: [
+      ['headwrap', '#f0e6d2'],
+      ['headwrapBlue', '#3a4fb5'],
+      ['headwrapRed', '#c0392b'],
+    ],
+    aviator: [
+      ['aviator', '#7b4a2a'],
+      ['aviatorRed', '#a83232'],
+      ['aviatorBlue', '#2b4f8f'],
+    ],
+    halo: [
+      ['halo', '#ffd23f'],
+      ['haloPink', '#ff9fc4'],
+      ['haloBlue', '#6fb7ff'],
+    ],
+  };
+
+  /** Every style id -> how it is drawn. Must match STYLES in src/pet-config.ts. */
+  const STYLES = {};
+  for (const [look, colors] of Object.entries(STYLE_COLORS)) {
+    for (const [id, color] of colors) {
+      STYLES[id] = Object.assign({ color }, STYLE_LOOKS[look]);
+    }
+  }
+
   // -- Colour helpers ---------------------------------------------------------
 
   /** @param {string} hex */
@@ -1134,7 +1549,7 @@
    * @param {Record<string,string>} pal
    * @param {{ eyes?: string, mouth?: string, frame?: number, look?: number,
    *   twitch?: boolean, pattern?: string, accessory?: string,
-   *   accessoryColor?: string, costume?: string, hide?: string[] }} expr
+   *   accessoryColor?: string, costume?: string, style?: string, hide?: string[] }} expr
    */
   function compose(species, pal, expr) {
     const sp = SPECIES[species] || SPECIES.cat;
@@ -1189,16 +1604,22 @@
       stamp(px, placed.grid, placed.x, placed.y, accPal, false);
     }
 
-    const costume = expr.costume ? COSTUMES[expr.costume] : null;
-    if (
-      costume &&
-      !(expr.hide || []).includes(costume.slot) &&
-      !(acc && acc.slot === costume.slot)
-    ) {
-      const a = costume.color;
-      const pal2 = Object.assign({ a, A: mix(a, '#000000', 0.45) }, ACC_FIXED);
-      const placed = costume.build(sp);
-      stamp(px, placed.grid, placed.x, placed.y, pal2, false);
+    // Each slot is drawn once: the accessory first, then a costume, then the style.
+    const taken = new Set(expr.hide || []);
+    if (acc) {
+      taken.add(acc.slot);
+    }
+    for (const extra of [
+      expr.costume ? COSTUMES[expr.costume] : null,
+      expr.style ? STYLES[expr.style] : null,
+    ]) {
+      if (extra && !taken.has(extra.slot)) {
+        taken.add(extra.slot);
+        const a = extra.color;
+        const pal2 = Object.assign({ a, A: mix(a, '#000000', 0.45) }, ACC_FIXED);
+        const placed = extra.build(sp);
+        stamp(px, placed.grid, placed.x, placed.y, pal2, false);
+      }
     }
 
     return px;
@@ -1253,6 +1674,7 @@
     PATTERNS,
     ACCESSORIES,
     COSTUMES,
+    STYLES,
     speciesIds: Object.keys(SPECIES),
     palette,
     compose,

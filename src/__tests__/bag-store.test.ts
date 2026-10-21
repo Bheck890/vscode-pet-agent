@@ -53,3 +53,29 @@ describe('BagStore', () => {
     expect(parseUnlocks({ 'idle.disco': true })).toEqual([]);
   });
 });
+
+describe('active bag', () => {
+  it('survives reloads and is shared by every window', () => {
+    const storage = memory();
+    new BagStore(storage).setActiveBag('ocean');
+    expect(new BagStore(storage).getActiveBag(3, true)).toBe('ocean');
+  });
+
+  it('falls back to the starter bag when unknown or not yet unlocked', () => {
+    const storage = memory();
+    const store = new BagStore(storage);
+    expect(store.getActiveBag(1, true)).toBe('starter');
+    store.setActiveBag('ocean');
+    expect(store.getActiveBag(2, true)).toBe('starter');
+    // With levels switched off, every bag is open.
+    expect(store.getActiveBag(1, false)).toBe('ocean');
+    storage.data['petActiveBag'] = 'atlantis';
+    expect(store.getActiveBag(99, true)).toBe('starter');
+  });
+
+  it("keeps each bag's shop purchases under the bag's name", () => {
+    expect(
+      parseUnlocks(['garden.idle.buzz', 'ocean.room.rockpool', 'a.b.c.d', 'Garden.idle.x']),
+    ).toEqual(['garden.idle.buzz', 'ocean.room.rockpool']);
+  });
+});

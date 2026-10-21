@@ -522,3 +522,115 @@ canvas {
 #house-themes {
   margin-top: 4px;
 }
+
+#house-picker,
+#house-rooms,
+#house-profiles,
+#house-visit {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin-bottom: 3px;
+}
+
+/* One line per row, scrolling sideways, so the strip stays slim. */
+#house-panel .food-choices {
+  gap: 3px;
+  padding: 1px 0;
+}
+
+#house-panel .food-choices button {
+  white-space: nowrap;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+#house-panel .food-choices .group {
+  white-space: nowrap;
+  align-self: center;
+}
+
+#house-note {
+  font-weight: normal;
+  text-align: center;
+}
+
+#house-picker button.locked,
+#house-rooms button.locked,
+#bag-picker button.locked {
+  opacity: 0.45;
+  cursor: default;
+}
+
+#house-profiles .group,
+#bag-picker small {
+  opacity: 0.7;
+}
+
+#house-profiles img {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  image-rendering: pixelated;
+}
+
+#house-visit[hidden] {
+  display: none;
+}
+
+/* -- Bags ---------------------------------------------------------------- */
+
+#bag-picker {
+  margin-bottom: 4px;
+}
+
+#bag-picker button {
+  padding: 1px 4px;
+}
+
+#bag-picker button.locked {
+  padding: 1px 2px;
+  font-size: 9px;
+}
+
+/* -- Saves and the finish screen ----------------------------------------- */
+
+#save-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+#save-actions button {
+  text-align: left;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  background: rgba(127, 127, 127, 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+
+#finish-panel {
+  top: 40px;
+  bottom: auto;
+  z-index: 20;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+#finish-panel .finish-title {
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+#finish-panel .finish-badges {
+  font-size: 18px;
+  margin: 4px 0 8px;
+}
+
+#finish-actions {
+  justify-content: center;
+}

@@ -11,6 +11,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- 🎒 20 themed bags, opened by level: one at each of levels 1 to 5, then one every 2 levels up to 35 (Garden, Ocean, Kitchen, Music, Sports, Space, Spooky, Retro tech, Farm, Camping, Art studio, Science lab, Winter, Jungle, Castle, Robots, Desert, Sky and the Legendary vault). Pick the active bag at the top of the 🎒 panel; new finds come from its catalogue and its own shop takes only its own spares. Each bag is a whole pack: 2 idle hobbies and a themed agent-state look, a house with its rooms, furniture, a room theme and a pet style, with more of each (and a themed food) in its shop. Existing toys, trades and purchases are the starter bag's, unchanged. New weekly challenge: find 3 toys in a new bag.
+- 🐾 Pet styles (`pet-agents.style`): a themed look from each bag, from a flower crown to a halo, with two colour variants each. Picked in the bag's ✨ Collection tab; your own accessory and holiday costumes win their spot.
+- 🏠 Several houses, one per bag, each with its own window, and rooms you switch between (`◀ Bedroom ▶`). Every room keeps its own furniture and theme, and has a job: the pet naps in a bedroom, waits by its bowl in a kitchen and plays with its toys in a yard. The starter house gains a food bowl, and a kitchen and yard in its shop. Your existing room becomes the starter house's living room.
+- 🏁 Finishing: reaching level 35 opens the last bag, throws a party and shows a finish screen summing up the save, with a 🏁 button in the level panel afterwards. Share it as a text summary, a 1200x630 share card, or a pre-filled post on X or Bluesky, only when you click (`pet-agents.shareButtons`). Nothing about prompts, files or repos is ever shared.
+- 💾 Save slots: **Start a new save** (⚙️ or `Pet Agents: Start a New Save`) stores the whole save as a profile file and starts again at level 1, keeping prompt records, settings and holiday toys. Old saves live in the 🏠 strip's **Profiles** row: visit an old pet alive in its own houses (read-only, care frozen), rename or hide it, or invite it over to play. Changes from a window still on an older save are dropped, and facts dated before a save started earn nothing in it.
+- 👋 Friends: `Pet Agents: Export Profile` / `Import Profile` swap `.petprofile.json` files (no prompts, paths or repo names); a friend's pet gets a guest house you can visit.
+- 🚚 Move your pet to another computer: `Pet Agents: Move Pet to Another Computer` writes a `.petsave` file, optionally locked with a password (scrypt and AES-256-GCM, Node's built-in crypto). Prompt previews only travel encrypted. The save here only becomes a "moved" profile once the file has been written and read back; `Pet Agents: Bring Pet from Another Computer` asks before replacing a save with progress.
+
 - 🎃 Holiday events by your local date: Halloween, Thanksgiving, Christmas, New Year, Valentine's Day and Easter. Your pet wears a costume, decorations go up, the weather turns, and each holiday has a toy you can only find while it is on (`pet-agents.holidays`, `pet-agents.hemisphere`).
 - 🏆 Weekly prompt records from your Claude Code transcripts: tiniest prompt with the longest run, longest prompt that finished fastest, busiest prompt, fewest actions, most helpers and the marathon, with totals and an all-time hall of fame. This week's earlier transcripts are read back once a day. Prompt text stays hidden unless `pet-agents.recordsShowPrompts` is on (`pet-agents.records`).
 - ⭐ Levels and XP from finished prompts, passing tests and builds, helpers, records and care, with three weekly challenges picked the same in every window. Counted once however many windows are open; a week away doubles the XP of your next three prompts (`pet-agents.levels`).
@@ -25,6 +33,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Care tools stay in hand after closing the care panel, so it no longer covers the pet. The 🐾 button shows the tool; Esc puts it away.
 
 ### Changed
+
+- Extension storage is kept per save slot (`petBag` becomes `petBag:<slot>`). Your current data becomes the first slot the first time the new version runs; the old keys are left in place.
 
 - Clicking a toy on the floor now plays with it; right-click puts it back in the bag.
 - Animation variants for an agent are picked from its transcript, so the same agent shows the same animation in every VS Code window (main pet in one, mini pet in another). Shop purchases made in one window reach the others within a minute.

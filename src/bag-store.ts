@@ -1,8 +1,10 @@
+import { STARTER_BAG, bagsUnlocked } from './bags';
 import { Storage } from './storage';
 
 const STORAGE_KEY = 'petBag';
 const SPENT_KEY = 'petBagSpent';
 const UNLOCKS_KEY = 'petUnlocks';
+const ACTIVE_KEY = 'petActiveBag';
 
 /** A toy bag: toy id -> how many have been found. Anything malformed is dropped. */
 export function parseBag(v: unknown): Record<string, number> {
@@ -18,13 +20,16 @@ export function parseBag(v: unknown): Record<string, number> {
   return out;
 }
 
-/** Shop purchases, e.g. "idle.disco" or "food.fish". Anything malformed is dropped. */
+/**
+ * Shop purchases, e.g. "idle.disco" or "food.fish" from the starter bag's
+ * shop, and "garden.idle.watering" from another bag's. Anything malformed is dropped.
+ */
 export function parseUnlocks(v: unknown): string[] {
   if (!Array.isArray(v)) {
     return [];
   }
   const ids = v.filter(
-    (id): id is string => typeof id === 'string' && /^[a-z]+\.[a-zA-Z]+$/.test(id),
+    (id): id is string => typeof id === 'string' && /^([a-z]+\.)?[a-z]+\.[a-zA-Z]+$/.test(id),
   );
   return [...new Set(ids)];
 }
@@ -64,6 +69,17 @@ export class BagStore {
     const merged = parseUnlocks([...this.getUnlocks(), ...parseUnlocks(unlocks)]);
     void this.storage.update(UNLOCKS_KEY, merged);
     return merged;
+  }
+
+  /** The bag new finds come from. Unknown or not yet unlocked falls back to the starter bag. */
+  getActiveBag(level: number, levelsOn: boolean): string {
+    const id = this.storage.get(ACTIVE_KEY);
+    return typeof id === 'string' && bagsUnlocked(level, levelsOn).includes(id) ? id : STARTER_BAG;
+  }
+
+  /** Saves the active bag for every window; the caller checks it is unlocked. */
+  setActiveBag(id: string): void {
+    void this.storage.update(ACTIVE_KEY, id);
   }
 
   private mergeCounts(key: string, counts: unknown): Record<string, number> {

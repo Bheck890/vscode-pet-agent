@@ -18,6 +18,68 @@ export const ACCESSORIES = [
   'collar',
 ] as const;
 
+/** Pet styles from the bags' packs: each base look, then its colour variants. Must match STYLES in media/pets.js. */
+export const STYLES = [
+  'none',
+  'flowerCrown',
+  'flowerCrownSunny',
+  'flowerCrownBluebell',
+  'snorkel',
+  'snorkelCoral',
+  'snorkelGold',
+  'chefHat',
+  'chefHatPink',
+  'chefHatBlack',
+  'rockShades',
+  'rockShadesGold',
+  'rockShadesNeon',
+  'sweatband',
+  'sweatbandBlue',
+  'sweatbandGreen',
+  'spaceHelmet',
+  'spaceHelmetGold',
+  'spaceHelmetPink',
+  'vampireCape',
+  'vampireCapeBlue',
+  'vampireCapeGreen',
+  'retroVisor',
+  'retroVisorGreen',
+  'retroVisorPink',
+  'strawHat',
+  'strawHatRed',
+  'strawHatBlue',
+  'rangerHat',
+  'rangerHatGreen',
+  'rangerHatRed',
+  'beret',
+  'beretBlue',
+  'beretGreen',
+  'labGoggles',
+  'labGogglesGreen',
+  'labGogglesPink',
+  'earmuffs',
+  'earmuffsBlue',
+  'earmuffsGreen',
+  'explorerHat',
+  'explorerHatGreen',
+  'explorerHatWhite',
+  'knightHelm',
+  'knightHelmGold',
+  'knightHelmBlack',
+  'antenna',
+  'antennaRed',
+  'antennaBlue',
+  'headwrap',
+  'headwrapBlue',
+  'headwrapRed',
+  'aviator',
+  'aviatorRed',
+  'aviatorBlue',
+  'halo',
+  'haloPink',
+  'haloBlue',
+] as const;
+
 export const DEFAULT_NAMES: Record<Species, string> = {
   cat: 'Mochi',
   dog: 'Biscuit',
@@ -95,6 +157,10 @@ export interface PetConfig {
   enemies: boolean;
   /** The pet's house, furnished with level unlocks. */
   house: boolean;
+  /** A themed look from a bag's pack, or '' for none. */
+  style: string;
+  /** Show the post-to-X and Bluesky buttons on the finish screen. */
+  shareButtons: boolean;
   size: number;
 }
 
@@ -128,6 +194,9 @@ export function panelSetting(key: unknown, on: unknown): [string, unknown] | nul
   if (key === 'disabledActions') {
     const ids = actionIds(on);
     return ids ? [key, ids] : null;
+  }
+  if (key === 'style') {
+    return typeof on === 'string' && (STYLES as readonly string[]).includes(on) ? [key, on] : null;
   }
   if (typeof key !== 'string' || !PANEL_SWITCHES.includes(key) || typeof on !== 'boolean') {
     return null;
@@ -189,6 +258,8 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     levels: get('levels') !== false,
     enemies: get('enemies') !== false,
     house: get('house') !== false,
+    style: oneOf(get('style'), STYLES),
+    shareButtons: get('shareButtons') !== false,
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };
 }

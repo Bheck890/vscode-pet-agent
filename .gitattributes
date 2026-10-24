@@ -1,0 +1,8 @@
+# Text files are LF in every checkout, Windows included, so Prettier's
+# format check (endOfLine: lf) passes on every CI runner.
+* text=auto eol=lf
+
+*.png binary
+*.gif binary
+*.ico binary
+*.vsix binary

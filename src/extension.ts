@@ -14,6 +14,7 @@ import { RecordsStore } from './records-store';
 import { SHARE_SITES, SaveFlows, ShareSite } from './save-flows';
 import { Slots } from './slot';
 import { scoped } from './storage';
+import { Visitors } from './visitors';
 import { customizePet } from './customize-menu';
 import { connectGames } from './games';
 import { getConfig, saveSetting } from './settings';
@@ -92,6 +93,9 @@ export function activate(context: vscode.ExtensionContext): void {
     profilesChanged: () => viewProvider.profilesChanged(),
   });
 
+  // A pet that needs looking after gets visitors, whether or not the view is open.
+  const visitors = new Visitors(save, stores.care, () => Object.keys(stores.bag.get()));
+
   const viewProvider = new PeonViewProvider({
     mediaPath,
     peon,
@@ -104,6 +108,7 @@ export function activate(context: vscode.ExtensionContext): void {
     slots,
     profiles,
     flows,
+    visitors,
     saveSetting,
     log,
   });
@@ -126,7 +131,13 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   };
 
-  const syncTimer = setInterval(() => viewProvider.syncShared(), 60_000);
+  const syncTimer = setInterval(() => {
+    viewProvider.syncShared();
+    const visit = getConfig().visitors ? visitors.tick(Date.now()) : null;
+    if (visit) {
+      viewProvider.visitor(visit);
+    }
+  }, 60_000);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(PeonViewProvider.viewId, viewProvider, {
       webviewOptions: { retainContextWhenHidden: true },

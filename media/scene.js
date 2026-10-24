@@ -2187,6 +2187,8 @@
           out: isOut(d.id),
         })),
       takeOut,
+      /** The toy of this kind on the floor, or null. */
+      toyOut: (id) => toys.find((o) => o.def.id === id && !o.storing) || null,
       putAway,
       putAllAway,
       foundCount: () => inv().size,

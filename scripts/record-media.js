@@ -912,6 +912,58 @@ CLIPS.holidays = async (browser) => {
   return writePng(path.join(OUT, 'holidays.png'), grid(shots, 3, 8));
 };
 
+/**
+ * Every holiday outfit. Each window picks its outfit at random when it
+ * opens, so try page seeds until the greeting says the one wanted.
+ */
+CLIPS.outfits = async (browser) => {
+  const events = fs.readFileSync(path.join(MEDIA, 'events.js'), 'utf8');
+  const wanted = [];
+  for (const [event, species] of [
+    ['halloween', 'fox'],
+    ['christmas', 'cat'],
+    ['thanksgiving', 'dog'],
+    ['newyear', 'bird'],
+    ['valentine', 'cat'],
+    ['easter', 'dog'],
+  ]) {
+    const block = events.slice(events.indexOf(`    ${event}: {`));
+    const outfits = block.slice(block.indexOf('outfits: ['), block.indexOf('decor: ['));
+    for (const m of outfits.matchAll(/name: '([^']+)'/g)) {
+      wanted.push([event, species, m[1]]);
+    }
+  }
+  const shots = [];
+  for (const [event, species, outfit] of wanted) {
+    for (let seed = 1; seed < 200; seed++) {
+      const panel = await Panel.open(browser, {
+        width: 240,
+        height: 220,
+        scale: 2,
+        seed,
+        cfg: { species, name: NAMES[species], size: SIZES.small },
+      });
+      await panel.send({
+        command: 'calendar',
+        day: '2026-01-01',
+        events: [event],
+        season: 'winter',
+      });
+      await panel.advance(300);
+      const said = await panel.frame.evaluate(() => Object.keys(window.__labels).join('|'));
+      if (said.includes(`dressed as ${outfit}`)) {
+        // Long enough for the greeting banner to pass and some weather to fall.
+        await panel.advance(8700);
+        shots.push(await panel.shot());
+        await panel.close();
+        break;
+      }
+      await panel.close();
+    }
+  }
+  return writePng(path.join(OUT, 'outfits.png'), grid(shots, 4, 8));
+};
+
 /** A `house` message with one furnished room, where the pet is. Items are [id, x, y]. */
 function houseLayout(house, room, theme, items) {
   return {
@@ -1055,6 +1107,77 @@ CLIPS.houses = async (browser) => {
   }
   await Promise.all(panels.map((p) => p.close()));
   return writePng(path.join(OUT, 'houses.png'), grid(shots, 3, 8));
+};
+
+/** Visitors: a passer-by with food, a rain shower, and a rare playmate with a toy. */
+CLIPS.visitors = async (browser) => {
+  const opts = { width: 300, height: 300, scale: 2 };
+  const visits = [
+    [{ species: 'dog', name: 'Biscuit' }, { kind: 'feed', at: 1760000002000 }, 3300],
+    [{ species: 'cat', name: 'Mochi' }, { kind: 'rain', at: 1760000000000 }, 3500],
+    [{ species: 'fox', name: 'Rusty' }, { kind: 'play', at: 1760000005000, toy: 'yarn' }, 4500],
+  ];
+  const shots = [];
+  for (const [cfg, visit, ms] of visits) {
+    const panel = await Panel.open(browser, { ...opts, cfg, state: { bag: { yarn: 2 } } });
+    await panel.send({ command: 'visitor', stat: 'fun', amount: 33, ...visit });
+    await panel.advance(ms);
+    shots.push(await panel.shot());
+    await panel.close();
+  }
+  return writePng(path.join(OUT, 'visitors.png'), grid(shots, 3, 8));
+};
+
+/** Every passer-by who might stop to feed the pet. */
+CLIPS.people = async (browser) => {
+  const species = ['dog', 'cat', 'fox', 'bird'];
+  const shots = [];
+  for (let i = 0; i < 8; i++) {
+    const panel = await Panel.open(browser, {
+      width: 240,
+      height: 200,
+      scale: 2,
+      cfg: { species: species[i % 4], name: NAMES[species[i % 4]], size: SIZES.small },
+    });
+    // The person is picked from the visit's time, one per second.
+    await panel.send({
+      command: 'visitor',
+      kind: 'feed',
+      at: 1760000000000 + i * 1000,
+      stat: 'fullness',
+      amount: 33,
+    });
+    await panel.advance(3200);
+    shots.push(await panel.shot());
+    await panel.close();
+  }
+  return writePng(path.join(OUT, 'visitor-people.png'), grid(shots, 4, 8));
+};
+
+/** Playmates: each one a randomly made-up pet of the same species, two per species. */
+CLIPS.playmates = async (browser) => {
+  const shots = [];
+  for (const [i, species] of ['fox', 'fox', 'cat', 'cat', 'dog', 'dog', 'bird', 'bird'].entries()) {
+    const panel = await Panel.open(browser, {
+      width: 300,
+      height: 220,
+      scale: 2,
+      cfg: { species, name: NAMES[species], size: SIZES.small },
+      state: { bag: { yarn: 2, teddy: 1, frisbee: 1 } },
+    });
+    await panel.send({
+      command: 'visitor',
+      kind: 'play',
+      at: 1760000000000 + i * 3600000,
+      stat: 'fun',
+      amount: 33,
+      toy: ['yarn', 'teddy', 'frisbee'][i % 3],
+    });
+    await panel.advance(4200);
+    shots.push(await panel.shot());
+    await panel.close();
+  }
+  return writePng(path.join(OUT, 'playmates.png'), grid(shots, 4, 8));
 };
 
 /** The finish screen, and a visit to an earlier save from the house menu. */

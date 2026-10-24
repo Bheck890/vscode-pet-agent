@@ -941,7 +941,9 @@
 
   /**
    * Holiday costumes, drawn like accessories (same keys) while an event is
-   * on. The user's own accessory wins when both want the same slot.
+   * on; events.js picks one of each holiday's outfits per window. The user's
+   * own accessory wins when both want the same slot. Some borrow a pet
+   * style's shape (defined further down) in a holiday colour.
    */
   const COSTUMES = {
     witchHat: {
@@ -1024,6 +1026,141 @@
         x: 8,
         y: sp.headTop - 6,
       }),
+    },
+    pumpkinHat: {
+      slot: 'head',
+      color: '#ff8c2a',
+      build: (sp) => ({
+        grid: [
+          '......GG........',
+          '.......G........',
+          '...AAaaAAaaAA...',
+          '..AaaaAaaAaaaA..',
+          '..AaaaAaaAaaaA..',
+          '...AAAAAAAAAA...',
+        ],
+        x: 8,
+        y: sp.headTop - 5,
+      }),
+    },
+    // A sheet's wavy hem over the paws: with white fur and a float, the pet is a ghost.
+    ghostHem: {
+      slot: 'neck',
+      color: '#f4f6ff',
+      build: (sp) => ({
+        grid: [
+          'aaaaaaaaaaaaaaaaaaaaaa',
+          'aaaaaaaaaaaaaaaaaaaaaa',
+          'aaaaaaaaaaaaaaaaaaaaaa',
+          'a.aaa.aaa.aaa.aaa.aaa.',
+          '...a...a...a...a...a..',
+        ],
+        x: 5,
+        y: sp.pawY - 3,
+      }),
+    },
+    vampireCollar: {
+      slot: 'neck',
+      color: '#1a1a22',
+      build: (sp) => STYLE_LOOKS.vampireCape.build(sp),
+    },
+    elfHat: {
+      slot: 'head',
+      color: '#3fa34d',
+      build: (sp) => ({
+        grid: [
+          '..............yy',
+          '.............Ay.',
+          '...........AaA..',
+          '.........AaaA...',
+          '.......AaaaaA...',
+          '.....AaaaaaaA...',
+          '...AaaaaaaaaaA..',
+          '..rrrrrrrrrrrrr.',
+          '..rwrrwrrwrrwrr.',
+        ],
+        x: 8,
+        y: sp.headTop - 8,
+      }),
+    },
+    antlers: {
+      slot: 'head',
+      color: '#8a5a2b',
+      build: (sp) => ({
+        grid: [
+          'a.a........a.a',
+          '.aa........aa.',
+          'a.a........a.a',
+          '.aa........aa.',
+          '..a........a..',
+          '..aa......aa..',
+        ],
+        x: 9,
+        y: sp.headTop - 6,
+      }),
+    },
+    topHat: {
+      slot: 'head',
+      color: '#22222a',
+      build: (sp) => ({
+        grid: [
+          '....aaaaaaaa....',
+          '....aaaaaaaa....',
+          '....aaaaaaaa....',
+          '....yyyyyyyy....',
+          '....aaaaaaaa....',
+          '.aaaaaaaaaaaaaa.',
+        ],
+        x: 8,
+        y: sp.headTop - 6,
+      }),
+    },
+    turkeyFan: {
+      slot: 'head',
+      color: '#a0522d',
+      build: (sp) => ({
+        grid: ['.r.y.a.y.r.', '.rAyaaayAr.', '..rAaaaAr..', '...AaaaA...', '....AaA....'],
+        x: 10,
+        y: sp.headTop - 5,
+      }),
+    },
+    scarecrowHat: {
+      slot: 'head',
+      color: '#7b4a2a',
+      build: (sp) => STYLE_LOOKS.strawHat.build(sp),
+    },
+    tiara: {
+      slot: 'head',
+      color: '#c0c8d8',
+      build: (sp) => ({
+        grid: ['.....c.....', '..y.aca.y..', '.aaaaaaaaa.', 'AAAAAAAAAAA'],
+        x: 10,
+        y: sp.headTop - 3,
+      }),
+    },
+    cupidHalo: {
+      slot: 'head',
+      color: '#ff9fc4',
+      build: (sp) => STYLE_LOOKS.halo.build(sp),
+    },
+    roseCrown: {
+      slot: 'head',
+      color: '#e63946',
+      build: (sp) => STYLE_LOOKS.flowerCrown.build(sp),
+    },
+    eggShell: {
+      slot: 'head',
+      color: '#fff4d6',
+      build: (sp) => ({
+        grid: ['.....yy.....', '...AaaaaA...', '..AaaaaaaA..', '.AaAaaAaaAA.', '.A.A..A..A..'],
+        x: 10,
+        y: sp.headTop - 4,
+      }),
+    },
+    springCrown: {
+      slot: 'head',
+      color: '#ffd23f',
+      build: (sp) => STYLE_LOOKS.flowerCrown.build(sp),
     },
     partyCone: {
       slot: 'head',

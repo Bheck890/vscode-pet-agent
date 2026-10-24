@@ -29,11 +29,12 @@
         <button id="house-done" title="Hide this bar; 🏠 leaves the house">Done</button>
       </div>
       <div id="house-visit" class="food-choices" hidden></div>
-      <div id="house-picker" class="food-choices"></div>
       <div id="house-rooms" class="food-choices"></div>
-      <div id="house-items" class="food-choices"></div>
-      <div id="house-themes" class="food-choices"></div>
-      <div id="house-profiles" class="food-choices"></div>
+      <div id="house-tabs" class="tabs"></div>
+      <div id="house-items" class="food-choices house-grid"></div>
+      <div id="house-themes" class="food-choices house-grid" hidden></div>
+      <div id="house-picker" class="food-choices house-grid" hidden></div>
+      <div id="house-profiles" class="food-choices house-grid" hidden></div>
     </div>
     <div id="finish-panel" class="panel" hidden>
       <div id="finish-body"></div>
@@ -80,6 +81,10 @@
       <label><input type="checkbox" data-setting="levels" /> ⭐ Levels and challenges</label>
       <label><input type="checkbox" data-setting="enemies" /> 🐛 Bugs to squash</label>
       <label><input type="checkbox" data-setting="house" /> 🏠 The pet's house</label>
+      <label
+        ><input type="checkbox" data-setting="visitors" /> 🚶 Visitors (food, rain and
+        playmates)</label
+      >
       <details>
         <summary>🎭 Actions (untick the ones you don't like)</summary>
         <div id="action-list"></div>
@@ -130,6 +135,7 @@
     <script nonce="<!--NONCE-->" src="<!--MEDIA:events.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:enemies.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:house.js-->"></script>
+    <script nonce="<!--NONCE-->" src="<!--MEDIA:visitors.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:panels.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:finish.js-->"></script>
     <script nonce="<!--NONCE-->" src="<!--MEDIA:webview.js-->"></script>

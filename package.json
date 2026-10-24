@@ -253,7 +253,7 @@
         "pet-agents.holidays": {
           "type": "boolean",
           "default": true,
-          "description": "Holiday events: decorations, a costume and a limited-time toy for Halloween, Thanksgiving, Christmas, New Year, Valentine's Day and Easter, by your local date."
+          "description": "Holiday events: decorations, an outfit and a limited-time toy for Halloween, Thanksgiving, Christmas, New Year, Valentine's Day and Easter, by your local date. Each window picks one of the holiday's outfits and decorations when it opens."
         },
         "pet-agents.hemisphere": {
           "type": "string",
@@ -362,6 +362,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show Post to X and Post to Bluesky buttons when sharing your progress. They only open your browser at a pre-filled post when you click them; nothing is sent otherwise."
+        },
+        "pet-agents.visitors": {
+          "type": "boolean",
+          "default": true,
+          "description": "While any care stat is at 40 or below, someone looks in every 40 minutes (every 30 once all three are at zero): a passer-by feeds your pet or a rain shower gives it a bath (each tops up a third of that stat), and very rarely a randomly made-up friend of the same species drops in to play with a toy from its bag. Looking after the pet yourself puts the next visit off for an hour."
         },
         "pet-agents.size": {
           "type": "string",

@@ -29,6 +29,7 @@ import { readPetConfig } from '../pet-config';
 import { LOOK_KEYS, PetLook, Profiles } from '../profiles';
 import { PetUi, SaveFlows } from '../save-flows';
 import { Slots } from '../slot';
+import { Visitors } from '../visitors';
 import type { StateWatcher } from '../state-watcher';
 import type { ClaudeWatcher, ClaudeUpdate } from '../claude-watcher';
 
@@ -194,6 +195,7 @@ function setup(
     saveChanged: refresh,
     profilesChanged: refresh,
   });
+  const visitors = new Visitors(gameStorage, stores.care, () => []);
   const provider = new PeonViewProvider({
     mediaPath: MEDIA,
     peon: watchers.peon,
@@ -206,6 +208,7 @@ function setup(
     slots,
     profiles,
     flows,
+    visitors,
     saveSetting,
     log,
   });
@@ -654,5 +657,37 @@ describe('bags and saves in the view', () => {
     const { v, progressStore } = setup();
     v.send({ command: 'found', bag: 'garden', toy: 'snail' });
     expect(progressStore.facts()['find:snail']).toMatchObject({ kind: 'find' });
+  });
+});
+
+describe('visitors in the view', () => {
+  it('puts off the next visitor when you look after the pet, not when care is refused', () => {
+    const { v, careStorage, gameStorage } = setup();
+    careStorage.data['petCare'] = { fullness: 99, fun: 10, clean: 10, updatedAt: Date.now() };
+    v.send({ command: 'care', action: 'kibble' });
+    expect(gameStorage.data['petVisitorWait']).toBeUndefined();
+    v.send({ command: 'care', action: 'pet' });
+    expect(gameStorage.data['petVisitorWait']).toMatchObject({ cared: true });
+  });
+
+  it('acts out a visit with the stat it raised, and nothing without a view', () => {
+    const { v, provider, careStorage, stores } = setup();
+    careStorage.data['petCare'] = { fullness: 20, fun: 50, clean: 50, updatedAt: Date.now() };
+    stores.care.boost('fullness', 33);
+    provider.visitor({ kind: 'feed', at: 1, stat: 'fullness', amount: 33 });
+    expect(v.last('visitor')).toEqual({
+      command: 'visitor',
+      kind: 'feed',
+      at: 1,
+      stat: 'fullness',
+      amount: 33,
+    });
+    expect(
+      (v.last('care-update') as { stats: { fullness: number } }).stats.fullness,
+    ).toBeGreaterThan(50);
+    v.close();
+    v.posted.length = 0;
+    provider.visitor({ kind: 'rain', at: 2, stat: 'clean', amount: 33 });
+    expect(v.posted).toEqual([]);
   });
 });

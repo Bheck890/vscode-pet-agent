@@ -38,6 +38,7 @@ const DEFAULTS = {
   house: true,
   style: '',
   shareButtons: true,
+  visitors: true,
   size: 200,
 };
 
@@ -87,6 +88,7 @@ describe('readPetConfig', () => {
       house: false,
       style: 'chefHatPink',
       shareButtons: false,
+      visitors: false,
       size: 'large',
     };
     expect(readPetConfig((k) => values[k])).toEqual({
@@ -116,6 +118,7 @@ describe('readPetConfig', () => {
       house: false,
       style: 'chefHatPink',
       shareButtons: false,
+      visitors: false,
       size: 250,
     });
   });
@@ -123,7 +126,15 @@ describe('readPetConfig', () => {
 
 describe('panelSetting', () => {
   it('accepts the game switches from the panel', () => {
-    for (const key of ['holidays', 'records', 'recordsShowPrompts', 'levels', 'enemies', 'house']) {
+    for (const key of [
+      'holidays',
+      'records',
+      'recordsShowPrompts',
+      'levels',
+      'enemies',
+      'house',
+      'visitors',
+    ]) {
       expect(panelSetting(key, false)).toEqual([key, false]);
     }
     expect(panelSetting('hemisphere', true)).toBeNull();

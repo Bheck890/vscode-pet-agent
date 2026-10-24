@@ -12,6 +12,7 @@ import { Profiles } from './profiles';
 import { RecordsService } from './records-service';
 import { SaveFlows } from './save-flows';
 import { Slots } from './slot';
+import type { Visitor, Visitors } from './visitors';
 import { FromWebview, ToWebview, WebviewState, parseFromWebview } from './protocol';
 import { getNonce, getWebviewOptions, buildHtml } from './webview-html';
 
@@ -37,6 +38,8 @@ export interface PetViewDeps {
   slots: Slots;
   profiles: Profiles;
   flows: SaveFlows;
+  /** Told when you look after the pet, which puts off the next visitor. */
+  visitors: Visitors;
   saveSetting: (key: string, value: unknown) => Thenable<void>;
   log: PetLog;
 }
@@ -154,6 +157,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
         post(webview, { command: 'care-update', ...result });
         if (result.ok) {
           this.deps.progress.care(message.action);
+          this.deps.visitors.cared(Date.now());
         }
         break;
       }
@@ -324,6 +328,14 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
     this.sendProfiles(webview);
     if (this.deps.progress.firstFinish()) {
       this.sendFinish(webview);
+    }
+  }
+
+  /** Someone looked in on the pet: the view acts it out, with the stat it raised. */
+  visitor(v: Visitor): void {
+    if (this.view) {
+      post(this.view.webview, { command: 'visitor', ...v });
+      post(this.view.webview, { command: 'care-update', stats: this.deps.care.get() });
     }
   }
 

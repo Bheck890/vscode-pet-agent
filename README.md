@@ -164,11 +164,23 @@ Click 🐾 to open care mode. Three stats wear down slowly in real time, even wh
 
 **Close the panel, keep the tool.** Pick a tool, then click 🐾 again to tuck the panel away and get the space back. The tool stays in your hand (the 🐾 button shows it, e.g. 🍖) until you press Esc, open the bag or settings, or the agent starts working.
 
+Every bit of care ends with the happy wiggle and hearts you get for petting it, whether it was you or a visitor who looked after it.
+
 Your pet has opinions: it won't eat when it's full, and is too hungry to play when starving. When a stat is low you'll see it: dirt smudges on its fur, and "hungry", "bored" or "needs a bath" under its name.
 
 **No treats on the clock.** While the agent is working, or any of its helper pets are out, care is locked and clicking the pet just gets a 🛠️ "busy working" bubble. Care unlocks as soon as the task is done.
 
 ![The care, bag and quick settings panels](docs/images/panels.png)
+
+### Visitors
+
+![A passer-by feeds Biscuit, a rain shower bathes Mochi, and a friend drops in to play yarn with Rusty](docs/images/visitors.png)
+
+A pet that needs looking after gets help. While any care stat is at 40 or below, someone looks in every 40 minutes, and every 30 once all three are at zero: a passer-by stops to feed it, or a rain shower gives it a bath, whichever helps, each topping up a third of that stat. Very rarely, a friend of its own kind drops in to play with a toy from its bag. Every friend is a new, randomly made-up pet of the same species, with its own colour, markings, accessory and name. Look after your pet yourself and the next visit is put off for an hour; keep every stat above 40 and nobody comes. Each visit happens once however many windows are open, and visitors are switched off with `pet-agents.visitors` or in ⚙️.
+
+![The eight passers-by who might stop to feed your pet](docs/images/visitor-people.png)
+
+![Playmates: two made-up friends for each species, playing with the fox, cat, dog and bird](docs/images/playmates.png)
 
 ### Quick settings and tooltips
 
@@ -188,7 +200,10 @@ Leave it open for weeks and there is always something going on. Every part is op
 
 ![Rusty in a witch hat for Halloween, Biscuit in a pilgrim hat, Mochi in a Santa hat, Pip in a party hat, Mochi with a heart band and Rusty in bunny ears](docs/images/holidays.png)
 
-Halloween, Thanksgiving, Christmas, New Year, Valentine's Day and Easter, worked out from your local date: your pet wears a costume, decorations go up either side of it, and bats, leaves, snow, fireworks, hearts or blossom drift by. Each holiday has a toy you can only find while it is on (a 🎃 jack-o-lantern, a ⛄ snowman...), and you keep it forever. Your own accessory wins if it wants the same spot as the costume (`pet-agents.holidays`).
+Halloween, Thanksgiving, Christmas, New Year, Valentine's Day and Easter, worked out from your local date: your pet dresses up, decorations go up either side of it with a garland above, and bats, leaves, snow, fireworks, hearts or blossom drift by. Every holiday has several outfits and sets of decorations, and each window picks its own when it opens: for Christmas your pet might be Santa, an elf, a reindeer or a snowman; for Halloween a witch, a ghost, a vampire or a pumpkin.
+
+![All twenty holiday outfits: a witch, ghost, vampire and pumpkin; Santa, an elf, a reindeer and a snowman; a pilgrim, turkey and scarecrow; party, top hat and tiara; a sweetheart, Cupid and a rose; a bunny, a chick and springtime](docs/images/outfits.png)
+Each holiday has a toy you can only find while it is on (a 🎃 jack-o-lantern, a ⛄ snowman...), and you keep it forever. Your own accessory wins if it wants the same spot as the costume (`pet-agents.holidays`).
 
 ### Levels, challenges and prompt records
 
@@ -286,35 +301,36 @@ If the pet ever vanishes, click **🪵 Gather debug logs** in ⚙️ (or run **P
 
 All settings apply instantly, no reload needed. Every colour setting takes any CSS colour.
 
-| Setting                         | Default   | Description                                                                                              |
-| ------------------------------- | --------- | -------------------------------------------------------------------------------------------------------- |
-| `pet-agents.species`            | `fox`     | `fox`, `cat`, `dog` or `bird`                                                                            |
-| `pet-agents.name`               | _(empty)_ | Your pet's name. Empty uses the species default: Rusty, Mochi, Biscuit, Pip                              |
-| `pet-agents.color`              | _(empty)_ | Fur/feather colour. Empty uses the species default (an orange fox, slate cat, brown dog, blue bird)      |
-| `pet-agents.accentColor`        | _(empty)_ | Belly, muzzle and chest colour                                                                           |
-| `pet-agents.eyeColor`           | _(empty)_ | Eye colour. Empty is dark slate with black pupils                                                        |
-| `pet-agents.pattern`            | `none`    | `spots`, `stripes`, `socks`, `mask`, `patch`                                                             |
-| `pet-agents.accessory`          | `none`    | `bow`, `flower`, `crown`, `beanie`, `headphones`, `glasses`, `sunglasses`, `bandana`, `scarf`, `collar`  |
-| `pet-agents.accessoryColor`     | _(empty)_ | Accessory colour. Empty uses each accessory's own default                                                |
-| `pet-agents.artStyle`           | `smooth`  | `smooth` rounds the pixel art off with Scale2x upscaling; `pixel` keeps it crisp                         |
-| `pet-agents.size`               | `medium`  | `small` (150px), `medium` (200px) or `large` (250px)                                                     |
-| `pet-agents.stateColors`        | `true`    | Tint the pet and its aura with a colour per agent state                                                  |
-| `pet-agents.variety`            | `random`  | `random` picks a different animation each time and adds idle hobbies; `classic` always uses the same one |
-| `pet-agents.disabledActions`    | `[]`      | Animations and hobbies never to play, e.g. `running.zoomies`, `idle.butterfly`                           |
-| `pet-agents.wander`             | `true`    | Wander around the panel and fidget when idle                                                             |
-| `pet-agents.toys`               | `true`    | New toys and furniture turn up, go into the bag and get played with                                      |
-| `pet-agents.machines`           | `true`    | A machine for each running test, build or background job                                                 |
-| `pet-agents.backgroundPets`     | `true`    | Other busy Claude sessions in this repo as small pets                                                    |
-| `pet-agents.otherRepoPets`      | `true`    | When no agents are running in this repo, show busy sessions from other repos as small pets               |
-| `pet-agents.holidays`           | `true`    | Holiday decorations, costumes and event toys by your local date                                          |
-| `pet-agents.hemisphere`         | `north`   | `north` or `south`: which way round the seasons go outside the house window                              |
-| `pet-agents.records`            | `true`    | Weekly prompt records board (🏆)                                                                         |
-| `pet-agents.recordsShowPrompts` | `false`   | Show the start of record-holding prompts on the board. Prompts never leave your machine                  |
-| `pet-agents.levels`             | `true`    | XP, levels and three weekly challenges                                                                   |
-| `pet-agents.enemies`            | `true`    | Failing tests and builds let bugs in; the next passing run squashes them                                 |
-| `pet-agents.house`              | `true`    | The pet's houses (🏠), furnished with level and bag unlocks                                              |
-| `pet-agents.style`              | `none`    | A themed look from a bag, e.g. `flowerCrown`, `chefHat`, `spaceHelmet`. Easiest to pick in 🎒 Collection |
-| `pet-agents.shareButtons`       | `true`    | Show Post to X and Post to Bluesky when sharing. They only open your browser when clicked                |
+| Setting                         | Default   | Description                                                                                                                                                         |
+| ------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pet-agents.species`            | `fox`     | `fox`, `cat`, `dog` or `bird`                                                                                                                                       |
+| `pet-agents.name`               | _(empty)_ | Your pet's name. Empty uses the species default: Rusty, Mochi, Biscuit, Pip                                                                                         |
+| `pet-agents.color`              | _(empty)_ | Fur/feather colour. Empty uses the species default (an orange fox, slate cat, brown dog, blue bird)                                                                 |
+| `pet-agents.accentColor`        | _(empty)_ | Belly, muzzle and chest colour                                                                                                                                      |
+| `pet-agents.eyeColor`           | _(empty)_ | Eye colour. Empty is dark slate with black pupils                                                                                                                   |
+| `pet-agents.pattern`            | `none`    | `spots`, `stripes`, `socks`, `mask`, `patch`                                                                                                                        |
+| `pet-agents.accessory`          | `none`    | `bow`, `flower`, `crown`, `beanie`, `headphones`, `glasses`, `sunglasses`, `bandana`, `scarf`, `collar`                                                             |
+| `pet-agents.accessoryColor`     | _(empty)_ | Accessory colour. Empty uses each accessory's own default                                                                                                           |
+| `pet-agents.artStyle`           | `smooth`  | `smooth` rounds the pixel art off with Scale2x upscaling; `pixel` keeps it crisp                                                                                    |
+| `pet-agents.size`               | `medium`  | `small` (150px), `medium` (200px) or `large` (250px)                                                                                                                |
+| `pet-agents.stateColors`        | `true`    | Tint the pet and its aura with a colour per agent state                                                                                                             |
+| `pet-agents.variety`            | `random`  | `random` picks a different animation each time and adds idle hobbies; `classic` always uses the same one                                                            |
+| `pet-agents.disabledActions`    | `[]`      | Animations and hobbies never to play, e.g. `running.zoomies`, `idle.butterfly`                                                                                      |
+| `pet-agents.wander`             | `true`    | Wander around the panel and fidget when idle                                                                                                                        |
+| `pet-agents.toys`               | `true`    | New toys and furniture turn up, go into the bag and get played with                                                                                                 |
+| `pet-agents.machines`           | `true`    | A machine for each running test, build or background job                                                                                                            |
+| `pet-agents.backgroundPets`     | `true`    | Other busy Claude sessions in this repo as small pets                                                                                                               |
+| `pet-agents.otherRepoPets`      | `true`    | When no agents are running in this repo, show busy sessions from other repos as small pets                                                                          |
+| `pet-agents.holidays`           | `true`    | Holiday decorations, costumes and event toys by your local date                                                                                                     |
+| `pet-agents.hemisphere`         | `north`   | `north` or `south`: which way round the seasons go outside the house window                                                                                         |
+| `pet-agents.records`            | `true`    | Weekly prompt records board (🏆)                                                                                                                                    |
+| `pet-agents.recordsShowPrompts` | `false`   | Show the start of record-holding prompts on the board. Prompts never leave your machine                                                                             |
+| `pet-agents.levels`             | `true`    | XP, levels and three weekly challenges                                                                                                                              |
+| `pet-agents.enemies`            | `true`    | Failing tests and builds let bugs in; the next passing run squashes them                                                                                            |
+| `pet-agents.house`              | `true`    | The pet's houses (🏠), furnished with level and bag unlocks                                                                                                         |
+| `pet-agents.style`              | `none`    | A themed look from a bag, e.g. `flowerCrown`, `chefHat`, `spaceHelmet`. Easiest to pick in 🎒 Collection                                                            |
+| `pet-agents.visitors`           | `true`    | While a care stat is at 40 or below, a passer-by feeds your pet or rain bathes it every 40 minutes (30 at zero); very rarely a friend of its own kind plays with it |
+| `pet-agents.shareButtons`       | `true`    | Show Post to X and Post to Bluesky when sharing. They only open your browser when clicked                                                                           |
 
 Your settings live in your VS Code user settings. The toy bags, shop purchases, houses and care stats are kept in VS Code's extension storage, and earlier saves as profile files in its storage folder.
 

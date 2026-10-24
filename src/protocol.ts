@@ -8,6 +8,7 @@ import type { ProgressUpdate } from './progress-service';
 import type { FinishSummary, ProfileEntry, ProfileFile } from './profiles';
 import type { RecordsUpdate } from './records-service';
 import type { ShareSite } from './save-flows';
+import type { Visitor } from './visitors';
 import type { PeonEvent, SessionUpdate } from './state-watcher';
 import { panelSetting } from './pet-config';
 import { isCareAction } from './pet-care';
@@ -94,7 +95,8 @@ export type ToWebview =
   | { command: 'house'; layout: HouseLayout }
   | { command: 'profiles'; profiles: ProfileEntry[] }
   | { command: 'profile'; profile: VisitProfile }
-  | { command: 'finished'; summary: FinishSummary; finished: boolean };
+  | { command: 'finished'; summary: FinishSummary; finished: boolean }
+  | ({ command: 'visitor' } & Visitor);
 
 export function isWebviewState(value: unknown): value is WebviewState {
   if (!value || typeof value !== 'object') {

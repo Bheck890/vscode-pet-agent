@@ -22,6 +22,7 @@ export const SLOT_KEYS = [
   'petCare',
   'petLifetime',
   'petFinishSeen',
+  'petVisitorWait',
 ];
 
 export function isSlotId(v: unknown): v is string {

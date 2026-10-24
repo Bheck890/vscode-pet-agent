@@ -128,6 +128,7 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     'house-done',
     'house-picker',
     'house-rooms',
+    'house-tabs',
     'house-profiles',
     'house-visit',
     'bag-picker',
@@ -1674,15 +1675,29 @@ describe('bags, houses and saves in the view', () => {
       const h = start();
       level(h, 2);
       click(h.elements['house-toggle']);
+      // The strip opens on the furniture, under a bar naming the room.
+      expect(h.elements['house-rooms'].innerHTML).toContain('🏡 Living room');
+      expect(h.elements['house-tabs'].innerHTML).toContain('data-tab="furniture" class="active"');
+      expect(h.elements['house-items'].hidden).toBe(false);
+      expect(h.elements['house-picker'].hidden).toBe(true);
+      // The room name opens the rooms tab.
+      click(h.elements['house-rooms'], { tab: 'rooms' });
+      expect(h.elements['house-picker'].hidden).toBe(false);
+      expect(h.elements['house-items'].hidden).toBe(true);
       expect(h.elements['house-picker'].innerHTML).toContain('data-house="garden"');
-      expect(h.elements['house-rooms'].innerHTML).toContain('data-room="living" class="active"');
-      expect(h.elements['house-rooms'].innerHTML).toContain('🔒 Kitchen');
-      click(h.elements['house-rooms'], { room: 'kitchen' });
-      expect(h.elements['house-rooms'].innerHTML).toContain('data-room="living" class="active"');
+      expect(h.elements['house-picker'].innerHTML).toContain('data-room="living" class="active"');
+      expect(h.elements['house-picker'].innerHTML).toContain('🔒 Kitchen');
+      click(h.elements['house-picker'], { room: 'kitchen' });
+      expect(h.elements['house-picker'].innerHTML).toContain('data-room="living" class="active"');
       click(h.elements['house-picker'], { house: 'garden' });
-      expect(h.elements['house-rooms'].innerHTML).toContain(
+      expect(h.elements['house-picker'].innerHTML).toContain(
         'data-room="greenhouse" class="active"',
       );
+      expect(h.elements['house-rooms'].innerHTML).toContain('🌿 Greenhouse');
+      click(h.elements['house-rooms'], { step: '1' });
+      expect(h.elements['house-rooms'].innerHTML).toContain('🌿 Potting shed');
+      click(h.elements['house-rooms'], { step: '1' });
+      click(h.elements['house-tabs'], { tab: 'furniture' });
       click(h.elements['house-items'], { furniture: 'leafbed' });
       const save = sent(h, 'house-save').pop() as {
         slot: string;
@@ -1732,7 +1747,7 @@ describe('bags, houses and saves in the view', () => {
         /^Visiting Biscuit's first save \(finished/,
       );
       expect(h.elements['bag-toggle'].hidden).toBe(true);
-      expect(h.elements['house-rooms'].innerHTML).toContain('data-room="hut" class="active"');
+      expect(h.elements['house-rooms'].innerHTML).toContain('🛖 Hut');
       const before = h.vscodeApi.postMessage.mock.calls.length;
       // Care is off, furniture doesn't move, nothing is saved, nothing is found.
       click(h.elements['care-toggle']);
@@ -1879,6 +1894,195 @@ describe('bags, houses and saves in the view', () => {
           h.runFrames(8000, 200);
         }
       }
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+describe('visitors in the view', () => {
+  type Harness = ReturnType<typeof runWebviewScript>;
+  const snapshot = (h: Harness): Record<string, unknown> => {
+    h.elements['gather-logs'].listeners['click'].forEach((l) => l({}));
+    const msg = h.vscodeApi.postMessage.mock.calls
+      .map(([m]) => m as unknown as { command: string; snapshot: string })
+      .filter((m) => m.command === 'gather-logs')
+      .pop()!;
+    return JSON.parse(msg.snapshot);
+  };
+  const visitor = (kind: string, toy?: string) => ({
+    command: 'visitor',
+    kind,
+    at: 1760000000000,
+    stat: kind === 'feed' ? 'fullness' : kind === 'rain' ? 'clean' : 'fun',
+    amount: 33,
+    ...(toy ? { toy } : {}),
+  });
+
+  it.each(['feed', 'rain'])('acts out a %s visit, then the visitor leaves', (kind) => {
+    jest.useFakeTimers();
+    try {
+      const h = runWebviewScript();
+      h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 }, bags: BAG_LEVELS });
+      h.runFrames(100);
+      h.send(visitor(kind));
+      h.runFrames(3000);
+      expect(snapshot(h)).toMatchObject({ visitor: true });
+      h.runFrames(8000, 50);
+      expect(snapshot(h)).toMatchObject({ visitor: false });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a playmate takes a toy out of the bag and the pet plays with it', () => {
+    jest.useFakeTimers();
+    try {
+      const h = runWebviewScript();
+      h.send({
+        command: 'init',
+        config: CONFIG,
+        state: { petX: 0, petY: 30, bag: { yarn: 2 } },
+        bags: BAG_LEVELS,
+      });
+      h.runFrames(100);
+      h.send(visitor('play', 'yarn'));
+      h.runFrames(3000);
+      h.elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
+      expect(h.elements['bag-grid'].innerHTML).toMatch(/class="toy out" data-toy="yarn"/);
+      // A napping pet wakes up first, then plays.
+      h.runFrames(1500);
+      let playing = false;
+      for (let y = 40; y <= 240 && !playing; y += 20) {
+        for (let x = 0; x <= 400 && !playing; x += 20) {
+          h.hover(x, y);
+          playing = h.tooltip.innerHTML.includes('ball of yarn');
+        }
+      }
+      expect(playing).toBe(true);
+      // The playmate is a made-up fox, like Rusty.
+      let friend = '';
+      for (let y = 40; y <= 300 && !friend; y += 10) {
+        for (let x = 0; x <= 600 && !friend; x += 10) {
+          h.hover(x, y);
+          friend = h.tooltip.innerHTML.includes('came over to play with Rusty')
+            ? h.tooltip.innerHTML
+            : '';
+        }
+      }
+      expect(friend).toMatch(/<b>\w+ the fox<\/b>/);
+      h.runFrames(12000, 50);
+      expect(snapshot(h)).toMatchObject({ visitor: false });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a busy pet is fed but does not stop work to play', () => {
+    jest.useFakeTimers();
+    try {
+      const h = runWebviewScript();
+      h.send({
+        command: 'init',
+        config: CONFIG,
+        state: { petX: 0, petY: 30, bag: { yarn: 2 } },
+        bags: BAG_LEVELS,
+      });
+      h.send({
+        command: 'claude-update',
+        main: { sessionId: 's', state: 'writing', detail: 'Edit a.ts', seq: 1, project: 'app' },
+        subagents: [],
+        sessions: [],
+      });
+      h.send(visitor('play', 'yarn'));
+      h.runFrames(4000);
+      h.elements['bag-toggle'].listeners['click'].forEach((l) => l({}));
+      expect(h.elements['bag-grid'].innerHTML).not.toMatch(/class="toy out"/);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+describe('the happy emote', () => {
+  type Harness = ReturnType<typeof runWebviewScript>;
+  const reaction = (h: Harness) => {
+    h.elements['gather-logs'].listeners['click'].forEach((l) => l({}));
+    const msg = h.vscodeApi.postMessage.mock.calls
+      .map(([m]) => m as unknown as { command: string; snapshot: string })
+      .filter((m) => m.command === 'gather-logs')
+      .pop()!;
+    return JSON.parse(msg.snapshot).pet.reaction;
+  };
+  const awake = () => {
+    const h = runWebviewScript();
+    h.send({ command: 'init', config: CONFIG, state: { petX: 0, petY: 30 }, bags: BAG_LEVELS });
+    h.send({
+      command: 'claude-update',
+      main: { sessionId: 's', state: 'idle', detail: '', seq: 1, project: null },
+      subagents: [],
+      sessions: [],
+    });
+    h.send({ command: 'care-update', stats: { fullness: 20, fun: 20, clean: 20 } });
+    return h;
+  };
+
+  it.each([
+    ['feed', 'fullness'],
+    ['rain', 'clean'],
+  ])('plays after a visitor %s, as it does when you pet it', (kind, stat) => {
+    jest.useFakeTimers();
+    try {
+      const h = awake();
+      h.runFrames(500);
+      h.send({ command: 'visitor', kind, at: 1, stat, amount: 33 });
+      const seen = new Set<string | null>();
+      for (let i = 0; i < 120; i++) {
+        h.runFrames(100);
+        seen.add(reaction(h));
+      }
+      expect(seen.has('pet')).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('plays when the pet finishes eating what you fed it', () => {
+    jest.useFakeTimers();
+    try {
+      const h = awake();
+      h.runFrames(500);
+      h.elements['care-toggle'].listeners['click'].forEach((l) => l({}));
+      h.pressCare('feed');
+      h.click(400, 150);
+      const seen = new Set<string | null>();
+      for (let i = 0; i < 100; i++) {
+        h.runFrames(100);
+        seen.add(reaction(h));
+      }
+      expect(seen.has('pet')).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('waits until the agent is done', () => {
+    jest.useFakeTimers();
+    try {
+      const h = awake();
+      h.send({
+        command: 'claude-update',
+        main: { sessionId: 's', state: 'writing', detail: 'Edit a.ts', seq: 2, project: null },
+        subagents: [],
+        sessions: [],
+      });
+      h.send({ command: 'visitor', kind: 'feed', at: 1, stat: 'fullness', amount: 33 });
+      const seen = new Set<string | null>();
+      for (let i = 0; i < 80; i++) {
+        h.runFrames(100);
+        seen.add(reaction(h));
+      }
+      expect(seen.has('pet')).toBe(false);
     } finally {
       jest.useRealTimers();
     }

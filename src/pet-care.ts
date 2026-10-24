@@ -119,6 +119,14 @@ export class CareStore {
     void this.storage.update(STORAGE_KEY, stats);
   }
 
+  /** Raises one stat (a visitor fed or bathed the pet), never past 100. */
+  boost(stat: CareStat, amount: number, now = Date.now()): CareStats {
+    const stats = this.get(now);
+    stats[stat] = clamp(stats[stat] + amount);
+    void this.storage.update(STORAGE_KEY, stats);
+    return stats;
+  }
+
   act(action: CareAction, now = Date.now()): CareResult {
     const result = applyCare(this.get(now), action, now);
     if (result.ok) {

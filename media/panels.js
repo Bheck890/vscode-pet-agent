@@ -109,6 +109,15 @@
     const housePicker = byId('house-picker');
     const houseRooms = byId('house-rooms');
     const houseProfiles = byId('house-profiles');
+    const houseTabs = byId('house-tabs');
+    /** The house strip shows one section at a time under its room bar. */
+    const HOUSE_TABS = [
+      ['furniture', '🛋️ Furniture', houseItems],
+      ['themes', '🎨 Theme', houseThemes],
+      ['rooms', '🚪 Rooms', housePicker],
+      ['profiles', '👤 Profiles', houseProfiles],
+    ];
+    let houseTab = 'furniture';
     const houseVisit = byId('house-visit');
     const bagPicker = byId('bag-picker');
     const saveActions = byId('save-actions');
@@ -551,21 +560,32 @@
       housePanel.hidden = true;
     });
     housePicker.addEventListener('click', (e) => {
-      const el = /** @type {HTMLElement} */ (e.target).closest('[data-house]');
-      const id = el && /** @type {HTMLElement} */ (el).dataset.house;
-      if (id && api.house.goTo(id)) {
-        renderHouse();
-      }
-    });
-    houseRooms.addEventListener('click', (e) => {
-      const el = /** @type {HTMLElement} */ (e.target).closest('[data-room], [data-step]');
-      const { room, step } = el ? /** @type {HTMLElement} */ (el).dataset : {};
-      if (step) {
-        api.house.step(Number(step));
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-house], [data-room]');
+      const { house, room } = el ? /** @type {HTMLElement} */ (el).dataset : {};
+      if (house) {
+        api.house.goTo(house);
       } else if (room) {
         api.house.goTo(api.house.catalogue().house.id, room);
       }
       renderHouse();
+    });
+    houseRooms.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-step], [data-tab]');
+      const { step, tab } = el ? /** @type {HTMLElement} */ (el).dataset : {};
+      if (step) {
+        api.house.step(Number(step));
+      } else if (tab) {
+        houseTab = tab;
+      }
+      renderHouse();
+    });
+    houseTabs.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-tab]');
+      const tab = el && /** @type {HTMLElement} */ (el).dataset.tab;
+      if (tab) {
+        houseTab = tab;
+        renderHouse();
+      }
     });
     houseProfiles.addEventListener('click', (e) => {
       const el = /** @type {HTMLElement} */ (e.target).closest('[data-profile], [data-profiles]');
@@ -893,8 +913,10 @@
       houseVisit.innerHTML =
         (v
           ? `<button data-visit="invite" title="${escapeHtml(v.pet.name)} comes to play at your house">` +
-            `🎈 Invite ${escapeHtml(v.pet.name)} over</button>` +
-            (v.guest ? '' : `<button data-visit="share">📤 Share this profile...</button>`) +
+            `🎈 Invite over</button>` +
+            (v.guest
+              ? ''
+              : `<button data-visit="share" title="Share this profile with a friend">📤 Share</button>`) +
             `<button data-visit="rename">✏️ Rename</button>` +
             `<button data-visit="hide">${v.hidden ? '👀 Show' : '🙈 Hide'}</button>`
           : '') +
@@ -904,17 +926,28 @@
               `<button data-visit="home:${escapeHtml(g.id)}">👋 Send ${escapeHtml(g.name)} home</button>`,
           )
           .join('');
-      housePicker.innerHTML = cat.houses
-        .map((h) =>
-          h.open
-            ? `<button data-house="${h.id}"${h.active ? ' class="active"' : ''}` +
-              ` title="${escapeHtml(h.name)}">${h.emoji}</button>`
-            : `<button class="locked" disabled` +
-              ` title="${escapeHtml(`${h.name}: comes with the ${bagDef(h.id).emoji} ${bagDef(h.id).name} bag at level ${api.bagLevel(h.id)}`)}">🔒</button>`,
-        )
-        .join('');
+      const open = cat.rooms.filter((r) => r.unlocked).length;
+      // This house's own pieces and themes first, then the starter bag's, then the rest.
+      const rank = (thing) => (thing.bag === cat.house.id ? 0 : thing.bag ? 2 : 1);
+      const byHouse = (list) =>
+        list
+          .map((x, i) => [x, i])
+          .sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
+          .map(([x]) => x);
       houseRooms.innerHTML =
-        '<button data-step="-1" title="Previous room">◀</button>' +
+        `<button data-step="-1" title="Previous room"${open < 2 ? ' disabled' : ''}>◀</button>` +
+        `<button class="where" data-tab="rooms" title="Pick a house or room">` +
+        `${cat.house.emoji} ${escapeHtml(cat.room.name)}</button>` +
+        `<button data-step="1" title="Next room"${open < 2 ? ' disabled' : ''}>▶</button>`;
+      houseTabs.innerHTML = HOUSE_TABS.map(
+        ([id, label]) =>
+          `<button data-tab="${id}"${id === houseTab ? ' class="active"' : ''}>${label}</button>`,
+      ).join('');
+      for (const [id, , el] of HOUSE_TABS) {
+        el.hidden = id !== houseTab;
+      }
+      housePicker.innerHTML =
+        `<span class="group">${escapeHtml(cat.house.name)}:</span>` +
         cat.rooms
           .map((r) =>
             r.unlocked
@@ -923,8 +956,17 @@
                 `🔒 ${escapeHtml(r.name)}</button>`,
           )
           .join('') +
-        '<button data-step="1" title="Next room">▶</button>';
-      houseItems.innerHTML = cat.furniture
+        '<span class="group">Houses:</span>' +
+        cat.houses
+          .map((h) =>
+            h.open
+              ? `<button data-house="${h.id}"${h.active ? ' class="active"' : ''}` +
+                ` title="${escapeHtml(h.name)}">${h.emoji}</button>`
+              : `<button class="locked" disabled` +
+                ` title="${escapeHtml(`${h.name}: comes with the ${bagDef(h.id).emoji} ${bagDef(h.id).name} bag at level ${api.bagLevel(h.id)}`)}">🔒</button>`,
+          )
+          .join('');
+      houseItems.innerHTML = byHouse(cat.furniture)
         .map((f) =>
           f.unlocked
             ? `<button data-furniture="${f.id}"${f.placed ? ' class="active"' : ''}${cat.readOnly ? ' disabled' : ''}` +
@@ -934,7 +976,7 @@
               ` title="${escapeHtml(`${f.name}: ${f.how}`)}">🔒</button>`,
         )
         .join('');
-      houseThemes.innerHTML = cat.themes
+      houseThemes.innerHTML = byHouse(cat.themes)
         .map((t) =>
           t.unlocked
             ? `<button data-theme="${t.id}"${t.active ? ' class="active"' : ''}${cat.readOnly ? ' disabled' : ''}>` +

@@ -11,6 +11,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- 🚶 Visitors (`pet-agents.visitors`): while any care stat is at 40 or below, someone looks in every 40 minutes (every 30 once all three are at zero). A passer-by feeds the pet or a rain shower gives it a bath, whichever helps, each topping up a third of that stat, and very rarely a friend of its own kind (a randomly made-up pet of the same species, with its own colour, markings, accessory and name) drops in to play with a toy from its bag. Looking after the pet yourself puts the next visit off for an hour. The schedule is shared, so several windows never double up.
+- 💖 The pet does its happy hearts wiggle (the one you get for petting it) after eating, catching a treat, bringing back the ball and its after-bath shake, whether you or a visitor looked after it, and when a playmate heads home.
+- 🎄 Holiday outfits: every holiday has 3 or 4 outfits and several sets of decorations with a garland, and each window picks its own when it opens. Christmas: Santa, an elf, a reindeer or a snowman. Halloween: a witch, a see-through floating ghost, a vampire or a pumpkin. Plus a turkey and scarecrow, a top hat and tiara, Cupid and a rose crown, and a chick in its egg.
 - 🎒 20 themed bags, opened by level: one at each of levels 1 to 5, then one every 2 levels up to 35 (Garden, Ocean, Kitchen, Music, Sports, Space, Spooky, Retro tech, Farm, Camping, Art studio, Science lab, Winter, Jungle, Castle, Robots, Desert, Sky and the Legendary vault). Pick the active bag at the top of the 🎒 panel; new finds come from its catalogue and its own shop takes only its own spares. Each bag is a whole pack: 2 idle hobbies and a themed agent-state look, a house with its rooms, furniture, a room theme and a pet style, with more of each (and a themed food) in its shop. Existing toys, trades and purchases are the starter bag's, unchanged. New weekly challenge: find 3 toys in a new bag.
 - 🐾 Pet styles (`pet-agents.style`): a themed look from each bag, from a flower crown to a halo, with two colour variants each. Picked in the bag's ✨ Collection tab; your own accessory and holiday costumes win their spot.
 - 🏠 Several houses, one per bag, each with its own window, and rooms you switch between (`◀ Bedroom ▶`). Every room keeps its own furniture and theme, and has a job: the pet naps in a bedroom, waits by its bowl in a kitchen and plays with its toys in a yard. The starter house gains a food bowl, and a kitchen and yard in its shop. Your existing room becomes the starter house's living room.
@@ -34,6 +37,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The 🏠 strip is a slim bar: the room you're in with arrows to the next, and tabs for furniture, theme, rooms and profiles, one at a time, instead of a stack of sideways-scrolling rows that hid the pet.
 - Extension storage is kept per save slot (`petBag` becomes `petBag:<slot>`). Your current data becomes the first slot the first time the new version runs; the old keys are left in place.
 
 - Clicking a toy on the floor now plays with it; right-click puts it back in the bag.

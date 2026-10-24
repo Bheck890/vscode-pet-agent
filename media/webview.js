@@ -16,7 +16,8 @@
     !window.PetEvents ||
     !window.PetEnemies ||
     !window.PetHouse ||
-    !window.PetFinish
+    !window.PetFinish ||
+    !window.PetVisitors
   ) {
     acquireVsCodeApi().postMessage({
       command: 'log',
@@ -233,9 +234,10 @@
     return c;
   }
 
-  function petPalette(color, tint, look = config) {
+  /** `accent` overrides the look's own, e.g. a holiday outfit's snowy belly. */
+  function petPalette(color, tint, look = config, accent = '') {
     return Art.palette(look.species, color, tint, tint ? 0.22 : 0, {
-      accent: cssToHex(look.accentColor) || '',
+      accent: accent || cssToHex(look.accentColor) || '',
       eye: cssToHex(look.eyeColor) || '',
     });
   }
@@ -272,8 +274,9 @@
     const style = look === config ? styleNow(config) : look.style || '';
     const key = [
       'pet',
-      look === config ? '' : look.name,
+      look === config ? '' : JSON.stringify(look),
       o.color,
+      o.accent,
       o.tint,
       o.eyes,
       o.mouth,
@@ -285,7 +288,7 @@
       style,
     ].join('|');
     return cached(key, () =>
-      Art.compose(look.species, petPalette(o.color, o.tint, look), {
+      Art.compose(look.species, petPalette(o.color, o.tint, look, o.accent), {
         eyes: o.eyes,
         mouth: o.mouth,
         frame: o.frame,
@@ -527,6 +530,30 @@
     main.fidget = null;
     main.reaction = null;
     main.lastActivity = t;
+    // Eating, a catch or the shake after a bath ends happy, however many in a row.
+    main.cheerAt = CHEERS.has(kind) ? t + CARE_MS[kind] : 0;
+  }
+
+  /** Care that ends with the pet's happy hearts, as when you pet it. */
+  const CHEERS = new Set(['eat', 'catch', 'shake']);
+
+  /** The pet's happy wiggle with a puff of hearts. */
+  function happy(p, t) {
+    p.reaction = { kind: 'pet', start: t, until: t + 1500 };
+    const c = center(p);
+    const s = petPx(p);
+    const hearts = ['💖', '💕', '💗'];
+    for (let i = 0; i < 5; i++) {
+      emit({
+        x: c.x + (Math.random() - 0.5) * s * 0.5,
+        y: p.y + s * 0.25,
+        vx: (Math.random() - 0.5) * s * 0.3,
+        vy: -s * (0.35 + Math.random() * 0.3),
+        text: hearts[i % hearts.length],
+        size: s * 0.12,
+        life: 1.2,
+      });
+    }
   }
 
   function lowestStat() {
@@ -730,6 +757,12 @@
     if (p !== main) {
       return;
     }
+    if (p.cheerAt && t >= p.cheerAt) {
+      p.cheerAt = 0;
+      if (!isBusy()) {
+        happy(p, t);
+      }
+    }
     const state = displayState(p);
     const def = lookOf(p, state, t);
     const size = petPx(p);
@@ -885,19 +918,7 @@
         });
       }
     } else {
-      p.reaction = { kind: 'pet', start: t, until: t + 1500 };
-      const hearts = ['💖', '💕', '💗'];
-      for (let i = 0; i < 5; i++) {
-        emit({
-          x: c.x + (Math.random() - 0.5) * s * 0.5,
-          y: p.y + s * 0.25,
-          vx: (Math.random() - 0.5) * s * 0.3,
-          vy: -s * (0.35 + Math.random() * 0.3),
-          text: hearts[i % hearts.length],
-          size: s * 0.12,
-          life: 1.2,
-        });
-      }
+      happy(p, t);
     }
   }
 
@@ -1803,16 +1824,21 @@
     const look = p.look || config;
     const species = look.species;
     const sp = Art.SPECIES[species];
+    // A holiday outfit can change the main pet's fur (a ghost, a snowman) and make it float.
+    const dress = p === main ? events.outfit() : null;
     const color = p.look
       ? cssToHex(look.color) || sp.defaultColor
       : p === main
-        ? baseColor()
+        ? (dress && dress.fur) || baseColor()
         : Art.rotateHue(baseColor(), p.hue);
     const tint = config.stateColors && def.color ? def.color : '';
     const ps = pose(p, def, state, tt, t);
     const frame = ps.wag > 0 ? Math.floor((t / 1000) * ps.wag) % 2 : 0;
     const m = motionFor(ps.motion, ps.mt, p);
-    const lift = (def.lift || 0) + (p === main ? scene.lift() / s : 0);
+    const lift =
+      (def.lift || 0) +
+      (p === main ? scene.lift() / s : 0) +
+      (dress && dress.float ? 2 + Math.sin(t / 450) * 1.5 : 0);
     const x0 = p.x + p.wx;
     const dk = depthK(p);
     const back = p.wz * size * DEPTH_RISE;
@@ -1876,10 +1902,13 @@
         look: ps.look,
         twitch: ps.twitch,
         hide: hide.join(','),
+        accent: (dress && dress.accent) || '',
       },
       look,
     );
+    ctx.globalAlpha = (dress && dress.alpha) || 1;
     ctx.drawImage(sprite, -size / 2, -size, size, size);
+    ctx.globalAlpha = 1;
     if (p === main) {
       play.drawOnPet(p, s);
     }
@@ -2316,6 +2345,7 @@
     scene.update(t, dt);
     events.update(t);
     enemies.update(t, dt);
+    visitors.update(t);
     // Work starting pulls the pet out of its house and back to its desk.
     const busy = isBusy();
     if (busy && !wasBusy && house.isOpen()) {
@@ -2328,10 +2358,12 @@
     drawDots(t);
     events.drawBack();
     scene.drawBack(t);
+    visitors.drawBack(t);
     // Further back means drawn first, so nearer pets overlap it.
     const bottom = (p) => spriteBox(p).y + spriteBox(p).s + (p.front ? viewH : 0);
     const drawOrder = [...minis.values(), main].sort((a, b) => bottom(a) - bottom(b));
     drawOrder.forEach((p) => drawPet(p, t));
+    visitors.draw(t);
     enemies.draw(t);
     play.draw(t);
     scene.drawFront(t);
@@ -2427,6 +2459,12 @@
       case 'profile':
         startVisit(msg.profile);
         break;
+      case 'visitor':
+        // A visit while looking round an old save still feeds the pet at home, out of sight.
+        if (!visit && main) {
+          visitors.start(msg, main.name);
+        }
+        break;
       case 'finished':
         finish.show(msg.summary, !!msg.finished);
         break;
@@ -2454,7 +2492,8 @@
   }
 
   function tooltipHtml(x, y) {
-    const thing = scene.hover(x, y) || enemies.hover(x, y) || house.hover(x, y);
+    const thing =
+      visitors.hover(x, y) || scene.hover(x, y) || enemies.hover(x, y) || house.hover(x, y);
     if (thing) {
       return `<b>${escapeHtml(thing.title)}</b><br><span class="dim">${escapeHtml(thing.sub)}</span>`;
     }
@@ -2772,6 +2811,44 @@
     homeName: () => ((home ? home.config : config) || { name: '' }).name,
   });
 
+  const visitors = window.PetVisitors.create({
+    ctx,
+    main: () => main,
+    petPx,
+    view: () => ({ w: viewW, h: viewH }),
+    now,
+    emit,
+    say: (text, color, ms) => scene.say(text, color, ms),
+    species: () => config.species,
+    sprite: (look, o) =>
+      petSprite(
+        Object.assign(
+          { color: cssToHex(look.color) || Art.SPECIES[look.species].defaultColor, tint: '' },
+          o,
+        ),
+        look,
+      ),
+    // The pet only reacts when it is free; a busy pet's visitor feeds it and goes.
+    react: (kind) => {
+      if (main && !isBusy() && !visit && !play.tool()) {
+        if (kind === 'happy') {
+          happy(main, now());
+        } else {
+          startCareAnim(kind);
+        }
+      }
+    },
+    play: (id) => {
+      if (main && !isBusy() && !visit && !play.tool()) {
+        scene.takeOut(id);
+        const toy = scene.toyOut(id);
+        if (toy) {
+          playWith(toy);
+        }
+      }
+    },
+  });
+
   const finish = window.PetFinish.create({
     post: (msg) => vscodeApi.postMessage(msg),
     escapeHtml,
@@ -2910,6 +2987,7 @@
       wz: main.wz,
       state: displayState(main),
       look: lookOf(main, displayState(main), now()).label,
+      reaction: main.reaction && now() < main.reaction.until ? main.reaction.kind : null,
     };
     return JSON.stringify({
       view: `${viewW}x${viewH}`,
@@ -2928,6 +3006,7 @@
       enemies: enemies.count(),
       inHouse: house.isOpen(),
       visiting: !!visit,
+      visitor: visitors.active(),
       guests: guests.size,
       activeBag,
       unlocks: (saved.unlocks || []).length,

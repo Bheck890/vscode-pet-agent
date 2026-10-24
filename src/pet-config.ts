@@ -161,6 +161,8 @@ export interface PetConfig {
   style: string;
   /** Show the post-to-X and Bluesky buttons on the finish screen. */
   shareButtons: boolean;
+  /** Passers-by feed the pet, rain bathes it, and now and then someone drops in to play. */
+  visitors: boolean;
   size: number;
 }
 
@@ -179,6 +181,7 @@ const PANEL_SWITCHES = [
   'levels',
   'enemies',
   'house',
+  'visitors',
 ];
 
 /** A list of action ids like `running.zoomies`, or null if it isn't one. */
@@ -260,6 +263,7 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     house: get('house') !== false,
     style: oneOf(get('style'), STYLES),
     shareButtons: get('shareButtons') !== false,
+    visitors: get('visitors') !== false,
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };
 }

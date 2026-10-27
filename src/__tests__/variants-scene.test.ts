@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
-import { BAG_LEVELS, EVENT_TOYS } from '../bags';
+import { BAG_LEVELS, HOLIDAYS, STARTER_EVENT_TOYS, isEventToy } from '../bags';
 import { PET_STATES } from '../transcript-parser';
 
 interface Variant {
@@ -66,6 +66,7 @@ interface SceneApi {
   spend(rarity: string, n: number, bag?: string): boolean;
   bagList(bag?: string): Array<{ id: string; count: number; out: boolean }>;
   bagCount(bag: string): { found: number; total: number };
+  odds(bag: string): { pct: Record<string, number>; luck: number; rising: boolean };
   visit(found: Record<string, number> | null): void;
   takeOut(id: string): boolean;
   putAway(id: string): void;
@@ -105,6 +106,7 @@ const PetScene = sandbox['PetScene'] as {
     event?: string;
     bag: string;
     use: string;
+    after?: number;
   }>;
   RARITY: Record<string, unknown>;
   PRICES: Record<string, Array<{ rarity: string; n: number }>>;
@@ -112,6 +114,8 @@ const PetScene = sandbox['PetScene'] as {
   SCENERY: string[];
   USE_LABEL: Record<string, string>;
   rollToy(rand: () => number, bag: string): { id: string; bag: string; rarity: string };
+  oddsFor(bag: string, t: number, luck: number, phase: number): Record<string, number>;
+  HOLIDAYS: string[];
 };
 const SCENERY = PetScene.SCENERY;
 
@@ -258,7 +262,12 @@ describe('animation variants', () => {
 describe('scene', () => {
   const pet = { x: 0, y: 30, wx: 0, scale: 6 };
 
-  function makeScene(config: Record<string, unknown>, events: string[] = [], bag = 'starter') {
+  function makeScene(
+    config: Record<string, unknown>,
+    events: string[] = [],
+    bag = 'starter',
+    level = 1,
+  ) {
     const saved: Array<Record<string, number>> = [];
     const spent: Array<Record<string, number>> = [];
     const found: string[] = [];
@@ -280,6 +289,9 @@ describe('scene', () => {
       onFound: (toy: { id: string }) => found.push(toy.id),
       events: () => events,
       activeBag: () => bag,
+      level: () => level,
+      bagLevel: (id: string) => BAG_LEVELS.find((b) => b.id === id)!.level,
+      openBags: () => BAG_LEVELS.filter((b) => b.level <= level).map((b) => b.id),
     });
     return { scene, saved, spent, found };
   }
@@ -290,11 +302,13 @@ describe('scene', () => {
     }
   });
 
-  it('has one holiday toy per event, and only holiday toys are of the event rarity', () => {
+  it('gives every bag one toy per holiday, and only holiday toys are of the event rarity', () => {
+    expect(PetScene.HOLIDAYS).toEqual(HOLIDAYS);
+    for (const bag of BAG_LEVELS) {
+      const mine = PetScene.TOYS.filter((t) => t.event && t.bag === bag.id);
+      expect([bag.id, mine.map((t) => t.event).sort()]).toEqual([bag.id, [...HOLIDAYS].sort()]);
+    }
     const eventToys = PetScene.TOYS.filter((t) => t.event);
-    expect(eventToys.map((t) => t.event).sort()).toEqual(
-      ['christmas', 'easter', 'halloween', 'newyear', 'thanksgiving', 'valentine'].sort(),
-    );
     expect(eventToys.every((t) => t.rarity === 'event')).toBe(true);
     expect(PetScene.TOYS.filter((t) => t.rarity === 'event')).toHaveLength(eventToys.length);
   });
@@ -327,7 +341,11 @@ describe('scene', () => {
     const total = Object.values(saved[1]).reduce((a, b) => a + b, 0);
     expect(total).toBe(2);
     expect(scene.foundCount()).toBe(Object.keys(saved[1]).length);
-    expect(scene.toyTotal).toBe(PetScene.TOYS.length);
+    // Only the starter bag is open at level 1, its bonus toys haven't joined, and holiday toys never count.
+    expect(scene.toyTotal).toBe(
+      PetScene.TOYS.filter((t) => t.bag === 'starter' && !t.after && t.rarity !== 'event').length,
+    );
+    expect(scene.toyTotal).toBe(24);
   });
 
   it('restores the bag, ignoring unknown toys, and takes toys out and back', () => {
@@ -469,7 +487,12 @@ describe('bags', () => {
   const NORMAL = ['common', 'uncommon', 'rare', 'legendary'];
   const pet = { x: 0, y: 30, wx: 0, scale: 6 };
 
-  function makeScene(config: Record<string, unknown>, events: string[] = [], bag = 'starter') {
+  function makeScene(
+    config: Record<string, unknown>,
+    events: string[] = [],
+    bag = 'starter',
+    level = 1,
+  ) {
     const saved: Array<Record<string, number>> = [];
     const found: string[] = [];
     const ctx = new Proxy(
@@ -490,6 +513,9 @@ describe('bags', () => {
       onFound: (toy: { id: string }) => found.push(toy.id),
       events: () => events,
       activeBag: () => bag,
+      level: () => level,
+      bagLevel: (id: string) => BAG_LEVELS.find((b) => b.id === id)!.level,
+      openBags: () => BAG_LEVELS.filter((b) => b.level <= level).map((b) => b.id),
     });
     return { scene, saved, found };
   }
@@ -499,13 +525,18 @@ describe('bags', () => {
     expect(PetScene.BAGS).toHaveLength(20);
   });
 
-  it('keeps toy ids unique across every bag, and the holiday toys under the starter bag', () => {
+  it('keeps toy ids unique, and the extension can tell the holiday toys apart', () => {
     const ids = PetScene.TOYS.map((t) => t.id);
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     expect(ids.every((id) => /^[a-z]+$/.test(id))).toBe(true);
-    const holiday = PetScene.TOYS.filter((t) => t.rarity === 'event');
-    expect(holiday.map((t) => t.id).sort()).toEqual([...EVENT_TOYS].sort());
-    expect(holiday.every((t) => t.bag === 'starter')).toBe(true);
+    for (const t of PetScene.TOYS) {
+      expect([t.id, isEventToy(t.id)]).toEqual([t.id, t.rarity === 'event']);
+    }
+    expect(
+      PetScene.TOYS.filter((t) => t.event && t.bag === 'starter')
+        .map((t) => t.id)
+        .sort(),
+    ).toEqual([...STARTER_EVENT_TOYS].sort());
   });
 
   it.each(PetScene.BAGS.map((b) => [b.id, b] as const))(
@@ -541,12 +572,96 @@ describe('bags', () => {
     expect([...bags]).toEqual(['garden']);
   });
 
-  it('still turns up holiday toys during their event, whichever bag is active', () => {
-    const { scene, saved } = makeScene({ toys: true, machines: true }, ['halloween'], 'space');
+  it("turns up the active bag's own holiday toy during its holiday", () => {
+    const { scene, saved } = makeScene({ toys: true, machines: true }, ['halloween'], 'space', 9);
     for (let i = 0; i < 60; i++) {
       scene.find();
     }
-    expect(Object.keys(saved[saved.length - 1])).toContain('pumpkin');
+    const found = Object.keys(saved[saved.length - 1]);
+    expect(found).toContain('spacehalloween');
+    expect(found).not.toContain('pumpkin');
+    expect(found).not.toContain('spacechristmas');
+  });
+
+  it('shows a holiday toy only once it is found', () => {
+    const { scene } = makeScene({ toys: false, machines: true }, [], 'garden', 2);
+    const before = scene.bagCount('garden').total;
+    expect(scene.bagList('garden').some((t) => t.id === 'gardenhalloween')).toBe(false);
+    scene.setBag({ gardenhalloween: 1 });
+    expect(scene.bagList('garden').find((t) => t.id === 'gardenhalloween')?.count).toBe(1);
+    expect(scene.bagCount('garden')).toEqual({ found: 1, total: before + 1 });
+  });
+
+  it('adds three hidden bonus toys to every bag as you level past it', () => {
+    for (const b of BAG_LEVELS) {
+      const bonus = PetScene.TOYS.filter((t) => t.bag === b.id && t.after);
+      expect([b.id, bonus.map((t) => [t.after, t.rarity])]).toEqual([
+        b.id,
+        [
+          [6, 'uncommon'],
+          [12, 'rare'],
+          [18, 'legendary'],
+        ],
+      ]);
+    }
+    const shows = (level: number) =>
+      makeScene({ toys: false, machines: true }, [], 'garden', level)
+        .scene.bagList('garden')
+        .filter((t) => t.id.startsWith('gardenbonus'))
+        .map((t) => t.id);
+    // The garden bag opens at level 2: its bonus toys join at 8, 14 and 20.
+    expect(shows(7)).toEqual([]);
+    expect(shows(8)).toEqual(['gardenbonusone']);
+    expect(shows(20)).toEqual(['gardenbonusone', 'gardenbonustwo', 'gardenbonusthree']);
+    expect(
+      makeScene({ toys: false, machines: true, levels: false }, [], 'garden', 1)
+        .scene.bagList('garden')
+        .filter((t) => t.id.startsWith('gardenbonus')),
+    ).toHaveLength(3);
+  });
+
+  it('finds bonus toys only once they have joined', () => {
+    const finds = (level: number) => {
+      const { scene, saved } = makeScene({ toys: true, machines: true }, [], 'starter', level);
+      for (let i = 0; i < 1500; i++) {
+        scene.find();
+      }
+      return Object.keys(saved[saved.length - 1]);
+    };
+    expect(finds(1).filter((id) => id.startsWith('starterbonus'))).toEqual([]);
+    expect(finds(30)).toContain('starterbonusone');
+  });
+
+  it('leans rarer the higher the bag, and shifts with luck and over time', () => {
+    const share = (bag: string, luck = 0, t = 0) => {
+      const w = PetScene.oddsFor(bag, t, luck, 0) as Record<string, number>;
+      const total = Object.values(w).reduce((a, b) => a + b, 0);
+      return (w['rare'] + w['legendary']) / total;
+    };
+    const ladder = BAG_LEVELS.map((b) => share(b.id));
+    for (let i = 1; i < ladder.length; i++) {
+      expect([BAG_LEVELS[i].id, ladder[i] >= ladder[i - 1] * 0.95]).toEqual([
+        BAG_LEVELS[i].id,
+        true,
+      ]);
+    }
+    expect(ladder[ladder.length - 1]).toBeGreaterThan(ladder[0] * 4);
+    expect(share('garden', 1)).toBeGreaterThan(share('garden', -1));
+    const day = Array.from({ length: 12 }, (_, h) => share('garden', 0, h * 15 * 60 * 1000));
+    expect(Math.max(...day)).toBeGreaterThan(Math.min(...day) * 1.2);
+  });
+
+  it("reports this view's odds, which add up, and its own luck", () => {
+    const lucks = new Set<number>();
+    for (let i = 0; i < 5; i++) {
+      const o = makeScene({ toys: false, machines: true }).scene.odds('starter');
+      const sum = Object.values(o.pct).reduce((a, b) => a + b, 0);
+      expect(Math.abs(sum - 100)).toBeLessThanOrEqual(2);
+      expect(o.luck).toBeGreaterThanOrEqual(-1);
+      expect(o.luck).toBeLessThanOrEqual(1);
+      lucks.add(o.luck);
+    }
+    expect(lucks.size).toBeGreaterThan(1);
   });
 
   it('reports each kind of toy the first time it is found', () => {

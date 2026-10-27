@@ -117,6 +117,25 @@ describe('sharing', () => {
     expect(SHARE_SITES.x('hi there')).toBe('https://x.com/intent/post?text=hi%20there');
   });
 
+  it('marks a collection of every toy, but not every shop item, with a tick', () => {
+    const summary = {
+      days: 1,
+      level: 5,
+      xp: 1000,
+      prompts: 1,
+      actions: 1,
+      agentHours: 0,
+      toys: 60,
+      bags: 5,
+      houses: 1,
+      rooms: 1,
+      records: 0,
+    };
+    const look = { name: 'Rusty', species: 'fox' };
+    expect(shareText(look, summary, false, 60, 'items').split('\n').pop()).toBe('🧸✅ 🎒x5 ⭐x5');
+    expect(shareText(look, summary, false, 60).split('\n').pop()).toBe('🎒x5 ⭐x5');
+  });
+
   it('marks a finished save and a complete collection', () => {
     const summary = {
       days: 412,
@@ -131,7 +150,7 @@ describe('sharing', () => {
       rooms: 57,
       records: 31,
     };
-    const text = shareText({ name: 'Rusty', species: 'fox' }, summary, true, 412);
+    const text = shareText({ name: 'Rusty', species: 'fox' }, summary, true, 412, 'all');
     expect(text.split('\n')).toEqual([
       '🏆 I finished Pet Agents!',
       'Rusty the fox - 412 days - level 35 - 61,240 XP',

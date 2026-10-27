@@ -694,6 +694,292 @@
     },
   ];
 
+  /** The holidays, in the order src/bags.ts HOLIDAYS lists them. */
+  const HOLIDAYS = ['halloween', 'thanksgiving', 'christmas', 'newyear', 'valentine', 'easter'];
+
+  /**
+   * Toys a bag gains as you level up past it, each `after` levels beyond the
+   * level that opens the bag. Until then they don't show at all, not even
+   * as a ❔. [after, kind, emoji, name, rarity, use].
+   */
+  const BONUS = {
+    starter: [
+      [6, 'toy', '🪀', 'yo-yo', 'uncommon', 'play'],
+      [12, 'object', '🎠', 'carousel horse', 'rare', 'admire'],
+      [18, 'object', '🪅', 'golden pinata', 'legendary', 'admire'],
+    ],
+    garden: [
+      [6, 'object', '🌺', 'hibiscus', 'uncommon', 'sniff'],
+      [12, 'toy', '🐛', 'caterpillar plush', 'rare', 'cuddle'],
+      [18, 'object', '🌸', 'blossom tree', 'legendary', 'admire'],
+    ],
+    ocean: [
+      [6, 'toy', '🦭', 'seal plush', 'uncommon', 'cuddle'],
+      [12, 'toy', '🦈', 'shark plush', 'rare', 'cuddle'],
+      [18, 'object', '🏝️', 'treasure island', 'legendary', 'admire'],
+    ],
+    kitchen: [
+      [6, 'toy', '🧇', 'waffle', 'uncommon', 'chew'],
+      [12, 'object', '🍱', 'bento box', 'rare', 'sniff'],
+      [18, 'object', '🫕', 'golden fondue', 'legendary', 'admire'],
+    ],
+    music: [
+      [6, 'object', '📻', 'boombox', 'uncommon', 'music'],
+      [12, 'object', '🎹', 'keytar', 'rare', 'music'],
+      [18, 'object', '🎼', 'golden score', 'legendary', 'admire'],
+    ],
+    sports: [
+      [6, 'toy', '🛼', 'roller skates', 'uncommon', 'ride'],
+      [12, 'toy', '🪃', 'boomerang', 'rare', 'play'],
+      [18, 'object', '🥇', 'champion medal', 'legendary', 'admire'],
+    ],
+    space: [
+      [6, 'object', '🔭', 'star scope', 'uncommon', 'admire'],
+      [12, 'toy', '🌑', 'new moon', 'rare', 'float', true],
+      [18, 'object', '💫', 'stardust', 'legendary', 'admire'],
+    ],
+    spooky: [
+      [6, 'toy', '🦉', 'owl plush', 'uncommon', 'cuddle'],
+      [12, 'object', '🧿', 'lucky charm', 'rare', 'admire'],
+      [18, 'object', '🌕', 'full moon', 'legendary', 'admire'],
+    ],
+    retro: [
+      [6, 'object', '📠', 'fax machine', 'uncommon', 'admire'],
+      [12, 'object', '🎞️', 'film reel', 'rare', 'admire'],
+      [18, 'object', '👾', 'golden invader', 'legendary', 'game'],
+    ],
+    farm: [
+      [6, 'toy', '🐐', 'goat plush', 'uncommon', 'cuddle'],
+      [12, 'toy', '🦆', 'duckling', 'rare', 'play'],
+      [18, 'object', '🏵️', 'prize rosette', 'legendary', 'admire'],
+    ],
+    camping: [
+      [6, 'object', '🛖', 'log cabin', 'uncommon', 'hide'],
+      [12, 'toy', '🦝', 'raccoon plush', 'rare', 'cuddle'],
+      [18, 'object', '🌄', 'mountain sunrise', 'legendary', 'admire'],
+    ],
+    art: [
+      [6, 'toy', '🪡', 'sewing needle', 'uncommon', 'play'],
+      [12, 'object', '🖋️', 'fountain pen', 'rare', 'admire'],
+      [18, 'object', '🗽', 'tiny statue', 'legendary', 'admire'],
+    ],
+    lab: [
+      [6, 'object', '⚗️', 'alembic', 'uncommon', 'sniff'],
+      [12, 'object', '🩻', 'x-ray', 'rare', 'admire'],
+      [18, 'object', '☢️', 'glowing isotope', 'legendary', 'admire'],
+    ],
+    winter: [
+      [6, 'toy', '🥌', 'curling stone', 'uncommon', 'play'],
+      [12, 'toy', '☃️', 'snowman plush', 'rare', 'cuddle'],
+      [18, 'object', '🫧', 'frozen bubble', 'legendary', 'admire'],
+    ],
+    jungle: [
+      [6, 'toy', '🦩', 'flamingo plush', 'uncommon', 'cuddle'],
+      [12, 'toy', '🐊', 'crocodile plush', 'rare', 'cuddle'],
+      [18, 'object', '🐘', 'golden elephant', 'legendary', 'admire'],
+    ],
+    castle: [
+      [6, 'toy', '🐎', 'toy horse', 'uncommon', 'ride'],
+      [12, 'toy', '🐲', 'baby dragon', 'rare', 'cuddle'],
+      [18, 'object', '🏯', 'golden keep', 'legendary', 'admire'],
+    ],
+    robots: [
+      [6, 'toy', '🚙', 'mini rover', 'uncommon', 'ride'],
+      [12, 'object', '🗄️', 'mainframe', 'rare', 'game'],
+      [18, 'object', '🔆', 'quantum core', 'legendary', 'admire'],
+    ],
+    desert: [
+      [6, 'toy', '🐪', 'dromedary plush', 'uncommon', 'cuddle'],
+      [12, 'object', '🥀', 'desert rose', 'rare', 'sniff'],
+      [18, 'object', '🏆', 'sun idol', 'legendary', 'admire'],
+    ],
+    sky: [
+      [6, 'toy', '🪽', 'angel wing', 'uncommon', 'float', true],
+      [12, 'toy', '🛩️', 'biplane', 'rare', 'float', true],
+      [18, 'object', '🌤️', 'sky castle', 'legendary', 'admire'],
+    ],
+    vault: [
+      [6, 'object', '👛', 'coin purse', 'uncommon', 'admire'],
+      [12, 'object', '⚱️', 'golden urn', 'rare', 'admire'],
+      [18, 'object', '👑', 'emperor crown', 'legendary', 'admire'],
+    ],
+  };
+
+  /**
+   * Each themed bag's own toy for each holiday, in HOLIDAYS order: [emoji,
+   * name]. Found only from that bag while its holiday is on, and only shown
+   * once found. Their ids are the bag's id and the holiday's, e.g. `gardenhalloween`.
+   */
+  const BAG_HOLIDAY_TOYS = {
+    garden: [
+      ['🎃', 'garden pumpkin'],
+      ['🧺', 'harvest basket'],
+      ['🎄', 'potted fir'],
+      ['🎆', 'firework flowers'],
+      ['🌹', 'rose bouquet'],
+      ['🌷', 'easter tulips'],
+    ],
+    ocean: [
+      ['🦑', 'spooky squid'],
+      ['🦞', 'lobster feast'],
+      ['🎅', 'beach santa'],
+      ['🎆', 'beach fireworks'],
+      ['💌', 'message in a bottle'],
+      ['🐚', 'painted shell'],
+    ],
+    kitchen: [
+      ['🍬', 'candy corn'],
+      ['🦃', 'roast turkey'],
+      ['🍪', 'gingerbread cookie'],
+      ['🥂', 'fizzy toast'],
+      ['🍫', 'box of truffles'],
+      ['🐣', 'chick cupcake'],
+    ],
+    music: [
+      ['🎻', 'spooky violin'],
+      ['🪕', 'harvest banjo'],
+      ['🔔', 'jingle bells'],
+      ['🎉', 'countdown horn'],
+      ['💕', 'love song'],
+      ['🎶', 'spring song'],
+    ],
+    sports: [
+      ['🧛', 'vampire mascot'],
+      ['🏈', 'turkey bowl ball'],
+      ['🛷', 'racing sled'],
+      ['🥇', 'new year medal'],
+      ['💘', 'cupid arrow'],
+      ['🥚', 'egg and spoon'],
+    ],
+    space: [
+      ['👽', 'alien costume'],
+      ['🥧', 'space pie'],
+      ['⭐', 'christmas star'],
+      ['🎇', 'starburst'],
+      ['💫', 'love star'],
+      ['🐰', 'moon rabbit'],
+    ],
+    spooky: [
+      ['🧙', 'witch doll'],
+      ['🕯️', 'harvest candle'],
+      ['👻', 'ghost of christmas'],
+      ['🎊', 'spooky confetti'],
+      ['🖤', 'black heart'],
+      ['🥚', 'cursed egg'],
+    ],
+    retro: [
+      ['💀', 'pixel skull'],
+      ['🍗', '8-bit drumstick'],
+      ['📺', 'holiday special'],
+      ['🕛', 'countdown clock'],
+      ['💾', 'love letter floppy'],
+      ['🎮', 'egg hunt game'],
+    ],
+    farm: [
+      ['🌾', 'scarecrow straw'],
+      ['🦃', 'prize turkey'],
+      ['🦌', 'barn reindeer'],
+      ['🐓', 'new year rooster'],
+      ['💐', 'wildflower posy'],
+      ['🐥', 'spring chick'],
+    ],
+    camping: [
+      ['🔦', 'spooky flashlight'],
+      ['🍠', 'campfire yam'],
+      ['🌲', 'snowy pine'],
+      ['🎆', 'lakeside fireworks'],
+      ['🍫', 'heart smores'],
+      ['🐇', 'forest bunny'],
+    ],
+    art: [
+      ['🎭', 'masquerade mask'],
+      ['🍂', 'leaf print'],
+      ['🖼️', 'holiday card'],
+      ['✨', 'glitter jar'],
+      ['💌', 'handmade valentine'],
+      ['🥚', 'painted egg art'],
+    ],
+    lab: [
+      ['🧪', 'monster potion'],
+      ['🌡️', 'turkey thermometer'],
+      ['❄️', 'snowflake slide'],
+      ['💥', 'chemistry fireworks'],
+      ['💖', 'love formula'],
+      ['🥚', 'egg experiment'],
+    ],
+    winter: [
+      ['👻', 'ice ghost'],
+      ['☕', 'cider mug'],
+      ['🎅', 'santa doll'],
+      ['🎉', 'ice party'],
+      ['💞', 'snow hearts'],
+      ['🐣', 'snow chick'],
+    ],
+    jungle: [
+      ['🕷️', 'jungle spider'],
+      ['🍌', 'banana bread'],
+      ['🎄', 'palm lights'],
+      ['🎆', 'jungle fireworks'],
+      ['🦜', 'lovebird'],
+      ['🐸', 'spring frog'],
+    ],
+    castle: [
+      ['🧛', 'castle vampire'],
+      ['🍖', 'banquet ham'],
+      ['🕯️', 'yule candle'],
+      ['🎆', 'castle fireworks'],
+      ['🌹', 'knight rose'],
+      ['🥚', 'jewelled egg'],
+    ],
+    robots: [
+      ['👾', 'haunted bot'],
+      ['🍗', 'robo drumstick'],
+      ['🎁', 'gift-wrapped bot'],
+      ['⏰', 'new year alarm'],
+      ['💟', 'heart chip'],
+      ['🥚', 'chrome egg'],
+    ],
+    desert: [
+      ['🦂', 'spooky scorpion'],
+      ['🫓', 'harvest flatbread'],
+      ['⭐', 'desert star'],
+      ['🎇', 'dune fireworks'],
+      ['🌹', 'desert rose bouquet'],
+      ['🥚', 'sand egg'],
+    ],
+    sky: [
+      ['🦇', 'night flyer'],
+      ['🍂', 'windblown leaves'],
+      ['🛷', 'flying sleigh'],
+      ['🎈', 'new year balloon'],
+      ['💘', 'cupid cloud'],
+      ['🐦', 'spring bird'],
+    ],
+    vault: [
+      ['💀', 'jewel skull'],
+      ['🥧', 'golden pie'],
+      ['🎁', 'treasure gift'],
+      ['🪙', 'lucky coin'],
+      ['💎', 'heart diamond'],
+      ['🥚', 'golden egg'],
+    ],
+  };
+
+  for (const bag of BAGS) {
+    BONUS[bag.id].forEach(([after, kind, emoji, name, rarity, use, floats], i) => {
+      const id = `${bag.id}bonus${['one', 'two', 'three'][i]}`;
+      bag.toys.push(Object.assign(toy(id, kind, emoji, name, rarity, use, floats), { after }));
+    });
+    (BAG_HOLIDAY_TOYS[bag.id] || []).forEach(([emoji, name], i) => {
+      const event = HOLIDAYS[i];
+      bag.toys.push(
+        Object.assign(toy(`${bag.id}${event}`, 'object', emoji, name, 'event', 'admire'), {
+          event,
+        }),
+      );
+    });
+  }
+
   /** Every toy in every bag, in bag then catalogue order, each knowing its bag. */
   const TOYS = BAGS.flatMap((bag) => bag.toys.map((t) => Object.assign({ bag: bag.id }, t)));
 
@@ -794,17 +1080,52 @@
     return BAGS.find((b) => b.id === id) || BAGS[0];
   }
 
+  /** How much each rarity's chance moves from the first bag (none) to the last (all of it). */
+  const BAG_TILT = { common: -0.35, uncommon: 0.25, rare: 0.9, legendary: 1.6 };
+  /** Rare and legendary odds swell and ebb over this long, all the time. */
+  const ODDS_WAVE_MS = 90 * 60 * 1000;
+
+  /** A bag's own rarity weights: RARITY's, or the bag's override. */
+  function baseWeights(bag) {
+    return Object.fromEntries(
+      Object.entries(RARITY).map(([name, r]) => [
+        name,
+        (bag.weights && bag.weights[name]) || r.weight,
+      ]),
+    );
+  }
+
   /**
-   * Weighted rarity roll (with the bag's own weights, if it has them), then
-   * one of the bag's toys of that rarity. A bag with none of that rarity
-   * gives one of its lowest rarity instead.
+   * The odds right now for a bag: higher bags lean rarer, and rare and
+   * legendary finds rise and fall with a slow wave and with `luck` (-1 to 1),
+   * rolled when the view starts.
    */
-  function rollToy(rand, bagId) {
+  function oddsFor(bagId, t, luck, phase) {
     const bag = bagOf(bagId);
-    const tiers = Object.entries(RARITY).map(([name, r]) => [
-      name,
-      (bag.weights && bag.weights[name]) || r.weight,
-    ]);
+    const tier = BAGS.indexOf(bag) / (BAGS.length - 1);
+    const wave = Math.sin((t / ODDS_WAVE_MS) * Math.PI * 2 + phase);
+    const boost = 1 + 0.3 * luck + 0.25 * wave;
+    const w = baseWeights(bag);
+    return {
+      common: w.common * (1 + BAG_TILT.common * tier),
+      uncommon: w.uncommon * (1 + BAG_TILT.uncommon * tier),
+      rare: w.rare * (1 + BAG_TILT.rare * tier) * boost,
+      legendary: w.legendary * (1 + BAG_TILT.legendary * tier) * boost,
+      event: 0,
+    };
+  }
+
+  /**
+   * Weighted rarity roll (the bag's own weights, or `opts.weights`), then
+   * one of the bag's toys of that rarity that `opts.can` allows (by default,
+   * the ones that come with the bag). A bag with none of that rarity gives
+   * one of its lowest rarity instead.
+   */
+  function rollToy(rand, bagId, opts = {}) {
+    const bag = bagOf(bagId);
+    const weights = opts.weights || baseWeights(bag);
+    const can = opts.can || ((t) => !t.after);
+    const tiers = Object.keys(RARITY).map((name) => [name, weights[name]]);
     const total = tiers.reduce((n, [, w]) => n + w, 0);
     let r = rand() * total;
     let tier = tiers[0][0];
@@ -815,14 +1136,13 @@
         break;
       }
     }
-    const mine = bag.toys.filter((t) => t.rarity !== 'event');
+    const mine = TOYS.filter((t) => t.bag === bag.id && t.rarity !== 'event' && can(t));
     let pool = mine.filter((t) => t.rarity === tier);
     if (pool.length === 0) {
       const lowest = tiers.find(([name]) => mine.some((t) => t.rarity === name));
       pool = mine.filter((t) => t.rarity === lowest[0]);
     }
-    const pick = pool[Math.floor(rand() * pool.length)];
-    return TOYS.find((t) => t.id === pick.id);
+    return pool[Math.floor(rand() * pool.length)];
   }
 
   /**
@@ -840,6 +1160,9 @@
    *   onFound: (toy: any) => void,
    *   events: () => string[],
    *   activeBag: () => string,
+   *   level: () => number,
+   *   bagLevel: (id: string) => number,
+   *   openBags: () => string[],
    * }} api
    */
   function create(api) {
@@ -860,6 +1183,9 @@
     /** Toy id -> how many were traded in at the shop. Both counts only grow. */
     /** @type {Map<string, number>} */
     const spent = new Map();
+    /** This view's luck (-1 to 1) and where it starts on the odds wave, rolled once when it opens. */
+    const luck = Math.random() * 2 - 1;
+    const phase = Math.random() * Math.PI * 2;
     /** While visiting an old save: its bag, which the pet plays from. Nothing is found or saved. */
     /** @type {Map<string, number> | null} */
     let visiting = null;
@@ -982,10 +1308,44 @@
       return toy;
     }
 
-    /** Kinds of toy found from one bag, and how many kinds it has. */
+    /** A bonus toy has joined its bag: you are far enough past the bag's level (or levels are off). */
+    function joined(d) {
+      const cfg = api.config();
+      return (
+        !d.after || (cfg && cfg.levels === false) || api.level() >= api.bagLevel(d.bag) + d.after
+      );
+    }
+
+    /** Shown in the bag: bonus toys once they join, holiday toys once found. */
+    function shown(d) {
+      return joined(d) && (d.rarity !== 'event' || inv().has(d.id));
+    }
+
+    /**
+     * Counts towards a full collection: a regular toy (holiday toys never
+     * count, so nobody waits for a holiday) from an open bag that has joined.
+     */
+    function collectable(d) {
+      return d.rarity !== 'event' && joined(d) && api.openBags().includes(d.bag);
+    }
+
+    /** Kinds of toy found from one bag, and how many kinds it shows. */
     function bagCount(bagId) {
-      const all = TOYS.filter((d) => d.bag === bagId);
+      const all = TOYS.filter((d) => d.bag === bagId && shown(d));
       return { found: all.filter((d) => inv().has(d.id)).length, total: all.length };
+    }
+
+    /** The odds of each rarity for a bag right now, as whole percentages, and this view's luck. */
+    function odds(bagId) {
+      const w = oddsFor(bagId, api.now(), luck, phase);
+      const total = Object.values(w).reduce((a, b) => a + b, 0);
+      const pct = Object.fromEntries(
+        Object.entries(w)
+          .filter(([name]) => name !== 'event')
+          .map(([name, v]) => [name, Math.round((v / total) * 100)]),
+      );
+      const rising = Math.cos((api.now() / ODDS_WAVE_MS) * Math.PI * 2 + phase) > 0;
+      return { pct, luck, rising };
     }
 
     /** A brand-new find from the active bag: rolls a rarity, adds it to the bag and shows it off. */
@@ -994,7 +1354,10 @@
         return;
       }
       const g = geom();
-      const def = rollEventToy() || rollToy(Math.random, api.activeBag());
+      const active = api.activeBag();
+      const def =
+        rollEventToy() ||
+        rollToy(Math.random, active, { weights: oddsFor(active, t, luck, phase), can: joined });
       const count = (bag.get(def.id) || 0) + 1;
       bag.set(def.id, count);
       saveBag();
@@ -1016,9 +1379,11 @@
       }
     }
 
-    /** While a holiday is on, its toy sometimes turns up instead of a normal find. */
+    /** While a holiday is on, the active bag's toy for it sometimes turns up instead of a normal find. */
     function rollEventToy() {
-      const live = TOYS.filter((d) => d.event && api.events().includes(d.event));
+      const live = TOYS.filter(
+        (d) => d.event && d.bag === api.activeBag() && api.events().includes(d.event),
+      );
       if (live.length === 0) {
         return null;
       }
@@ -2177,7 +2542,7 @@
        * in the bag and whether one is out.
        */
       bagList: (bagId) =>
-        TOYS.filter((d) => !bagId || d.bag === bagId).map((d) => ({
+        TOYS.filter((d) => (!bagId || d.bag === bagId) && shown(d)).map((d) => ({
           id: d.id,
           emoji: d.emoji,
           name: d.name,
@@ -2195,7 +2560,16 @@
       bagCount,
       spares,
       spend,
-      toyTotal: TOYS.length,
+      /** Every regular toy there is to collect right now, across the open bags. */
+      get toyTotal() {
+        return TOYS.filter(collectable).length;
+      },
+      /** How many of those have been found. */
+      collected: () => {
+        const all = TOYS.filter(collectable);
+        return { found: all.filter((d) => inv().has(d.id)).length, total: all.length };
+      },
+      odds,
       /** Where toys are out on the floor, for a play room to steer the pet to. */
       toysOut: () => toys.filter((o) => !o.storing).map((o) => o.x),
       /**
@@ -2218,5 +2592,17 @@
     };
   }
 
-  root.PetScene = { create, BAGS, TOYS, RARITY, PRICES, CRITTERS, SCENERY, USE_LABEL, rollToy };
+  root.PetScene = {
+    create,
+    BAGS,
+    TOYS,
+    RARITY,
+    PRICES,
+    CRITTERS,
+    SCENERY,
+    USE_LABEL,
+    HOLIDAYS,
+    rollToy,
+    oddsFor,
+  };
 })(this);

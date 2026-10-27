@@ -1,4 +1,4 @@
-import { BagStore, parseBag, parseUnlocks } from '../bag-store';
+import { BagStore, parseBag, parseCompletion, parseUnlocks } from '../bag-store';
 
 function memory() {
   const data: Record<string, unknown> = {};
@@ -77,5 +77,17 @@ describe('active bag', () => {
     expect(
       parseUnlocks(['garden.idle.buzz', 'ocean.room.rockpool', 'a.b.c.d', 'Garden.idle.x']),
     ).toEqual(['garden.idle.buzz', 'ocean.room.rockpool']);
+  });
+});
+
+describe('collection completion', () => {
+  it('keeps what the view last reported, and nothing else', () => {
+    const storage = memory();
+    const store = new BagStore(storage);
+    expect(store.getCompletion()).toBe('');
+    store.setCompletion('items');
+    expect(new BagStore(storage).getCompletion()).toBe('items');
+    expect(parseCompletion('most')).toBe('');
+    expect(parseCompletion('all')).toBe('all');
   });
 });

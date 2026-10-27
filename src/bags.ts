@@ -36,11 +36,29 @@ export const BAG_LEVELS: BagLevel[] = [
   { id: 'vault', level: 35, rooms: ['vault', 'hoard', 'trophies'] },
 ];
 
+/** The holidays, in the order media/events.js and the bags' holiday toys use. */
+export const HOLIDAYS = [
+  'halloween',
+  'thanksgiving',
+  'christmas',
+  'newyear',
+  'valentine',
+  'easter',
+];
+
+/** The starter bag's holiday toys; every other bag's are named `<bag><holiday>`. */
+export const STARTER_EVENT_TOYS = ['pumpkin', 'pie', 'snowman', 'popper', 'chocolates', 'egg'];
+
 /**
- * Holiday toys (rarity `event` in media/scene.js). They can only be found
- * while their holiday is on, so they come along into a new save.
+ * True for a holiday toy (rarity `event` in media/scene.js). They can only
+ * be found while their holiday is on, so they come along into a new save.
  */
-export const EVENT_TOYS = ['pumpkin', 'pie', 'snowman', 'popper', 'chocolates', 'egg'];
+export function isEventToy(id: string): boolean {
+  return (
+    STARTER_EVENT_TOYS.includes(id) ||
+    BAG_LEVELS.some((b) => b.id !== STARTER_BAG && HOLIDAYS.some((h) => id === `${b.id}${h}`))
+  );
+}
 
 export function isBagId(v: unknown): v is string {
   return typeof v === 'string' && BAG_LEVELS.some((b) => b.id === v);

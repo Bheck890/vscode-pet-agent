@@ -655,3 +655,38 @@ canvas {
 #finish-actions {
   justify-content: center;
 }
+
+/* -- Collection progress (top of the Profiles tab) ------------------------- */
+
+#house-profiles {
+  max-height: 150px;
+}
+
+.collect-bars {
+  flex-basis: 100%;
+  margin-bottom: 4px;
+}
+
+/* Label, bar and count on one line each. */
+.collect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.collect .what {
+  flex: 0 0 9.5em;
+  white-space: nowrap;
+}
+
+.collect .xp-track {
+  flex: 1;
+  margin: 0;
+}
+
+.collect .dim {
+  flex: 0 0 auto;
+  min-width: 3.5em;
+  text-align: right;
+}

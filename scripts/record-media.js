@@ -1242,6 +1242,10 @@ CLIPS.profiles = async (browser) => {
   await visit.send({ command: 'profiles', profiles: [old, friend] });
   await visit.send({ command: 'profile', profile: old });
   await visit.advance(3000);
+  await visit.frame.evaluate(() =>
+    document.querySelector('#house-tabs [data-tab="profiles"]').click(),
+  );
+  await visit.advance(300);
   const shots = [await finish.shot(), await visit.shot()];
   await Promise.all([finish, visit].map((p) => p.close()));
   return writePng(path.join(OUT, 'profiles.png'), grid(shots, 2, 8));

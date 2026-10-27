@@ -132,6 +132,7 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     'house-profiles',
     'house-visit',
     'bag-picker',
+    'bag-odds',
     'save-actions',
     'finish-panel',
     'finish-body',
@@ -1592,7 +1593,10 @@ describe('bags, houses and saves in the view', () => {
     expect(picker).toContain('data-bag="ocean"');
     expect(picker).not.toContain('data-bag="kitchen"');
     expect(picker).toContain('Kitchen bag: unlocks at level 4');
-    expect(h.elements['bag-title'].textContent).toBe('🎒 Starter - 1/30 found - 3/20 bags');
+    expect(h.elements['bag-title'].textContent).toBe('🎒 Starter - 1/24 found - 3/20 bags');
+    expect(h.elements['bag-odds'].textContent).toMatch(
+      /\d+% common - \d+% uncommon - \d+% rare - \d+% legendary$/,
+    );
   });
 
   it('switching bags changes the toys, collection and shop tabs, and tells the extension', () => {
@@ -2083,6 +2087,90 @@ describe('the happy emote', () => {
         seen.add(reaction(h));
       }
       expect(seen.has('pet')).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+describe('collection progress', () => {
+  // The catalogue, loaded as the page loads it, to know what a full starter collection is.
+  const lib: Record<string, unknown> = {};
+  for (const f of ['pets.js', 'states.js', 'play.js', 'variants.js', 'scene.js', 'house.js']) {
+    vm.runInNewContext(fs.readFileSync(path.join(process.cwd(), 'media', f), 'utf8'), lib);
+  }
+  const Scene = lib['PetScene'] as {
+    TOYS: Array<{ id: string; bag: string; rarity: string; after?: number }>;
+  };
+  const Variants = lib['PetVariants'] as { shopActions(bag: string): Array<{ id: string }> };
+  const Play = lib['PetPlay'] as {
+    FOODS: Array<{ id: string; emoji: string | null; bag?: string }>;
+  };
+  const House = lib['PetHouse'] as { HOUSES: Array<{ id: string; rooms: Array<{ id: string }> }> };
+  const STARTER_TOYS = Scene.TOYS.filter(
+    (t) => t.bag === 'starter' && t.rarity !== 'event' && !t.after,
+  ).map((t) => t.id);
+  const STARTER_SHOP = [
+    ...Variants.shopActions('starter').map((a) => a.id),
+    ...Play.FOODS.filter((f) => f.emoji && !f.bag).map((f) => `food.${f.id}`),
+    ...House.HOUSES[0].rooms.slice(2).map((r) => `room.${r.id}`),
+  ];
+
+  function start(bag: Record<string, number>, unlocks: string[] = []) {
+    const h = runWebviewScript();
+    h.send({
+      command: 'init',
+      config: CONFIG,
+      state: { petX: 0, petY: 30, bag, unlocks },
+      bags: BAG_LEVELS,
+      slot: 'slot-one',
+    });
+    h.runFrames(2500, 100);
+    return h;
+  }
+  const reported = (h: ReturnType<typeof runWebviewScript>) =>
+    h.vscodeApi.postMessage.mock.calls
+      .map(([m]) => m as unknown as { command: string; complete?: string })
+      .filter((m) => m.command === 'collection')
+      .pop()?.complete;
+
+  it('counts every toy without waiting for a holiday, then every shop item for 💯', () => {
+    jest.useFakeTimers();
+    try {
+      const all = Object.fromEntries(STARTER_TOYS.map((id) => [id, 1]));
+      expect(reported(start(all))).toBe('items');
+      expect(reported(start(all, STARTER_SHOP))).toBe('all');
+      const short = { ...all };
+      delete short[STARTER_TOYS[0]];
+      expect(reported(start(short, STARTER_SHOP))).toBe('');
+      // Holiday toys make no difference either way.
+      expect(reported(start({ ...short, pumpkin: 1, egg: 1 }))).toBe('');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('shows progress bars for toys, food, animations, room stuff and styles in the Profiles tab', () => {
+    jest.useFakeTimers();
+    try {
+      const all = Object.fromEntries(STARTER_TOYS.map((id) => [id, 1]));
+      const h = start(all, ['idle.disco', 'food.fish']);
+      h.elements['house-toggle'].listeners['click'].forEach((l) => l({}));
+      h.elements['house-tabs'].listeners['click'].forEach((l) =>
+        l({ target: { closest: () => ({ dataset: { tab: 'profiles' } }) } }),
+      );
+      const html = h.elements['house-profiles'].innerHTML;
+      expect(html).toContain("✅ Rusty's collection");
+      expect(html).toMatch(
+        /🧸 Bag items<\/span><div class="xp-track">.*?<span class="dim">24\/24</,
+      );
+      expect(html).toMatch(/🍽️ Shop food<\/span><div class="xp-track">.*?<span class="dim">1\/4</);
+      expect(html).toMatch(
+        /🎭 Shop animations<\/span><div class="xp-track">.*?<span class="dim">1\/8</,
+      );
+      expect(html).toMatch(/🛋️ Room stuff<\/span><div class="xp-track">.*?<span class="dim">0\/2</);
+      expect(html).toMatch(/🐾 Pet styles<\/span><div class="xp-track">.*?<span class="dim">0\/0</);
+      expect(html).toContain('style="width:100%"');
     } finally {
       jest.useRealTimers();
     }

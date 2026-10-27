@@ -8,6 +8,7 @@ import {
   isEncrypted,
 } from './move-file';
 import type { ProgressService } from './progress-service';
+import type { Completion } from './bag-store';
 import { FinishSummary, GUEST_MAX_BYTES, LOOK_KEYS, PetLook, Profiles } from './profiles';
 import type { RecordsStore } from './records-store';
 import type { Slots } from './slot';
@@ -54,17 +55,19 @@ const n = (v: number) => Math.round(v).toLocaleString('en-US');
 /**
  * The share text: numbers, the pet's name and species, and badges. Built
  * from the summary alone, so no prompt text, file or repo name can get in.
+ * 💯 is every toy and every shop item; ✅ every toy (holiday toys never count).
  */
 export function shareText(
   look: Pick<PetLook, 'name' | 'species'>,
   s: FinishSummary,
   finished: boolean,
   toyTotal: number,
+  complete: Completion = '',
 ): string {
   const toys = toyTotal > 0 ? `${n(s.toys)}/${n(toyTotal)}` : n(s.toys);
   const badges = [
     finished ? '🏁' : '',
-    toyTotal > 0 && s.toys >= toyTotal ? '💯' : '',
+    complete === 'all' ? '💯' : complete === 'items' ? '🧸✅' : '',
     `🎒x${s.bags}`,
     `⭐x${s.level}`,
   ].filter(Boolean);
@@ -124,7 +127,14 @@ export class SaveFlows {
 
   /** The text for sharing. `toyTotal` is the webview's catalogue size. */
   summaryText(toyTotal: number): string {
-    return shareText(this.deps.look(), this.deps.profiles.summary(), this.finished(), toyTotal);
+    const { profiles } = this.deps;
+    return shareText(
+      this.deps.look(),
+      profiles.summary(),
+      this.finished(),
+      toyTotal,
+      profiles.completion(),
+    );
   }
 
   async copySummary(toyTotal: number): Promise<void> {

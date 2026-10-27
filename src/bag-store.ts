@@ -5,6 +5,17 @@ const STORAGE_KEY = 'petBag';
 const SPENT_KEY = 'petBagSpent';
 const UNLOCKS_KEY = 'petUnlocks';
 const ACTIVE_KEY = 'petActiveBag';
+const COMPLETE_KEY = 'petComplete';
+
+/**
+ * How complete the collection is, as the view last worked it out: every
+ * regular toy from the open bags ('items'), and every shop item too ('all').
+ */
+export type Completion = '' | 'items' | 'all';
+
+export function parseCompletion(v: unknown): Completion {
+  return v === 'items' || v === 'all' ? v : '';
+}
 
 /** A toy bag: toy id -> how many have been found. Anything malformed is dropped. */
 export function parseBag(v: unknown): Record<string, number> {
@@ -80,6 +91,14 @@ export class BagStore {
   /** Saves the active bag for every window; the caller checks it is unlocked. */
   setActiveBag(id: string): void {
     void this.storage.update(ACTIVE_KEY, id);
+  }
+
+  getCompletion(): Completion {
+    return parseCompletion(this.storage.get(COMPLETE_KEY));
+  }
+
+  setCompletion(c: Completion): void {
+    void this.storage.update(COMPLETE_KEY, c);
   }
 
   private mergeCounts(key: string, counts: unknown): Record<string, number> {

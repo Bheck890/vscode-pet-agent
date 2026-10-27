@@ -116,7 +116,7 @@ When the agent is quiet, your pet gets up to things: chasing a butterfly, bird w
 
 ### Toys, furniture and the bag
 
-Every few minutes your pet finds something new (`pet-agents.toys`), and every find goes into its 🎒 bag:
+Every few minutes your pet finds something new (`pet-agents.toys`), and every find goes into its 🎒 bag. These are the starter bag's usual odds; they shift all the time (see [Bags](#bags)):
 
 | Rarity    | Chance | Examples                                                                              |
 | --------- | ------ | ------------------------------------------------------------------------------------- |
@@ -203,7 +203,7 @@ Leave it open for weeks and there is always something going on. Every part is op
 Halloween, Thanksgiving, Christmas, New Year, Valentine's Day and Easter, worked out from your local date: your pet dresses up, decorations go up either side of it with a garland above, and bats, leaves, snow, fireworks, hearts or blossom drift by. Every holiday has several outfits and sets of decorations, and each window picks its own when it opens: for Christmas your pet might be Santa, an elf, a reindeer or a snowman; for Halloween a witch, a ghost, a vampire or a pumpkin.
 
 ![All twenty holiday outfits: a witch, ghost, vampire and pumpkin; Santa, an elf, a reindeer and a snowman; a pilgrim, turkey and scarecrow; party, top hat and tiara; a sweetheart, Cupid and a rose; a bunny, a chick and springtime](docs/images/outfits.png)
-Each holiday has a toy you can only find while it is on (a 🎃 jack-o-lantern, a ⛄ snowman...), and you keep it forever. Your own accessory wins if it wants the same spot as the costume (`pet-agents.holidays`).
+Every bag has its own toy for each holiday (a 🎃 jack-o-lantern in the starter bag, a 🦑 spooky squid in the ocean bag, a 🍪 gingerbread cookie in the kitchen bag...), found only from that bag while the holiday is on, and kept forever. They stay hidden until you find them. Your own accessory wins if it wants the same spot as the costume (`pet-agents.holidays`).
 
 ### Levels, challenges and prompt records
 
@@ -237,6 +237,10 @@ Every bag after the first is a whole pack:
 | 🍽️ Food        |                                                                                                                  | 1 themed food     |
 | 🐾 Pet style   | 1 themed look for your pet                                                                                       | 2 colour variants |
 
+**The odds keep changing.** Higher bags lean rarer: rare and legendary finds are several times likelier in the late bags than in the starter bag. On top of that, rare and legendary odds rise and fall on a slow 90-minute wave, and every time the panel opens it rolls its own luck, so one window may be on a 🍀 lucky streak while another has a 🌧️ slow day. The 🧸 Toys tab shows the odds right now and whether they're rising 📈 or falling 📉.
+
+**Older bags keep growing.** Every bag gains three bonus toys (uncommon, rare, then legendary) as you level up past it: 6, 12 and 18 levels after the bag opens. They don't show at all, not even as ❔, until they join.
+
 A new challenge joins the weekly pool: 🧸 find 3 toys in a new bag.
 
 ### Pet styles
@@ -260,6 +264,7 @@ Rooms have a job: in a bedroom your pet naps in its bed, in a kitchen it waits b
 - **You finished!** When the last bag opens at level 35, your pet throws a party and a finish screen sums up the save: days, level, XP, prompts, actions, toys, houses, rooms and records. It shows once, then from the 🏁 button in the level panel. XP keeps counting after.
 - **Share it.** Copy a summary, save a 1200x630 share card, or open a pre-filled post on X or Bluesky (only when you click, and `pet-agents.shareButtons` hides those buttons). Only numbers, your pet's name and look and the bags are shared: never prompt text, file names or repo names. **Pet Agents: Share Progress** does the same any time.
 - **Start a new save** from the finish screen, ⚙️ **💾 Saves and sharing**, or **Pet Agents: Start a New Save**. Everything that belongs to the save (level, bags, purchases, houses, care) is written to a profile file and a fresh save starts at level 1. Your prompt records, settings and holiday toys carry over, and every finished save adds a 🏅 to the level panel.
+- **Complete the collection.** The 👤 Profiles tab in the 🏠 strip has progress bars for your bag items, shop food, shop animations, room stuff (furniture, themes and rooms) and pet styles, counting every bag you've opened. Find every regular toy and the save is ✅ complete; holiday toys never count, so nobody waits for a holiday. Buy everything in every shop too and it earns 💯. The badge shows on the finish card, in your share text and next to the save in the Profiles row.
 - **Visit your old pets** from the **Profiles** row in the 🏠 strip. Each earlier pet is alive in its own houses, with its own toys, hobbies and style: pet it, look round, or 🎈 invite it over to play at your house as a mini pet. Visits are read-only: nothing moves, no XP, no finds, and its care stats stay as they were. 🏠 (or an agent starting work) brings you home. Profiles can be renamed and hidden.
 - **Swap profiles with friends.** **📤 Share this profile...** (or **Pet Agents: Export Profile**) writes a `.petprofile.json` with no prompts, paths or repo names. A friend adds it with **➕ Add a friend's profile...** (or **Pet Agents: Import Profile**) and it appears under 👋 Friends. Send a newer copy and it replaces the old one.
 - **Move your pet to another computer.** **🚚 Move my pet to another computer...** (or **Pet Agents: Move Pet to Another Computer**) writes a `.petsave` file with your live save, your prompt records and, if you like, your old profiles and friends. Give it a password and the file is encrypted (scrypt and AES-256-GCM); without one, prompt previews stay behind. There is no password reset. Once the file is written and checked, the pet here becomes a "moved" profile you can still visit. On the other computer, **📦 Bring my pet here...** (or **Pet Agents: Bring Pet from Another Computer**) brings it in, look and all, and asks before replacing a save that has progress.

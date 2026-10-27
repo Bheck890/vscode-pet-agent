@@ -28,9 +28,16 @@
     ];
   }
 
-  /** The badge row: finished, every toy found, and how many bags. */
-  function badges(s, finished, toyTotal) {
-    return [finished ? '🏁' : '', s.toys >= toyTotal ? '💯' : '', `🎒 ${s.bags}`].filter(Boolean);
+  /**
+   * The badge row: finished, the collection (💯 every toy and shop item, ✅
+   * every toy; holiday toys never count), and how many bags.
+   */
+  function badges(s, finished, complete) {
+    return [
+      finished ? '🏁' : '',
+      complete === 'all' ? '💯' : complete === 'items' ? '✅' : '',
+      `🎒 ${s.bags}`,
+    ].filter(Boolean);
   }
 
   /**
@@ -39,7 +46,8 @@
    *   escapeHtml: (s: string) => string,
    *   pet: () => {name: string, species: string},
    *   config: () => any,
-   *   toyTotal: number,
+   *   toyTotal: () => number,
+   *   complete: () => string,
    *   celebrate: (text: string, color: string) => void,
    *   sprite: () => any,
    * }} api
@@ -57,11 +65,11 @@
         return;
       }
       const { summary, finished } = shown;
-      const [title, ...rest] = lines(summary, api.pet(), finished, api.toyTotal);
+      const [title, ...rest] = lines(summary, api.pet(), finished, api.toyTotal());
       body.innerHTML =
         `<div class="finish-title">${api.escapeHtml(title)}</div>` +
         rest.map((l) => `<div>${api.escapeHtml(l)}</div>`).join('') +
-        `<div class="finish-badges">${badges(summary, finished, api.toyTotal).join(' ')}</div>`;
+        `<div class="finish-badges">${badges(summary, finished, api.complete()).join(' ')}</div>`;
       const share = api.config() && api.config().shareButtons !== false;
       actions.innerHTML =
         '<button data-finish-action="copy">📋 Copy summary</button>' +
@@ -94,7 +102,7 @@
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(sprite, 60, CARD_H - 120 - 256, 256, 256);
       }
-      const [title, ...rest] = lines(summary, api.pet(), finished, api.toyTotal);
+      const [title, ...rest] = lines(summary, api.pet(), finished, api.toyTotal());
       ctx.fillStyle = '#ffd23f';
       ctx.font = 'bold 56px sans-serif';
       ctx.textAlign = 'left';
@@ -104,7 +112,7 @@
       ctx.font = '32px sans-serif';
       rest.forEach((l, i) => ctx.fillText(l, 360, 170 + i * 64));
       ctx.font = '56px sans-serif';
-      ctx.fillText(badges(summary, finished, api.toyTotal).join('  '), 360, 380);
+      ctx.fillText(badges(summary, finished, api.complete()).join('  '), 360, 380);
       ctx.fillStyle = '#c8c0ff';
       ctx.font = '26px sans-serif';
       ctx.fillText('Pet Agents for VS Code', 360, CARD_H - 78);
@@ -114,7 +122,7 @@
     actions.addEventListener('click', (e) => {
       const el = /** @type {HTMLElement} */ (e.target).closest('[data-finish-action]');
       const what = el && /** @type {HTMLElement} */ (el).dataset.finishAction;
-      const toyTotal = api.toyTotal;
+      const toyTotal = api.toyTotal();
       switch (what) {
         case 'copy':
           api.post({ command: 'share-copy', toyTotal });

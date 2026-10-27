@@ -1,4 +1,5 @@
 import { BagLevel, isBagId } from './bags';
+import { Completion } from './bag-store';
 import type { Calendar } from './calendar';
 import type { ClaudeUpdate } from './claude-watcher';
 import type { PetConfig } from './pet-config';
@@ -55,6 +56,7 @@ export type FromWebview =
   | { command: 'house-save'; layout: HouseLayout; slot: string }
   | { command: 'bag-switch'; bag: string; slot: string }
   | { command: 'found'; bag: string; toy: string }
+  | { command: 'collection'; complete: Completion }
   | { command: 'new-save' }
   | { command: 'visit-profile'; id: string; guest: boolean }
   | { command: 'profile-rename'; id: string; guest: boolean }
@@ -175,6 +177,10 @@ export function parseFromWebview(msg: unknown): FromWebview | null {
     case 'bag-switch':
       return isBagId(m['bag']) && isSlotId(slot)
         ? { command: 'bag-switch', bag: m['bag'], slot }
+        : null;
+    case 'collection':
+      return m['complete'] === '' || m['complete'] === 'items' || m['complete'] === 'all'
+        ? { command: 'collection', complete: m['complete'] }
         : null;
     case 'found':
       return isBagId(m['bag']) && typeof m['toy'] === 'string' && /^[a-z]+$/.test(m['toy'])

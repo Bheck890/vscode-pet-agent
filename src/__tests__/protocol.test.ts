@@ -68,6 +68,14 @@ describe('parseFromWebview', () => {
       { command: 'share-post', site: 'bluesky', toyTotal: 4 },
     ],
     [{ command: 'move-out' }, { command: 'move-out' }],
+    [
+      { command: 'collection', complete: 'all' },
+      { command: 'collection', complete: 'all' },
+    ],
+    [
+      { command: 'collection', complete: '' },
+      { command: 'collection', complete: '' },
+    ],
     [{ command: 'move-in' }, { command: 'move-in' }],
   ])('accepts %j', (msg, parsed) => {
     expect(parseFromWebview(msg)).toEqual(parsed);
@@ -106,6 +114,8 @@ describe('parseFromWebview', () => {
     },
     { command: 'share-card', png: 'data:image/png;base64,' + 'A'.repeat(5 * 1024 * 1024) },
     { command: 'share-card', png: 42 },
+    { command: 'collection', complete: 'most' },
+    { command: 'collection' },
   ])('rejects %j', (msg) => {
     expect(parseFromWebview(msg)).toBeNull();
   });

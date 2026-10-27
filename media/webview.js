@@ -2546,7 +2546,7 @@
           ? `<br><span class="dim">${helpers} helper${helpers > 1 ? 's' : ''} working</span>`
           : '') +
         (jobs ? `<br><span class="dim">${jobs} job${jobs > 1 ? 's' : ''} running</span>` : '') +
-        `<br><span class="dim">🎒 ${scene.foundCount()}/${scene.toyTotal} toys found</span>` +
+        `<br><span class="dim">🎒 ${scene.collected().found}/${scene.collected().total} toys found</span>` +
         (events.label() ? `<br>${escapeHtml(events.label())}` : '')
       );
     }
@@ -2667,6 +2667,9 @@
     onFound: (toy) => vscodeApi.postMessage({ command: 'found', bag: toy.bag, toy: toy.id }),
     events: () => events.active(),
     activeBag: () => activeBag,
+    level: () => level,
+    bagLevel,
+    openBags: () => (config ? openBags() : ['starter']),
   });
 
   const events = window.PetEvents.create({
@@ -2854,7 +2857,8 @@
     escapeHtml,
     pet: () => ({ name: config ? config.name : '', species: config ? config.species : '' }),
     config: () => config,
-    toyTotal: scene.toyTotal,
+    toyTotal: () => scene.toyTotal,
+    complete: () => panels.completion().complete,
     celebrate,
     sprite: () =>
       main && config

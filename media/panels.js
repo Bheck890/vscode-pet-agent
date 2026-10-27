@@ -118,8 +118,12 @@
       ['profiles', '👤 Profiles', houseProfiles],
     ];
     let houseTab = 'furniture';
+    /** When the collection was last checked, and what was last told to the extension. */
+    let completionAt = 0;
+    let reported = null;
     const houseVisit = byId('house-visit');
     const bagPicker = byId('bag-picker');
+    const bagOdds = byId('bag-odds');
     const saveActions = byId('save-actions');
     /** Earlier saves and friends' profiles, from the extension. */
     let profiles = [];
@@ -241,6 +245,12 @@
       bagTitle.textContent =
         `${bag.emoji} ${bag.name} - ${found}/${total} found - ` +
         `${api.openBags().length}/${BAGS.length} bags`;
+      const odds = scene.odds(bag.id);
+      const mood =
+        odds.luck > 0.35 ? '🍀 Lucky streak' : odds.luck < -0.35 ? '🌧️ Slow day' : '🎲 Odds';
+      bagOdds.textContent =
+        `${mood} ${odds.rising ? '📈' : '📉'} ` +
+        ['common', 'uncommon', 'rare', 'legendary'].map((r) => `${odds.pct[r]}% ${r}`).join(' - ');
       bagGrid.innerHTML = scene
         .bagList(bag.id)
         .map((toy) =>
@@ -860,6 +870,53 @@
     }
 
     /** The Profiles row: this save, then earlier saves newest first, then 👋 friends. */
+    /**
+     * Progress towards a full collection, for the save being played (or the
+     * one being visited): regular toys from the open bags (never holiday
+     * toys), then everything their shops sell. 'items' is every toy; 'all'
+     * is every toy and every shop item.
+     */
+    function completion() {
+      const sold = api.openBags().flatMap((b) => shopItems(b));
+      const owned = (kinds) => {
+        const list = sold.filter((i) => kinds.includes(i.kind));
+        return [list.filter((i) => owns(i.id)).length, list.length];
+      };
+      const toys = scene.collected();
+      const rows = [
+        ['🧸', 'Bag items', toys.found, toys.total],
+        ['🍽️', 'Shop food', ...owned(['food'])],
+        ['🎭', 'Shop animations', ...owned(['animation'])],
+        ['🛋️', 'Room stuff', ...owned(['furniture', 'theme', 'room'])],
+        ['🐾', 'Pet styles', ...owned(['style'])],
+      ];
+      const full = (row) => row[2] >= row[3];
+      const complete = !full(rows[0]) ? '' : rows.every(full) ? 'all' : 'items';
+      return { rows, complete };
+    }
+
+    /** The collection's progress bars, at the top of the Profiles tab. */
+    function collectionHtml() {
+      const c = completion();
+      const v = api.visiting();
+      const badge = c.complete === 'all' ? '💯 ' : c.complete === 'items' ? '✅ ' : '';
+      return (
+        '<div class="collect-bars">' +
+        `<div class="group">${badge}${escapeHtml(v ? v.pet.name : api.homeName())}'s collection</div>` +
+        c.rows
+          .map(([icon, label, got, of]) => {
+            const pct = of > 0 ? Math.round((got / of) * 100) : 100;
+            return (
+              `<div class="collect"><span class="what">${icon} ${label}</span>` +
+              `<div class="xp-track"><div class="xp-fill" style="width:${pct}%"></div></div>` +
+              `<span class="dim">${got}/${of}</span></div>`
+            );
+          })
+          .join('') +
+        '</div>'
+      );
+    }
+
     function profilesHtml() {
       const v = api.visiting();
       const list = profiles.filter((p) => showHidden || !p.hidden);
@@ -868,7 +925,7 @@
         const pic = img ? `<img src="${img}" alt="" />` : SPECIES_EMOJI[p.pet.species] || '🐾';
         const marks =
           (p.finished ? '🏁' : '') +
-          (p.summary.toys >= scene.toyTotal ? '💯' : '') +
+          (p.complete === 'all' ? '💯' : p.complete === 'items' ? '✅' : '') +
           (p.moved ? '🚚' : '') +
           (p.hidden ? '🙈' : '');
         const on = v && v.id === p.id && !!v.guest === !!p.guest;
@@ -985,7 +1042,7 @@
               `🔒 ${escapeHtml(t.name)}</button>`,
         )
         .join('');
-      houseProfiles.innerHTML = profilesHtml();
+      houseProfiles.innerHTML = collectionHtml() + profilesHtml();
     }
 
     /** Leaves the house, and any old save being visited. */
@@ -1033,7 +1090,17 @@
           renderBag();
         }
         updateCareUi(t);
+        // Tell the extension when the save's collection becomes (or stops being) complete.
+        if (t - completionAt > 2000 && api.config() && !api.visiting()) {
+          completionAt = t;
+          const { complete } = completion();
+          if (complete !== reported) {
+            reported = complete;
+            api.post({ command: 'collection', complete });
+          }
+        }
       },
+      completion,
       /** A short message under the care buttons. */
       note: showNote,
       careOn,

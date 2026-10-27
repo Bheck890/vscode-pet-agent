@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { EVENT_TOYS, STARTER_BAG, bagsUnlocked, isBagId } from './bags';
-import { BagStore, parseBag, parseUnlocks } from './bag-store';
+import { STARTER_BAG, bagsUnlocked, isBagId, isEventToy } from './bags';
+import { BagStore, Completion, parseBag, parseCompletion, parseUnlocks } from './bag-store';
 import { HouseLayout, HouseStore, parseLayout } from './house-store';
 import { ACCESSORIES, PATTERNS, STYLES, isSpecies } from './pet-config';
 import { CareStats, CareStore, parseStats } from './pet-care';
@@ -78,6 +78,8 @@ export interface ProfileFile {
   finished: boolean;
   /** The pet moved to another computer from here. */
   moved?: boolean;
+  /** Every regular toy found ('items'), and every shop item bought too ('all'). */
+  complete?: 'items' | 'all';
   pet: PetLook;
   progress: {
     xp: number;
@@ -103,6 +105,7 @@ export interface ProfileEntry {
   name: string;
   finished: boolean;
   moved?: boolean;
+  complete?: 'items' | 'all';
   createdAt: number;
   endedAt: number;
   /** Hidden from the house menu; the file stays on disk. */
@@ -201,6 +204,7 @@ export function parseProfile(v: unknown): ProfileFile | null {
   if (typeof o['finished'] !== 'boolean' || !obj(o['house']) || !obj(o['care'])) {
     return null;
   }
+  const complete = parseCompletion(o['complete']);
   return {
     version: PROFILE_VERSION,
     id: o['id'],
@@ -209,6 +213,7 @@ export function parseProfile(v: unknown): ProfileFile | null {
     endedAt,
     finished: o['finished'],
     ...(o['moved'] === true ? { moved: true } : {}),
+    ...(complete ? { complete } : {}),
     pet,
     progress: {
       xp,
@@ -235,6 +240,7 @@ function entryOf(p: ProfileFile, guest: boolean, hidden: boolean): ProfileEntry 
     name: p.name,
     finished: p.finished,
     ...(p.moved ? { moved: true } : {}),
+    ...(p.complete ? { complete: p.complete } : {}),
     createdAt: p.createdAt,
     endedAt: p.endedAt,
     ...(hidden ? { hidden: true } : {}),
@@ -343,7 +349,8 @@ export class Profiles {
       prompts: life.prompts,
       actions: life.actions,
       agentHours: Math.round(life.agentMs / 3_600_000),
-      toys: Object.keys(bag.get()).length,
+      // Holiday toys are a bonus, never part of the collection.
+      toys: Object.keys(bag.get()).filter((id) => !isEventToy(id)).length,
       bags: bagsUnlocked(level, this.deps.levelsOn()).length,
       houses: rooms.filter((n) => n > 0).length,
       rooms: rooms.reduce((a, b) => a + b, 0),
@@ -358,6 +365,7 @@ export class Profiles {
     const now = this.deps.now();
     const pet = this.deps.look();
     const summary = this.summary();
+    const complete = this.completion();
     const ordinal = this.list({ hidden: true }).filter((p) => !p.guest).length + 1;
     return {
       version: PROFILE_VERSION,
@@ -367,6 +375,7 @@ export class Profiles {
       endedAt: now.getTime(),
       finished,
       ...(moved ? { moved: true } : {}),
+      ...(complete ? { complete } : {}),
       pet,
       progress: {
         xp: summary.xp,
@@ -385,6 +394,11 @@ export class Profiles {
       care: care.get(now.getTime()),
       summary,
     };
+  }
+
+  /** How complete the current save's collection is, as the view last reported. */
+  completion(): Completion {
+    return this.deps.stores.bag.getCompletion();
   }
 
   /** True if the current save has anything worth keeping. */
@@ -472,7 +486,7 @@ export class Profiles {
       startedAt: now.getTime(),
     });
     const holiday = Object.fromEntries(
-      Object.entries(old.bag.found).filter(([id]) => EVENT_TOYS.includes(id)),
+      Object.entries(old.bag.found).filter(([id]) => isEventToy(id)),
     );
     if (Object.keys(holiday).length > 0) {
       this.deps.stores.bag.save(holiday);

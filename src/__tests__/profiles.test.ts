@@ -63,9 +63,19 @@ describe('profiles', () => {
       finished: false,
       pet: { species: 'fox', name: 'Rusty', style: 'flowerCrown' },
       bag: { found: { yarn: 4, pumpkin: 1, sunflower: 2 }, activeBag: 'starter' },
-      summary: { level: 1, toys: 3, houses: 1, rooms: 1 },
+      // The jack-o-lantern is a holiday toy, which never counts towards the collection.
+      summary: { level: 1, toys: 2, houses: 1, rooms: 1 },
     });
     expect(p.house.houses['starter']['living'].theme).toBe('mint');
+  });
+
+  it('remembers how complete the collection was, in the file and the index', () => {
+    const s = played();
+    s.stores.bag.setCompletion('all');
+    const p = s.profiles.archive(true);
+    s.slots.start({ id: 'next', startedAt: 1 });
+    expect(s.profiles.load(p.id)?.complete).toBe('all');
+    expect(s.profiles.list()[0].complete).toBe('all');
   });
 
   it('starts a new save at level 1, keeping only the holiday toys', () => {

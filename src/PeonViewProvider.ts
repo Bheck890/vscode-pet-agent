@@ -180,6 +180,9 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       case 'found':
         this.deps.progress.found(message.bag, message.toy);
         break;
+      case 'collection':
+        bag.setCompletion(message.complete);
+        break;
       case 'log':
         log[message.level](`view: ${message.message}`);
         break;

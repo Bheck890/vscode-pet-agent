@@ -10,6 +10,14 @@
       "presentation": { "reveal": "always", "panel": "dedicated" }
     },
     {
+      "label": "Package Pet for Marketplace",
+      "detail": "Build the extension and package marketplace/<version>-<date>/pet-agents-<version>.vsix to upload",
+      "type": "npm",
+      "script": "package",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
       "label": "Build Pet (watch)",
       "type": "npm",
       "script": "watch",

@@ -38,4 +38,5 @@ CLAUDE.md
 
 # Misc
 *.vsix
+marketplace/**
 coverage/**

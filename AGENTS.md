@@ -2,7 +2,7 @@
 
 ## What this is
 
-A VS Code extension (`bheck890.pet-agents`, display name **Pet Agents**) that draws a recolourable pixel pet (fox, cat, dog, bird) in the Explorer sidebar and acts out what an AI coding agent is doing. Sub-agents appear as mini pets. It also has idle hobbies, collectable toys, machines for test/build jobs, and hands-on care (feed, treat, fetch, bath).
+A VS Code extension (`NorthPandaLabs.pet-agents`, display name **Pet Agents**) that draws a recolourable pixel pet (fox, cat, dog, bird) in the Explorer sidebar and acts out what an AI coding agent is doing. Sub-agents appear as mini pets. It also has idle hobbies, collectable toys, machines for test/build jobs, and hands-on care (feed, treat, fetch, bath).
 
 - Repo: https://github.com/Bheck890/vscode-pet-agent (public). Grew out of smcqueen2/vscode-peon-pet; the Orc Peon sprites and character packs are gone.
 - Settings namespace: `pet-agents.*`. Commands: `pet-agents.customize`, `pet-agents.refresh`. View id: `petAgentsView`.
@@ -35,7 +35,7 @@ A VS Code extension (`bheck890.pet-agents`, display name **Pet Agents**) that dr
 npm run compile | watch | lint | format
 npm test                # lint + compile + jest (CI runs this on Windows/macOS/Linux for every push)
 npm run media           # re-record README media after visual changes
-npm run package         # pet-agents.vsix
+npm run package         # marketplace/<version>-<date>/pet-agents-<version>.vsix (or the "Package Pet for Marketplace" task)
 npm run install:vscode  # package and install into local VS Code, then Developer: Reload Window
 ```
 
@@ -48,4 +48,4 @@ npm run install:vscode  # package and install into local VS Code, then Developer
 - New webview message: add it to `protocol.ts` (and its test) first. New webview script: one `<!--MEDIA:x.js-->` line in `webview.html`, nothing else.
 - Every commit is tested in full by `.github/workflows/ci.yml`; keep it green and add tests with each feature.
 - README images must be PNG/GIF under `docs/images/` (the marketplace rejects SVG); `docs/**` is excluded from the VSIX and served from GitHub.
-- Before publishing: bump `version`, add the CHANGELOG entry (a test checks it), `npx @vscode/vsce publish`.
+- Before publishing: bump `version`, add the CHANGELOG entry (a test checks it), `npm run package`, then upload the new `marketplace/<version>-<date>/*.vsix` (or `npx @vscode/vsce publish --packagePath <it>`). `marketplace/` is gitignored and left out of the VSIX.

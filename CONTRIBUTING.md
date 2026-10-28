@@ -19,15 +19,15 @@ To see the pet react you need an agent producing activity: Claude Code works wit
 
 ## Scripts
 
-| Command                | Description                                                         |
-| ---------------------- | ------------------------------------------------------------------- |
-| `npm run compile`      | Development build with source maps                                  |
-| `npm run watch`        | Rebuild on change                                                   |
-| `npm run lint`         | ESLint over `src` and `media`                                       |
-| `npm run format`       | Prettier                                                            |
-| `npm test`             | Lint, compile, then the Jest suite                                  |
-| `npm run media`        | Re-record the README GIFs, screenshots and icon (needs Chrome/Edge) |
-| `npm run package`      | Production build and `pet-agents.vsix`                              |
+| Command           | Description                                                                   |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `npm run compile` | Development build with source maps                                            |
+| `npm run watch`   | Rebuild on change                                                             |
+| `npm run lint`    | ESLint over `src` and `media`                                                 |
+| `npm run format`  | Prettier                                                                      |
+| `npm test`        | Lint, compile, then the Jest suite                                            |
+| `npm run media`   | Re-record the README GIFs, screenshots and icon (needs Chrome/Edge)           |
+| `npm run package` | Production build and `marketplace/<version>-<date>/pet-agents-<version>.vsix` |
 
 ## Code style
 

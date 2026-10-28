@@ -3,7 +3,7 @@
   "displayName": "Pet Agents",
   "description": "A pixel pet in your sidebar that acts out what your AI coding agent is doing, live. Sub-agents pop out as mini pets. Feed it, play fetch, collect toys.",
   "version": "0.4.0",
-  "publisher": "bheck890",
+  "publisher": "NorthPandaLabs",
   "license": "MIT",
   "pricing": "Free",
   "icon": "media/assets/icon.png",
@@ -389,7 +389,7 @@
   "scripts": {
     "compile": "webpack --mode development",
     "watch": "webpack --mode development --watch",
-    "package": "webpack --mode production && npx @vscode/vsce package --no-dependencies -o pet-agents.vsix",
+    "package": "webpack --mode production && node scripts/package-vsix.js",
     "lint": "eslint src media",
     "lint:fix": "eslint src media --fix",
     "format": "prettier --write \"src/**/*.ts\" \"media/**/*.{js,css,html}\"",
@@ -397,7 +397,7 @@
     "test": "jest",
     "pretest": "npm run lint && npm run compile",
     "prepare": "husky",
-    "install:vscode": "npm run package && code --install-extension pet-agents.vsix --force",
+    "install:vscode": "webpack --mode production && node scripts/package-vsix.js --install",
     "media": "node scripts/record-media.js"
   },
   "lint-staged": {

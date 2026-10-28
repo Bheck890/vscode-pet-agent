@@ -1,6 +1,6 @@
 # Pet Agents
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-Pet%20Agents-6c4fd8)](https://marketplace.visualstudio.com/items?itemName=bheck890.pet-agents)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-Pet%20Agents-6c4fd8)](https://marketplace.visualstudio.com/items?itemName=NorthPandaLabs.pet-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **A pixel pet in your VS Code sidebar that acts out what your AI coding agent is doing, live.**
@@ -17,7 +17,7 @@ Works with **Claude Code** out of the box, and with Cursor, Codex, OpenCode and 
 In VS Code, open the Extensions view (`Ctrl+Shift+X`), search for **Pet Agents** and click **Install**. Or press `Ctrl+P` and run:
 
 ```
-ext install bheck890.pet-agents
+ext install NorthPandaLabs.pet-agents
 ```
 
 Then open the **Explorer** sidebar: your pet lives in the **Pet Agents** panel. Drag the panel taller if it feels cramped, especially when sub-agents are running.
@@ -347,7 +347,7 @@ Your settings live in your VS Code user settings. The toy bags, shop purchases, 
 git clone https://github.com/Bheck890/vscode-pet-agent
 cd vscode-pet-agent
 npm ci
-npm run install:vscode   # build, package pet-agents.vsix and install it into VS Code
+npm run install:vscode   # build, package a .vsix and install it into VS Code
 ```
 
 Then run **Developer: Reload Window**. Or press **F5** to launch an Extension Development Host.
@@ -358,7 +358,7 @@ npm run watch     # rebuild on change
 npm run lint
 npm test          # lint, compile, then the Jest suite
 npm run media     # re-record the README GIFs, screenshots and the icon (needs Chrome or Edge)
-npm run package   # production build + pet-agents.vsix
+npm run package   # production build + marketplace/<version>-<date>/pet-agents-<version>.vsix
 ```
 
 `npm run media` drives the real webview in headless Chrome with a fake clock, so every frame is exact and every run produces the same pictures. Pass a clip name to record just one, e.g. `npm run media -- care`. Set `CHROME_PATH` if Chrome isn't found.

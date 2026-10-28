@@ -2,6 +2,7 @@ node_modules/
 dist/
 out/
 *.vsix
+marketplace/
 .vscode-test/
 *.map
 coverage/

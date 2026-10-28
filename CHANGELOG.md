@@ -42,6 +42,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Published under the **NorthPandaLabs** publisher: the extension is now `NorthPandaLabs.pet-agents`.
 - The 🏠 strip is a slim bar: the room you're in with arrows to the next, and tabs for furniture, theme, rooms and profiles, one at a time, instead of a stack of sideways-scrolling rows that hid the pet.
 - Extension storage is kept per save slot (`petBag` becomes `petBag:<slot>`). Your current data becomes the first slot the first time the new version runs; the old keys are left in place.
 

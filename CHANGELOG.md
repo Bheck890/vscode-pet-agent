@@ -9,6 +9,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-27
+
 ### Added
 
 - 🚶 Visitors (`pet-agents.visitors`): while any care stat is at 40 or below, someone looks in every 40 minutes (every 30 once all three are at zero). A passer-by feeds the pet or a rain shower gives it a bath, whichever helps, each topping up a third of that stat, and very rarely a friend of its own kind (a randomly made-up pet of the same species, with its own colour, markings, accessory and name) drops in to play with a toy from its bag. Looking after the pet yourself puts the next visit off for an hour. The schedule is shared, so several windows never double up.

@@ -25,6 +25,7 @@ import { ProgressService } from '../progress-service';
 import { ProgressStore } from '../progress-store';
 import { RecordsService } from '../records-service';
 import { RecordsStore } from '../records-store';
+import { peonGuide } from '../peon-guide';
 import { readPetConfig } from '../pet-config';
 import { LOOK_KEYS, PetLook, Profiles } from '../profiles';
 import { PetUi, SaveFlows } from '../save-flows';
@@ -197,6 +198,7 @@ function setup(
   });
   const visitors = new Visitors(gameStorage, stores.care, () => []);
   const customize = jest.fn();
+  const copy = jest.fn();
   const provider = new PeonViewProvider({
     mediaPath: MEDIA,
     peon: watchers.peon,
@@ -212,6 +214,8 @@ function setup(
     visitors,
     saveSetting,
     customize,
+    peonGuide: () => peonGuide('linux', false),
+    copy,
     log,
   });
   const v = fakeView();
@@ -239,6 +243,7 @@ function setup(
     dir,
     refresh,
     customize,
+    copy,
   };
 }
 
@@ -623,6 +628,22 @@ describe('bags and saves in the view', () => {
     progress.agentDone('a');
     v.send({ command: 'ready' });
     expect(v.last('welcome')).toBeUndefined();
+  });
+
+  it('sends the peon-ping guide and copies only its own commands', () => {
+    const { v, provider, copy } = setup();
+    v.send({ command: 'ready' });
+    const guide = v.last('peon') as { installed: boolean; steps: Array<{ command?: string }> };
+    expect(guide.installed).toBe(false);
+    const step = guide.steps.findIndex((s) => s.command);
+    v.send({ command: 'peon-copy', step });
+    expect(copy).toHaveBeenCalledWith(guide.steps[step].command);
+    v.send({ command: 'peon-copy', step: 0 });
+    v.send({ command: 'peon-copy', step: 99 });
+    expect(copy).toHaveBeenCalledTimes(1);
+    v.posted.length = 0;
+    provider.syncShared();
+    expect(v.last('peon')).toBeDefined();
   });
 
   it('opens the Customize Pet menu and starts over when asked', async () => {

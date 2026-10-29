@@ -138,6 +138,8 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     'finish-body',
     'finish-actions',
     'welcome-panel',
+    'peon-guide',
+    'replay-tour',
   ]) {
     elements[id] = fakeEl();
   }
@@ -1720,6 +1722,27 @@ describe('bags, houses and saves in the view', () => {
     }
   });
 
+  it('shows the peon-ping guide with escaped steps and copy buttons', () => {
+    const h = start();
+    h.send({
+      command: 'peon',
+      installed: false,
+      steps: [{ text: 'Open a terminal <now>' }, { text: 'Download it', command: 'curl -o x <y>' }],
+      notes: ['Checks GitHub for updates'],
+    });
+    const html = h.elements['peon-guide'].innerHTML;
+    expect(html).toContain('Not installed');
+    expect(html).toContain('Open a terminal &lt;now&gt;');
+    expect(html).toContain('<code>curl -o x &lt;y&gt;</code>');
+    expect(html).toContain('data-peon-step="1"');
+    expect(html).not.toContain('data-peon-step="0"');
+    expect(html).toContain('Checks GitHub for updates');
+    click(h.elements['peon-guide'], { peonStep: '1' });
+    expect(sent(h, 'peon-copy')).toEqual([{ command: 'peon-copy', step: 1 }]);
+    h.send({ command: 'peon', installed: true, steps: [], notes: [] });
+    expect(h.elements['peon-guide'].innerHTML).toContain('✅ peon-ping is installed');
+  });
+
   it('offers to start over from the Profiles row, but not while visiting', () => {
     const h = start();
     click(h.elements['house-toggle']);
@@ -1759,9 +1782,45 @@ describe('bags, houses and saves in the view', () => {
     expect(panel.innerHTML).toContain('✨ Start with Noodle');
     click(panel, { welcomeAction: 'more' });
     expect(sent(h, 'customize')).toHaveLength(1);
+    // Picking the pet leads into the tour; only finishing it ends the welcome.
     click(panel, { welcomeAction: 'done' });
+    expect(panel.hidden).toBe(false);
+    expect(panel.innerHTML).toContain('1 / 6');
+    expect(panel.innerHTML).toContain('Noodle acts out what your AI coding agent is doing');
+    expect(panel.innerHTML).not.toContain('◀ Back');
+    click(panel, { welcomeAction: 'next' });
+    expect(panel.innerHTML).toContain('2 / 6');
+    expect(panel.innerHTML).toContain('◀ Back');
+    click(panel, { welcomeAction: 'back' });
+    expect(panel.innerHTML).toContain('1 / 6');
+    for (let i = 0; i < 10; i++) {
+      click(panel, { welcomeAction: 'next' });
+    }
+    expect(panel.innerHTML).toContain('6 / 6');
+    expect(panel.innerHTML).toContain("Let's go!");
+    expect(sent(h, 'welcome-done')).toHaveLength(0);
+    click(panel, { welcomeAction: 'finish' });
     expect(panel.hidden).toBe(true);
     expect(sent(h, 'welcome-done')).toHaveLength(1);
+  });
+
+  it('skips the pet picking and the tutorial, and replays the tour from settings', () => {
+    const h = start();
+    const panel = h.elements['welcome-panel'];
+    h.send({ command: 'welcome', colors: [], eyes: [], names: { fox: 'Rusty' } });
+    expect(panel.innerHTML).toContain('data-welcome-action="skip"');
+    click(panel, { welcomeAction: 'skip' });
+    expect(sent(h, 'setting')).toHaveLength(0);
+    expect(panel.innerHTML).toContain('1 / 6');
+    expect(panel.innerHTML).toContain('Skip tutorial');
+    click(panel, { welcomeAction: 'skip-tour' });
+    expect(panel.hidden).toBe(true);
+    expect(sent(h, 'welcome-done')).toHaveLength(1);
+    // From ⚙️ later: straight to the tour, not the pet picking.
+    h.elements['replay-tour'].listeners['click'].forEach((l) => l({}));
+    expect(panel.hidden).toBe(false);
+    expect(panel.innerHTML).toContain('1 / 6');
+    expect(panel.innerHTML).toContain('Rusty acts out');
   });
 
   it('lists this save, then earlier saves, then friends in the house menu', () => {

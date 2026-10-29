@@ -133,6 +133,7 @@
     let records = null;
     let trophyTab = 'level';
     const gatherLogs = /** @type {HTMLButtonElement} */ (document.getElementById('gather-logs'));
+    const peonGuide = byId('peon-guide');
 
     /** Groups of switchable actions for the settings panel, in display order. */
     const ACTION_GROUPS = [
@@ -701,6 +702,15 @@
         setActionOn(id, input.checked);
       }
     });
+    peonGuide.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-peon-step]');
+      if (el) {
+        api.post({
+          command: 'peon-copy',
+          step: Number(/** @type {HTMLElement} */ (el).dataset.peonStep),
+        });
+      }
+    });
     gatherLogs.addEventListener('click', () =>
       api.post({ command: 'gather-logs', snapshot: api.debugSnapshot() }),
     );
@@ -1144,6 +1154,31 @@
         layoutCorners();
         renderHouse();
         updateCareUi(now());
+      },
+      /** The peon-ping guide: installed or not, the steps for this OS, and what it sends. */
+      setPeon(msg) {
+        const steps = Array.isArray(msg.steps) ? msg.steps : [];
+        const notes = Array.isArray(msg.notes) ? msg.notes : [];
+        peonGuide.innerHTML =
+          (msg.installed
+            ? '<div class="peon-status">✅ peon-ping is installed: Cursor, Codex, OpenCode and Kiro move the pet too.</div>'
+            : '<div class="peon-status">Not installed. Claude Code works without it; peon-ping adds Cursor, Codex, OpenCode and Kiro.</div>') +
+          '<ol>' +
+          steps
+            .map(
+              (s, i) =>
+                `<li>${escapeHtml(s.text)}` +
+                (s.command
+                  ? `<code>${escapeHtml(s.command)}</code>` +
+                    `<button data-peon-step="${i}" title="Copy to paste into a terminal">📋 Copy</button>`
+                  : '') +
+                '</li>',
+            )
+            .join('') +
+          '</ol>' +
+          '<div class="group">What peon-ping sends</div><ul>' +
+          notes.map((n) => `<li>${escapeHtml(n)}</li>`).join('') +
+          '</ul>';
       },
       setProfiles(list) {
         profiles = list;

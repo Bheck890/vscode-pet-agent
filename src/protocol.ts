@@ -2,6 +2,7 @@ import { BagLevel, isBagId } from './bags';
 import { Completion } from './bag-store';
 import type { Calendar } from './calendar';
 import type { ClaudeUpdate } from './claude-watcher';
+import type { PeonGuide } from './peon-guide';
 import type { PetConfig } from './pet-config';
 import type { CareAction, CareResult, CareStats } from './pet-care';
 import type { HouseLayout } from './house-store';
@@ -61,6 +62,7 @@ export type FromWebview =
   | { command: 'start-over' }
   | { command: 'welcome-done' }
   | { command: 'customize' }
+  | { command: 'peon-copy'; step: number }
   | { command: 'visit-profile'; id: string; guest: boolean }
   | { command: 'profile-rename'; id: string; guest: boolean }
   | { command: 'profile-hide'; id: string; guest: boolean; hidden: boolean }
@@ -107,6 +109,7 @@ export type ToWebview =
       eyes: Array<{ label: string; color: string }>;
       names: Record<string, string>;
     }
+  | ({ command: 'peon' } & PeonGuide)
   | ({ command: 'visitor' } & Visitor);
 
 export function isWebviewState(value: unknown): value is WebviewState {
@@ -208,6 +211,10 @@ export function parseFromWebview(msg: unknown): FromWebview | null {
     case 'profile-export':
       return m['id'] === null || isSlotId(m['id'])
         ? { command: 'profile-export', id: m['id'] }
+        : null;
+    case 'peon-copy':
+      return typeof m['step'] === 'number' && Number.isInteger(m['step']) && m['step'] >= 0
+        ? { command: 'peon-copy', step: m['step'] }
         : null;
     case 'share-copy':
       return { command: 'share-copy', toyTotal: toyTotal(m['toyTotal']) };

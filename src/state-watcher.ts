@@ -1,7 +1,6 @@
 import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import * as vscode from 'vscode';
+import { PEON_STATE_FILE as STATE_FILE } from './peon-guide';
 import {
   isValidSessionId,
   createSessionTracker,
@@ -9,8 +8,6 @@ import {
   EVENT_TO_ANIM,
   SessionState,
 } from './session-tracker';
-
-const STATE_FILE = path.join(os.homedir(), '.claude', 'hooks', 'peon-ping', '.state.json');
 
 /** How often to poll the state file (ms). */
 const POLL_MS = 200;

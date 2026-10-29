@@ -16,6 +16,7 @@ import { Slots } from './slot';
 import { scoped } from './storage';
 import { Visitors } from './visitors';
 import { customizePet } from './customize-menu';
+import { peonGuide, peonInstalled } from './peon-guide';
 import { connectGames } from './games';
 import { getConfig, saveSetting } from './settings';
 import { vscodeUi } from './ui';
@@ -111,6 +112,11 @@ export function activate(context: vscode.ExtensionContext): void {
     visitors,
     saveSetting,
     customize: () => void customizePet(),
+    peonGuide: () => peonGuide(process.platform, peonInstalled()),
+    copy: (text) =>
+      void vscodeUi
+        .copy(text)
+        .then(() => vscodeUi.info('Pet Agents: copied. Paste it into a terminal.')),
     log,
   });
 

@@ -1,8 +1,10 @@
 // @ts-check
 // The welcome screen: a new save (a fresh install, a new save or starting
-// over) opens with it to pick the pet's species, name and look. Each pick
-// is saved as a setting straight away, like the Customize Pet menu, so the
-// pet redraws live. webview.js creates one instance, like the other helpers.
+// over) opens with it to pick the pet's species, name and look, then a short
+// tour of the corner buttons. Both can be skipped, and the tour replayed
+// from the settings panel. Each pick is saved as a setting straight away,
+// like the Customize Pet menu, so the pet redraws live. webview.js creates
+// one instance, like the other helpers.
 (function (root) {
   'use strict';
 
@@ -30,6 +32,52 @@
   };
   const LOOK_KEYS = ['species', 'name', 'color', 'eyeColor', 'pattern', 'accessory'];
 
+  /** The tour: each stop lights up its corner button (none for the first). */
+  const TOUR = [
+    {
+      target: '',
+      title: '🤖 Your agent, acted out',
+      text: (name) =>
+        `${name} acts out what your AI coding agent is doing: reading, writing, running tests, ` +
+        'waiting for you. Helpers it sends off turn up as mini pets. Claude Code works straight away.',
+    },
+    {
+      target: 'care-toggle',
+      title: '🐾 Look after it',
+      text: () =>
+        'Feed it, give it a treat, play fetch or give it a bath while your agent is idle. ' +
+        "If you're away, visitors drop by to help.",
+    },
+    {
+      target: 'bag-toggle',
+      title: '🎒 Toys',
+      text: () =>
+        'Toys turn up as you work. Take them out to play, and trade spares in the shop ' +
+        'for new animations and food.',
+    },
+    {
+      target: 'trophy-toggle',
+      title: '🏆 Levels',
+      text: () =>
+        'You start at level 1 with 0 XP. Finished prompts, passing tests and builds earn XP, ' +
+        'weekly challenges and prompt records earn more, and levelling up opens new bags.',
+    },
+    {
+      target: 'house-toggle',
+      title: '🏠 Home',
+      text: () =>
+        'Furnish its houses room by room. The 👤 Profiles tab keeps your old saves, ' +
+        'and 🔄 Start over gives you a fresh pet.',
+    },
+    {
+      target: 'settings-toggle',
+      title: '⚙️ Settings',
+      text: () =>
+        'Switch any feature off, set up peon-ping for other agents (Cursor, Codex...), ' +
+        'and replay this tour.',
+    },
+  ];
+
   const title = (s) => s[0].toUpperCase() + s.slice(1);
   const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
@@ -52,6 +100,8 @@
     let presets = { colors: [], eyes: [], names: {} };
     /** The look being picked; '' is the default (and for the name, the species' own). */
     let look = /** @type {Record<string, string>} */ ({});
+    /** -1 while picking the pet, else the tour stop being shown. */
+    let stop = -1;
 
     const defaultName = () => presets.names[look.species] || 'Pet';
 
@@ -88,7 +138,50 @@
       ]);
     }
 
+    function glow(on) {
+      const id = stop >= 0 ? TOUR[stop].target : '';
+      const el = id && document.getElementById(id);
+      if (el) {
+        el.classList.toggle('tour', on);
+      }
+    }
+
+    function go(next) {
+      glow(false);
+      stop = next;
+      glow(true);
+      render();
+    }
+
+    function finish() {
+      glow(false);
+      stop = -1;
+      panel.hidden = true;
+      api.post({ command: 'welcome-done' });
+      api.celebrate(`🎉 Say hi to ${look.name || defaultName()}!`, '#ffd23f');
+    }
+
+    function renderTour() {
+      const s = TOUR[stop];
+      const last = stop === TOUR.length - 1;
+      panel.innerHTML =
+        `<div class="panel-head"><span>${s.title}</span>` +
+        `<span class="dim">${stop + 1} / ${TOUR.length}</span></div>` +
+        `<div class="tour-text">${escapeHtml(s.text(look.name || defaultName()))}</div>` +
+        '<div class="food-choices welcome-actions">' +
+        '<button data-welcome-action="skip-tour">Skip tutorial</button>' +
+        (stop > 0 ? '<button data-welcome-action="back">◀ Back</button>' : '') +
+        (last
+          ? `<button data-welcome-action="finish" class="go">✨ Let's go!</button>`
+          : '<button data-welcome-action="next" class="go">Next ▶</button>') +
+        '</div>';
+    }
+
     function render() {
+      if (stop >= 0) {
+        renderTour();
+        return;
+      }
       const name = look.name || defaultName();
       const img = api.spriteUrl({ ...api.config(), ...look });
       panel.innerHTML =
@@ -123,6 +216,8 @@
           ]),
         ) +
         '<div class="food-choices welcome-actions">' +
+        '<button data-welcome-action="skip" title="Keep this look; change it any time from Customize Pet">' +
+        'Skip</button>' +
         '<button data-welcome-action="random">🎲 Surprise me</button>' +
         '<button data-welcome-action="more" title="Every option, in the Customize Pet menu">' +
         '⚙️ More options...</button>' +
@@ -160,13 +255,30 @@
         case 'more':
           api.post({ command: 'customize' });
           break;
+        case 'skip':
         case 'done':
-          panel.hidden = true;
-          api.post({ command: 'welcome-done' });
-          api.celebrate(`🎉 Say hi to ${look.name || defaultName()}!`, '#ffd23f');
+          go(0);
+          break;
+        case 'next':
+          go(Math.min(TOUR.length - 1, stop + 1));
+          break;
+        case 'back':
+          go(Math.max(0, stop - 1));
+          break;
+        case 'skip-tour':
+        case 'finish':
+          finish();
           break;
       }
     });
+
+    const replay = document.getElementById('replay-tour');
+    if (replay) {
+      replay.addEventListener('click', () => {
+        go(0);
+        panel.hidden = false;
+      });
+    }
 
     panel.addEventListener('change', (e) => {
       const input = /** @type {HTMLInputElement} */ (e.target);
@@ -193,12 +305,14 @@
         if (look.name === presets.names[look.species]) {
           look.name = '';
         }
+        glow(false);
+        stop = -1;
         render();
         panel.hidden = false;
       },
       /** The look changed elsewhere (the Customize Pet menu): follow it. */
       sync() {
-        if (panel.hidden) {
+        if (panel.hidden || stop >= 0) {
           return;
         }
         const config = api.config() || {};

@@ -41,6 +41,10 @@ describe('parseFromWebview', () => {
     [{ command: 'welcome-done' }, { command: 'welcome-done' }],
     [{ command: 'customize' }, { command: 'customize' }],
     [
+      { command: 'peon-copy', step: 2 },
+      { command: 'peon-copy', step: 2 },
+    ],
+    [
       { command: 'visit-profile', id: '2026-10-19-rusty', guest: true },
       { command: 'visit-profile', id: '2026-10-19-rusty', guest: true },
     ],
@@ -88,6 +92,9 @@ describe('parseFromWebview', () => {
     null,
     undefined,
     'ready',
+    { command: 'peon-copy', step: -1 },
+    { command: 'peon-copy', step: 1.5 },
+    { command: 'peon-copy', step: '1' },
     42,
     [],
     {},

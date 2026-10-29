@@ -9,10 +9,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-28
+
 ### Added
 
-- 👋 A welcome screen: a new pet (a fresh install, a new save or starting over) opens by picking its species, name, fur and eye colour, pattern and accessory, with a live preview, 🎲 Surprise me, and ⚙️ More options... for the full Customize Pet menu.
+- 👋 A welcome screen: a new pet (a fresh install, a new save or starting over) opens by picking its species, name, fur and eye colour, pattern and accessory, with a live preview, 🎲 Surprise me, and ⚙️ More options... for the full Customize Pet menu. **Skip** keeps the look as it is.
+- 🎓 A short tutorial after it: six stops that light up each corner button in turn (care, toys, levels, home, settings), with Back, Next and **Skip tutorial**. Replay it any time from ⚙️ **🎓 Replay the tour**.
 - 🔄 **Start over...** in the 🏠 strip's Profiles row: back to level 1 and the welcome screen. A save with progress can be kept as a profile to visit, or left out of the house menu.
+- 🔔 ⚙️ **Other agents (peon-ping)**: shows whether peon-ping is installed, with step-by-step install and uninstall commands for your OS (📋 copy buttons; the installer is saved to a file to read before it runs) and what peon-ping itself sends off the machine.
+- 🔒 A test that keeps Pet Agents offline: no network or process modules, no fetches, no runtime dependencies, a locked-down webview and no addresses but the share intents and the peon-ping guide.
+- 🧪 A first-run test: a fresh install with this week's transcripts fills the records board and starts at level 1 with no XP.
 
 ### Fixed
 

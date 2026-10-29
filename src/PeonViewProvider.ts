@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { BAG_LEVELS, bagsUnlocked } from './bags';
+import type { PeonGuide } from './peon-guide';
 import { COLOR_PRESETS, DEFAULT_NAMES, EYE_PRESETS, PetConfig } from './pet-config';
 import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
@@ -43,6 +44,10 @@ export interface PetViewDeps {
   saveSetting: (key: string, value: unknown) => Thenable<void>;
   /** Opens the full Customize Pet menu. */
   customize: () => void;
+  /** The settings panel's peon-ping guide, with whether it is installed. */
+  peonGuide: () => PeonGuide;
+  /** Copies a guide command for the user to paste into a terminal. */
+  copy: (text: string) => void;
   log: PetLog;
 }
 
@@ -235,6 +240,13 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       case 'customize':
         this.deps.customize();
         break;
+      case 'peon-copy': {
+        const command = this.deps.peonGuide().steps[message.step]?.command;
+        if (command) {
+          this.deps.copy(command);
+        }
+        break;
+      }
       case 'visit-profile': {
         const p = profiles.load(message.id, message.guest);
         if (p) {
@@ -348,6 +360,7 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
     post(webview, { command: 'progress-update', ...this.deps.progress.snapshot() });
     post(webview, { command: 'house', layout: this.deps.house.get() });
     this.sendProfiles(webview);
+    post(webview, { command: 'peon', ...this.deps.peonGuide() });
     if (this.deps.progress.firstFinish()) {
       this.sendFinish(webview);
     }

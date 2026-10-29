@@ -2455,6 +2455,9 @@
         }
         break;
       }
+      case 'peon':
+        panels.setPeon(msg);
+        break;
       case 'profiles':
         panels.setProfiles(Array.isArray(msg.profiles) ? msg.profiles : []);
         break;

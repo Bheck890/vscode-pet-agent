@@ -17,7 +17,7 @@ A VS Code extension (`NorthPandaLabs.pet-agents`, display name **Pet Agents**) t
   - `protocol.ts` every message both ways (`FromWebview` / `ToWebview`) and their validation
   - `webview-html.ts` page HTML + CSP; `media-files.ts` reads the script list from `media/webview.html`
   - `transcript-tail.ts` reads appended JSONL lines; `transcript-parser.ts` lines -> pet state (`PET_STATES`); `claude-watcher.ts` picks which sessions and sub-agents to show
-  - `state-watcher.ts` + `session-tracker.ts` peon-ping polling
+  - `state-watcher.ts` + `session-tracker.ts` peon-ping polling; `peon-guide.ts` its state file path and the settings panel's install guide
   - `storage.ts` the globalState interface and `scoped()`, which keys each store's data by save slot; `slot.ts` the current save (`petSlot`); stores: `pet-care.ts`, `bag-store.ts` (+ active bag), `records-store.ts` (not slot-scoped), `progress-store.ts`, `house-store.ts` (many houses, room by room; all merge across windows)
   - Bags and saves (`docs/Plans/Bags.md`, `docs/Plans/Profiles.md`, both built): `bags.ts` the bag ladder (`BAG_LEVELS`, house room ids, `FINISH_LEVEL`); `profiles.ts` profile files, the index, new saves, friends; `move-file.ts` the `.petsave` format and its crypto; `save-flows.ts` the user journeys behind a `PetUi` (VS Code's is `ui.ts`)
   - Games (`docs/Plans/Roadmap.md`): `calendar.ts` holidays/weeks; `turn-tracker.ts` + `records*.ts` weekly prompt records and backfill; `progress*.ts` XP facts, levels, challenges; `games.ts` wires watcher events into them
@@ -44,6 +44,7 @@ npm run install:vscode  # package and install into local VS Code, then Developer
 - Keep `media/pets.js` ACCESSORIES/PATTERNS/STYLES, `src/pet-config.ts` and the `package.json` enums in sync (tests enforce it). Likewise `src/bags.ts` with `scene.js` BAGS and `house.js` HOUSES (bag ids, room ids, holiday toys).
 - Toy, furniture and theme ids are global (`/^[a-z]+$/`). Shop unlock ids are `kind.id` for the starter bag and `bag.kind.id` for the others (`PetVariants.unlockId`).
 - Save messages from the view (`save-state`, `house-save`, `bag-switch`) carry the slot; anything else that writes per-save data must go through the slot-scoped stores. New settings must be read in `readPetConfig` and documented in the README settings table (tests enforce it).
+- Offline: no network or process modules, no fetches, no runtime dependencies, no new URLs (`offline.test.ts`). Sharing only opens the browser on a click.
 - ASCII only in code and comments; emoji only inside user-facing strings (`encoding.test.ts`).
 - New webview message: add it to `protocol.ts` (and its test) first. New webview script: one `<!--MEDIA:x.js-->` line in `webview.html`, nothing else.
 - Every commit is tested in full by `.github/workflows/ci.yml`; keep it green and add tests with each feature.

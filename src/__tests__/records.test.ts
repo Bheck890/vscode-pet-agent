@@ -1,10 +1,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { connectGames } from '../games';
+import { ProgressService } from '../progress-service';
+import { ProgressStore } from '../progress-store';
 import { CATEGORIES, bestOf, beats, counts, formatDuration, totals } from '../records';
 import { RecordsService } from '../records-service';
 import { RecordsStore, parseTurn } from '../records-store';
-import type { Storage } from '../storage';
+import { Slots } from '../slot';
+import { Storage, scoped } from '../storage';
 import { TurnRecord, applyTurnLine, createTurnTracker } from '../turn-tracker';
 
 function memory(): Storage & { data: Record<string, unknown> } {
@@ -327,6 +331,40 @@ describe('RecordsService', () => {
     expect(await service.backfill(dir)).toBe(2);
     expect(store.turns()).toHaveLength(2);
     expect(await service.backfill(dir)).toBe(0);
+  });
+
+  it('a fresh install fills the board from older prompts but starts at level 1 with no XP', async () => {
+    // Wired like extension.ts, on empty storage: the first start on a new machine.
+    const storage = memory();
+    let now = NOW;
+    const slots = new Slots(
+      storage,
+      () => now,
+      () => 'Rusty',
+    );
+    const store = new ProgressStore(scoped(storage, () => slots.current().id));
+    const progress = new ProgressService(
+      store,
+      () => now,
+      () => slots.current(),
+    );
+    const records = new RecordsService(new RecordsStore(storage), storage, () => now);
+    connectGames({ onEvent: () => ({ dispose: () => undefined }) }, records, progress);
+    expect(progress.needsWelcome()).toBe(true);
+
+    writeTranscript('proj', 'sess', [prompt('p1', 'go', 0), toolUse(1000), endTurn(9000)]);
+    fs.utimesSync(path.join(dir, 'proj', 'sess.jsonl'), NOW, NOW);
+    expect(await records.backfill(dir)).toBe(1);
+    expect(records.snapshot(false).records.length).toBeGreaterThan(0);
+    expect(progress.snapshot()).toMatchObject({ level: 1, xp: 0 });
+    expect(progress.needsWelcome()).toBe(true);
+
+    // A prompt after the pet arrived earns XP as normal.
+    now = new Date(NOW.getTime() + 2 * 60 * 60 * 1000);
+    const later = (ms: number) => new Date(NOW.getTime() + 60 * 60 * 1000 + ms).toISOString();
+    records.line('s2', { ...prompt('p2', 'next', 0), timestamp: later(0) });
+    records.line('s2', { ...endTurn(5000), timestamp: later(5000) });
+    expect(progress.snapshot().xp).toBeGreaterThan(0);
   });
 
   it('skips transcripts untouched this week and copes with a missing folder', async () => {

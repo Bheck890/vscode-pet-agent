@@ -245,8 +245,8 @@ describe('ProgressService', () => {
     const { svc, store } = service();
     svc.agentDone('a1');
     svc.agentDone('a1');
-    svc.record('busiest');
-    svc.record('busiest');
+    svc.record('busiest', NOW.getTime());
+    svc.record('busiest', NOW.getTime());
     expect(store.total()).toBe(XP.agent + XP.record);
   });
 
@@ -341,8 +341,8 @@ describe('finishing and saves', () => {
     const t = turn({ promptId: 'a', actions: 4, startedAt: NOW.getTime() - 3600000 });
     svc.turns([t]);
     svc.turns([t]);
-    svc.record('marathon');
-    svc.record('marathon');
+    svc.record('marathon', NOW.getTime());
+    svc.record('marathon', NOW.getTime());
     expect(store.lifetime()).toEqual({ prompts: 1, actions: 4, agentMs: 3600000, records: 1 });
   });
 

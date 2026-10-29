@@ -5,6 +5,7 @@ const FACTS_KEY = 'petXp';
 const BANK_KEY = 'petXpBanked';
 const LIFETIME_KEY = 'petLifetime';
 const FINISH_SEEN_KEY = 'petFinishSeen';
+const WELCOMED_KEY = 'petWelcomed';
 
 /** Running totals for the finish card; facts are folded away after a month or two. */
 export interface Lifetime {
@@ -126,6 +127,15 @@ export class ProgressStore {
 
   markFinishSeen(): void {
     void this.storage.update(FINISH_SEEN_KEY, true);
+  }
+
+  /** The welcome screen was done for this save (the pet was picked). */
+  welcomed(): boolean {
+    return this.storage.get(WELCOMED_KEY) === true;
+  }
+
+  markWelcomed(): void {
+    void this.storage.update(WELCOMED_KEY, true);
   }
 
   lifetime(): Lifetime {

@@ -126,10 +126,13 @@ export class ProgressService {
     this.add(`agent:${agentId}`, { xp: XP.agent, kind: 'agent', at: this.now().getTime() });
   }
 
-  /** A weekly record category taken this week. */
-  record(category: string): void {
+  /**
+   * A weekly record category taken this week by turns that finished at `at`;
+   * one taken by turns from before the save started earns nothing.
+   */
+  record(category: string, at: number): void {
     const now = this.now();
-    const fact = { xp: XP.record, kind: 'record', at: now.getTime() };
+    const fact = { xp: XP.record, kind: 'record', at };
     if (this.add(`record:${weekId(now)}:${category}`, fact)) {
       this.store.addLifetime({ records: 1 });
     }
@@ -190,6 +193,15 @@ export class ProgressService {
     }
     this.store.markFinishSeen();
     return true;
+  }
+
+  /** A save that has neither picked its pet nor earned anything yet opens with the welcome screen. */
+  needsWelcome(): boolean {
+    return !this.store.welcomed() && this.store.total() === 0;
+  }
+
+  welcomed(): void {
+    this.store.markWelcomed();
   }
 
   snapshot(): ProgressUpdate {

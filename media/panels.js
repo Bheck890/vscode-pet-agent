@@ -607,6 +607,8 @@
         api.endVisit();
       } else if (what === 'import') {
         api.post({ command: 'profile-import' });
+      } else if (what === 'start-over') {
+        api.post({ command: 'start-over' });
       } else if (what === 'hidden') {
         showHidden = !showHidden;
       } else if (profile) {
@@ -941,6 +943,10 @@
         '<span class="group">Profiles:</span>' +
         `<button data-profiles="home"${v ? '' : ' class="active"'}` +
         ` title="The save you are playing">🏠 ${escapeHtml(api.homeName())}</button>` +
+        (v
+          ? ''
+          : '<button data-profiles="start-over" title="Pick your pet again, back at level 1">' +
+            '🔄 Start over...</button>') +
         own.map(button).join('') +
         (friends.length > 0
           ? '<span class="group">👋 Friends:</span>' + friends.map(button).join('')

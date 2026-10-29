@@ -137,6 +137,7 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     'finish-panel',
     'finish-body',
     'finish-actions',
+    'welcome-panel',
   ]) {
     elements[id] = fakeEl();
   }
@@ -1717,6 +1718,50 @@ describe('bags, houses and saves in the view', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('offers to start over from the Profiles row, but not while visiting', () => {
+    const h = start();
+    click(h.elements['house-toggle']);
+    h.send({ command: 'profiles', profiles: [] });
+    expect(h.elements['house-profiles'].innerHTML).toContain('🔄 Start over...');
+    click(h.elements['house-profiles'], { profiles: 'start-over' });
+    expect(sent(h, 'start-over')).toHaveLength(1);
+    h.send({ command: 'profile', profile: PROFILE });
+    expect(h.elements['house-profiles'].innerHTML).not.toContain('Start over');
+  });
+
+  it('a new save picks its pet on the welcome screen, saving each pick', () => {
+    const h = start();
+    const panel = h.elements['welcome-panel'];
+    expect(panel.hidden).toBe(true);
+    h.send({
+      command: 'welcome',
+      colors: [{ label: 'Mint', color: '#5cc9a7' }],
+      eyes: [{ label: 'Black', color: '' }],
+      names: { cat: 'Mochi', dog: 'Biscuit', bird: 'Pip', fox: 'Rusty' },
+    });
+    expect(panel.hidden).toBe(false);
+    expect(panel.innerHTML).toContain('<b>Rusty</b> the fox');
+    expect(panel.innerHTML).toContain('placeholder="Rusty"');
+    click(panel, { welcome: 'species', value: 'cat' });
+    expect(panel.innerHTML).toContain('<b>Mochi</b> the cat');
+    click(panel, { welcome: 'color', value: '#5cc9a7' });
+    expect(sent(h, 'setting')).toEqual([
+      { command: 'setting', key: 'species', value: 'cat' },
+      { command: 'setting', key: 'name', value: '' },
+      { command: 'setting', key: 'color', value: '#5cc9a7' },
+    ]);
+    panel.listeners['change'].forEach((l) =>
+      l({ target: { id: 'welcome-name', value: ' Noodle ' } }),
+    );
+    expect(sent(h, 'setting').pop()).toEqual({ command: 'setting', key: 'name', value: 'Noodle' });
+    expect(panel.innerHTML).toContain('✨ Start with Noodle');
+    click(panel, { welcomeAction: 'more' });
+    expect(sent(h, 'customize')).toHaveLength(1);
+    click(panel, { welcomeAction: 'done' });
+    expect(panel.hidden).toBe(true);
+    expect(sent(h, 'welcome-done')).toHaveLength(1);
   });
 
   it('lists this save, then earlier saves, then friends in the house menu', () => {

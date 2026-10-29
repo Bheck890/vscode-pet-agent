@@ -110,6 +110,7 @@ export function activate(context: vscode.ExtensionContext): void {
     flows,
     visitors,
     saveSetting,
+    customize: () => void customizePet(),
     log,
   });
 

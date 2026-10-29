@@ -192,8 +192,36 @@ function actionIds(v: unknown): string[] | null {
     : null;
 }
 
+const COLOUR_KEYS = ['color', 'accentColor', 'eyeColor', 'accessoryColor'];
+const LOOK_SETTINGS = ['species', 'name', 'pattern', 'accessory', ...COLOUR_KEYS];
+
+/** The welcome screen's look changes; '' (or 'none') resets to the default. */
+function lookSetting(key: string, v: unknown): [string, unknown] | null {
+  if (typeof v !== 'string') {
+    return null;
+  }
+  const reset = (ok: boolean): [string, unknown] | null =>
+    ok ? [key, v.trim() === '' || v === 'none' ? undefined : v.trim()] : null;
+  if (key === 'species') {
+    return isSpecies(v) ? [key, v] : null;
+  }
+  if (key === 'name') {
+    return reset(v.trim().length <= 40);
+  }
+  if (key === 'pattern') {
+    return reset((PATTERNS as readonly string[]).includes(v));
+  }
+  if (key === 'accessory') {
+    return reset((ACCESSORIES as readonly string[]).includes(v));
+  }
+  return COLOUR_KEYS.includes(key) ? reset(/^[#a-zA-Z0-9(),.% ]{0,40}$/.test(v)) : null;
+}
+
 /** Validates a change made in the webview's settings panel and returns the setting to save, or null. */
 export function panelSetting(key: unknown, on: unknown): [string, unknown] | null {
+  if (typeof key === 'string' && LOOK_SETTINGS.includes(key)) {
+    return lookSetting(key, on);
+  }
   if (key === 'disabledActions') {
     const ids = actionIds(on);
     return ids ? [key, ids] : null;

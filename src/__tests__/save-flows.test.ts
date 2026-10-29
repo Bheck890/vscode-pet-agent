@@ -94,11 +94,51 @@ describe('new save', () => {
   });
 });
 
+describe('starting over', () => {
+  it('starts straight over when there is nothing to lose', async () => {
+    const t = setup();
+    const slot = t.slots.current().id;
+    await t.flows.startOver();
+    expect(t.ui.choose).not.toHaveBeenCalled();
+    expect(t.slots.current().id).not.toBe(slot);
+    expect(t.profiles.list()).toHaveLength(0);
+    expect(t.saveChanged).toHaveBeenCalled();
+  });
+
+  it('keeps the old save as a profile, or leaves it out, as asked', async () => {
+    const keep = setup();
+    keep.progress.agentDone('a1');
+    await keep.flows.startOver();
+    expect(keep.profiles.list()).toHaveLength(1);
+    expect(keep.stores.progress.total()).toBe(0);
+
+    const drop = setup({ choose: "Start over without keeping Rusty's save" });
+    drop.progress.agentDone('a1');
+    await drop.flows.startOver();
+    expect(drop.profiles.list()).toHaveLength(0);
+    expect(drop.stores.progress.total()).toBe(0);
+  });
+
+  it('changes nothing when cancelled', async () => {
+    const t = setup({ choose: '' });
+    t.progress.agentDone('a1');
+    const slot = t.slots.current().id;
+    await t.flows.startOver();
+    expect(t.slots.current().id).toBe(slot);
+    expect(t.saveChanged).not.toHaveBeenCalled();
+  });
+});
+
 describe('sharing', () => {
   it('shares numbers only: no prompt text, file names or repo names', async () => {
     const t = setup();
-    t.records.add([turn()], new Date(2026, 9, 19, 12));
-    t.progress.turns([turn()]);
+    // After the save started (12:00), so it counts.
+    const t1 = turn({
+      startedAt: new Date(2026, 9, 19, 12).getTime(),
+      endedAt: new Date(2026, 9, 19, 13).getTime(),
+    });
+    t.records.add([t1], new Date(2026, 9, 19, 13));
+    t.progress.turns([t1]);
     const text = t.flows.summaryText(412);
     expect(text).toContain('Rusty the fox');
     expect(text).toContain('1 prompts - 3 actions');

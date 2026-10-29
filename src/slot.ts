@@ -73,8 +73,14 @@ export class Slots {
     if (slot) {
       return slot;
     }
-    // The first save keeps everything earned so far, so it counts facts from any time.
-    const first = { id: slotId(this.petName(), this.now(), () => false), startedAt: 0 };
+    // Data from before there were saves keeps everything earned, so it counts facts from any time.
+    // A fresh install counts from now: older transcripts must not level up a brand-new pet.
+    const legacy = SLOT_KEYS.some((key) => this.storage.get(key) !== undefined);
+    const now = this.now();
+    const first = {
+      id: slotId(this.petName(), now, () => false),
+      startedAt: legacy ? 0 : now.getTime(),
+    };
     for (const key of SLOT_KEYS) {
       const old = this.storage.get(key);
       if (old !== undefined && this.storage.get(`${key}:${first.id}`) === undefined) {

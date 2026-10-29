@@ -125,6 +125,26 @@ describe('readPetConfig', () => {
 });
 
 describe('panelSetting', () => {
+  it("accepts the welcome screen's look changes; empty or 'none' resets to the default", () => {
+    expect(panelSetting('species', 'cat')).toEqual(['species', 'cat']);
+    expect(panelSetting('name', '  Noodle ')).toEqual(['name', 'Noodle']);
+    expect(panelSetting('name', '')).toEqual(['name', undefined]);
+    expect(panelSetting('color', '#e8772e')).toEqual(['color', '#e8772e']);
+    expect(panelSetting('eyeColor', '')).toEqual(['eyeColor', undefined]);
+    expect(panelSetting('pattern', 'socks')).toEqual(['pattern', 'socks']);
+    expect(panelSetting('accessory', 'none')).toEqual(['accessory', undefined]);
+    for (const [key, value] of [
+      ['species', 'dragon'],
+      ['name', 'x'.repeat(41)],
+      ['color', 'red;}<script>'],
+      ['pattern', 'plaid'],
+      ['accessory', 'cape'],
+      ['species', 3],
+    ]) {
+      expect(panelSetting(key, value)).toBeNull();
+    }
+  });
+
   it('accepts the game switches from the panel', () => {
     for (const key of [
       'holidays',

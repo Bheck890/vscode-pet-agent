@@ -58,6 +58,9 @@ export type FromWebview =
   | { command: 'found'; bag: string; toy: string }
   | { command: 'collection'; complete: Completion }
   | { command: 'new-save' }
+  | { command: 'start-over' }
+  | { command: 'welcome-done' }
+  | { command: 'customize' }
   | { command: 'visit-profile'; id: string; guest: boolean }
   | { command: 'profile-rename'; id: string; guest: boolean }
   | { command: 'profile-hide'; id: string; guest: boolean; hidden: boolean }
@@ -98,6 +101,12 @@ export type ToWebview =
   | { command: 'profiles'; profiles: ProfileEntry[] }
   | { command: 'profile'; profile: VisitProfile }
   | { command: 'finished'; summary: FinishSummary; finished: boolean }
+  | {
+      command: 'welcome';
+      colors: Array<{ label: string; color: string }>;
+      eyes: Array<{ label: string; color: string }>;
+      names: Record<string, string>;
+    }
   | ({ command: 'visitor' } & Visitor);
 
 export function isWebviewState(value: unknown): value is WebviewState {
@@ -146,6 +155,9 @@ export function parseFromWebview(msg: unknown): FromWebview | null {
     case 'ready':
     case 'refresh':
     case 'new-save':
+    case 'start-over':
+    case 'welcome-done':
+    case 'customize':
     case 'profile-import':
     case 'finish-open':
     case 'move-out':

@@ -9,6 +9,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- 👋 A welcome screen: a new pet (a fresh install, a new save or starting over) opens by picking its species, name, fur and eye colour, pattern and accessory, with a live preview, 🎲 Surprise me, and ⚙️ More options... for the full Customize Pet menu.
+- 🔄 **Start over...** in the 🏠 strip's Profiles row: back to level 1 and the welcome screen. A save with progress can be kept as a profile to visit, or left out of the house menu.
+
+### Fixed
+
+- A fresh install starts at level 1. It used to count this week's earlier Claude Code prompts as XP and could open several levels up; they still fill the records board, but only prompts from after the pet arrives earn XP.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added

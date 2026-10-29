@@ -125,6 +125,40 @@ export class SaveFlows {
     this.deps.saveChanged();
   }
 
+  /**
+   * Back to level 1 and the welcome screen, to pick the pet again. A save
+   * with progress can be kept as a profile or left out of the house menu.
+   */
+  async startOver(): Promise<void> {
+    const { ui, profiles, look } = this.deps;
+    const name = look().name;
+    let keep = false;
+    if (profiles.hasProgress()) {
+      const KEEP = `Keep ${name}'s save as a profile to visit`;
+      const DROP = `Start over without keeping ${name}'s save`;
+      const pick = await ui.choose(
+        `Start over at level 1? Your prompt records and settings stay.`,
+        [KEEP, DROP],
+      );
+      if (!pick) {
+        return;
+      }
+      keep = pick === KEEP;
+    }
+    try {
+      if (keep) {
+        profiles.startNewSave(this.finished());
+      } else {
+        profiles.startOver();
+      }
+    } catch (err) {
+      this.fail('Starting over', err);
+      return;
+    }
+    this.deps.log.info(keep ? 'Started over, keeping the old save' : 'Started over');
+    this.deps.saveChanged();
+  }
+
   /** The text for sharing. `toyTotal` is the webview's catalogue size. */
   summaryText(toyTotal: number): string {
     const { profiles } = this.deps;

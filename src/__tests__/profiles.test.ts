@@ -21,6 +21,34 @@ describe('slots', () => {
     expect(stores.progress.total()).toBe(10);
   });
 
+  it('starts a fresh install from now, so older prompts earn nothing', () => {
+    const { slots, progress, stores } = makeSave();
+    const first = slots.current();
+    expect(first).toEqual({
+      id: '2026-10-19-rusty',
+      startedAt: new Date(2026, 9, 19, 12).getTime(),
+    });
+    progress.agentDone('a1');
+    progress.turns([
+      {
+        promptId: 'last-week',
+        sessionId: 's',
+        project: null,
+        startedAt: new Date(2026, 9, 19, 9).getTime(),
+        endedAt: new Date(2026, 9, 19, 10).getTime(),
+        words: 3,
+        chars: 20,
+        actions: 2,
+        subagents: 0,
+        outputTokens: 5,
+        outcome: 'done',
+        preview: '',
+      },
+    ]);
+    progress.record('busiest', new Date(2026, 9, 19, 10).getTime());
+    expect(stores.progress.total()).toBe(5);
+  });
+
   it('makes readable ids that never clash', () => {
     const day = new Date(2026, 0, 2);
     expect(slotId('Mr. Biscuit!', day, () => false)).toBe('2026-01-02-mr-biscuit');
@@ -50,6 +78,18 @@ describe('profiles', () => {
     s.progress.agentDone('a1');
     return s;
   }
+
+  it('starts over without keeping the save as a profile; holiday toys come along', () => {
+    const s = played();
+    const old = s.slots.current().id;
+    s.profiles.startOver();
+    expect(s.slots.current().id).not.toBe(old);
+    expect(s.profiles.list()).toHaveLength(0);
+    expect(fs.readdirSync(s.dir)).toHaveLength(0);
+    expect(s.stores.bag.get()).toEqual({ pumpkin: 1 });
+    expect(s.stores.progress.total()).toBe(0);
+    expect(s.storage.data[`petBag:${old}`]).toEqual({ yarn: 4, pumpkin: 1, sunflower: 2 });
+  });
 
   it('archives the save to a file that parses back the same', () => {
     const { profiles, dir, slots } = played();
@@ -201,7 +241,7 @@ describe('profiles', () => {
         sessionId: 's',
         project: 'my-secret-repo',
         startedAt: 1,
-        endedAt: new Date(2026, 9, 19, 11).getTime(),
+        endedAt: new Date(2026, 9, 19, 13).getTime(),
         words: 3,
         chars: 20,
         actions: 2,

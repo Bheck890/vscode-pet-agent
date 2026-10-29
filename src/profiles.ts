@@ -479,19 +479,29 @@ export class Profiles {
    */
   startNewSave(finished: boolean, moved = false): ProfileFile {
     const old = this.archive(finished, moved);
+    this.freshSlot(old.id, old.bag.found);
+    return old;
+  }
+
+  /**
+   * Starts again at level 1 without keeping the current save as a profile,
+   * for a start that went wrong. Its data stays in storage, just unlisted.
+   */
+  startOver(): void {
+    this.freshSlot(this.deps.slots.current().id, this.deps.stores.bag.get());
+  }
+
+  private freshSlot(oldId: string, found: Record<string, number>): void {
     const now = this.deps.now();
-    const taken = new Set([old.id, ...this.entries().map((e) => e.id)]);
+    const taken = new Set([oldId, ...this.entries().map((e) => e.id)]);
     this.deps.slots.start({
       id: slotId(this.deps.look().name, now, (id) => taken.has(id)),
       startedAt: now.getTime(),
     });
-    const holiday = Object.fromEntries(
-      Object.entries(old.bag.found).filter(([id]) => isEventToy(id)),
-    );
+    const holiday = Object.fromEntries(Object.entries(found).filter(([id]) => isEventToy(id)));
     if (Object.keys(holiday).length > 0) {
       this.deps.stores.bag.save(holiday);
     }
-    return old;
   }
 
   private update(id: string, guest: boolean, change: (e: ProfileEntry) => ProfileEntry): void {

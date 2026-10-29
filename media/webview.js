@@ -17,6 +17,7 @@
     !window.PetEnemies ||
     !window.PetHouse ||
     !window.PetFinish ||
+    !window.PetWelcome ||
     !window.PetVisitors
   ) {
     acquireVsCodeApi().postMessage({
@@ -2396,6 +2397,7 @@
           home.config = msg.config;
         } else {
           applyConfig(msg.config);
+          welcome.sync();
         }
         break;
       case 'peon-event': {
@@ -2467,6 +2469,9 @@
         break;
       case 'finished':
         finish.show(msg.summary, !!msg.finished);
+        break;
+      case 'welcome':
+        welcome.show(msg);
         break;
       case 'care-update':
         if (visit) {
@@ -2864,6 +2869,14 @@
       main && config
         ? petSprite({ color: baseColor(), tint: '', eyes: 'happy', mouth: 'smile' })
         : null,
+  });
+
+  const welcome = window.PetWelcome.create({
+    post: (msg) => vscodeApi.postMessage(msg),
+    escapeHtml,
+    config: () => config,
+    spriteUrl,
+    celebrate,
   });
 
   const spriteUrls = new Map();

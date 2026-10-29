@@ -14,7 +14,8 @@ export function connectGames(
   return [
     records.onTurns((turns, broken) => {
       progress.turns(turns);
-      broken.forEach((category) => progress.record(category));
+      const at = Math.max(...turns.map((t) => t.endedAt));
+      broken.forEach((category) => progress.record(category, at));
     }),
     watcher.onEvent((e) => {
       switch (e.kind) {

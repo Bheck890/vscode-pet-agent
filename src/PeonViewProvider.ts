@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { BAG_LEVELS, bagsUnlocked } from './bags';
-import { PetConfig } from './pet-config';
+import { COLOR_PRESETS, DEFAULT_NAMES, EYE_PRESETS, PetConfig } from './pet-config';
 import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
 import { CareStore } from './pet-care';
@@ -41,6 +41,8 @@ export interface PetViewDeps {
   /** Told when you look after the pet, which puts off the next visitor. */
   visitors: Visitors;
   saveSetting: (key: string, value: unknown) => Thenable<void>;
+  /** Opens the full Customize Pet menu. */
+  customize: () => void;
   log: PetLog;
 }
 
@@ -132,6 +134,14 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       post(webview, { command: 'claude-update', ...latest });
     }
     this.syncShared();
+    if (this.deps.progress.needsWelcome()) {
+      post(webview, {
+        command: 'welcome',
+        colors: COLOR_PRESETS,
+        eyes: EYE_PRESETS,
+        names: DEFAULT_NAMES,
+      });
+    }
   }
 
   /** True if a save message is for the save being played; otherwise the view is re-started. */
@@ -215,6 +225,15 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       }
       case 'new-save':
         void flows.newSave();
+        break;
+      case 'start-over':
+        void flows.startOver();
+        break;
+      case 'welcome-done':
+        this.deps.progress.welcomed();
+        break;
+      case 'customize':
+        this.deps.customize();
         break;
       case 'visit-profile': {
         const p = profiles.load(message.id, message.guest);

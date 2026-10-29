@@ -196,6 +196,7 @@ function setup(
     profilesChanged: refresh,
   });
   const visitors = new Visitors(gameStorage, stores.care, () => []);
+  const customize = jest.fn();
   const provider = new PeonViewProvider({
     mediaPath: MEDIA,
     peon: watchers.peon,
@@ -210,6 +211,7 @@ function setup(
     flows,
     visitors,
     saveSetting,
+    customize,
     log,
   });
   const v = fakeView();
@@ -236,6 +238,7 @@ function setup(
     ui,
     dir,
     refresh,
+    customize,
   };
 }
 
@@ -603,6 +606,34 @@ describe('bags and saves in the view', () => {
     slots.start({ id: 'elsewhere', startedAt: 5 });
     provider.syncShared();
     expect(v.webview.html).toContain('Content-Security-Policy');
+  });
+
+  it('opens a new save with the welcome screen until the pet is picked', () => {
+    const { v } = setup();
+    v.send({ command: 'ready' });
+    expect(v.last('welcome')).toMatchObject({ names: { cat: 'Mochi' } });
+    v.posted.length = 0;
+    v.send({ command: 'welcome-done' });
+    v.send({ command: 'ready' });
+    expect(v.last('welcome')).toBeUndefined();
+  });
+
+  it('skips the welcome screen for a save that has earned XP', () => {
+    const { v, progress } = setup();
+    progress.agentDone('a');
+    v.send({ command: 'ready' });
+    expect(v.last('welcome')).toBeUndefined();
+  });
+
+  it('opens the Customize Pet menu and starts over when asked', async () => {
+    const { v, customize, slots, refresh } = setup();
+    v.send({ command: 'customize' });
+    expect(customize).toHaveBeenCalled();
+    const slot = slots.current().id;
+    v.send({ command: 'start-over' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(slots.current().id).not.toBe(slot);
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('shows the finish screen once, at the finish level, then on asking', () => {

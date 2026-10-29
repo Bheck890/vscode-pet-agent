@@ -37,6 +37,9 @@ describe('parseFromWebview', () => {
       { command: 'found', bag: 'ocean', toy: 'crab' },
     ],
     [{ command: 'new-save', extra: 1 }, { command: 'new-save' }],
+    [{ command: 'start-over' }, { command: 'start-over' }],
+    [{ command: 'welcome-done' }, { command: 'welcome-done' }],
+    [{ command: 'customize' }, { command: 'customize' }],
     [
       { command: 'visit-profile', id: '2026-10-19-rusty', guest: true },
       { command: 'visit-profile', id: '2026-10-19-rusty', guest: true },

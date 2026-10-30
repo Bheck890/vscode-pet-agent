@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import { NEW_SAVE_LEVEL } from './bags';
 import {
   MIN_PASSWORD,
   MOVE_MAX_BYTES,
@@ -106,9 +107,37 @@ export class SaveFlows {
     this.deps.ui.error(`Pet Agents: ${what} failed. Nothing was changed.`);
   }
 
+  /**
+   * Why this save can't be kept as a new profile yet, or '' if it can: it
+   * takes level 100 and, for a pet, the 💯 collection (helpers have no bags).
+   */
+  private notReady(): string {
+    const level = this.deps.progress.snapshot().level;
+    const helper = this.deps.companion() === 'helper';
+    if (level >= NEW_SAVE_LEVEL && (helper || this.deps.profiles.completion() === 'all')) {
+      return '';
+    }
+    return helper
+      ? `New saves open at level ${NEW_SAVE_LEVEL} (this one is level ${level}).`
+      : `New saves open at level ${NEW_SAVE_LEVEL} with the 💯 collection, every toy and shop ` +
+          `item from every bag (this one is level ${level}).`;
+  }
+
+  /** Keeping the save as a profile makes nothing new if it already is one (it was switched back to). */
+  private canKeep(): boolean {
+    return !this.notReady() || this.deps.profiles.load(this.deps.slots.current().id) !== null;
+  }
+
   async newSave(): Promise<void> {
     const { ui, profiles, look } = this.deps;
     const name = look().name;
+    const reason = this.notReady();
+    if (reason) {
+      ui.info(
+        `Pet Agents: ${reason} Until then, 🔄 Start over can begin again without keeping this save.`,
+      );
+      return;
+    }
     const ok = await ui.confirm(
       `Start a new save?`,
       `${name}'s save will be stored as a profile you can visit from the house menu. ` +
@@ -139,9 +168,11 @@ export class SaveFlows {
     if (profiles.hasProgress()) {
       const KEEP = `Keep ${name}'s save as a profile to visit`;
       const DROP = `Start over without keeping ${name}'s save`;
+      const can = this.canKeep();
       const pick = await ui.choose(
-        `Start over at level 1? Your prompt records and settings stay.`,
-        [KEEP, DROP],
+        `Start over at level 1? Your prompt records and settings stay.` +
+          (can ? '' : ` ${this.notReady()}`),
+        can ? [KEEP, DROP] : [DROP],
       );
       if (!pick) {
         return;
@@ -159,6 +190,93 @@ export class SaveFlows {
       return;
     }
     this.deps.log.info(keep ? 'Started over, keeping the old save' : 'Started over');
+    this.deps.saveChanged();
+  }
+
+  /**
+   * Goes back to an old save (`id`, or one picked from a list) and carries
+   * on where it left off. The save being played is kept as a profile or left
+   * out of the house menu, as asked; its data stays either way. A helper's
+   * save switches to the helper, a pet's to the pet. Saves moved to another
+   * computer stay there, so two copies can't drift apart.
+   */
+  async playSave(id?: string): Promise<void> {
+    const { profiles, ui } = this.deps;
+    const saves = profiles.list({ hidden: true }).filter((p) => !p.guest);
+    let entry = id === undefined ? undefined : saves.find((p) => p.id === id);
+    if (id === undefined) {
+      const playable = saves.filter((p) => !p.moved);
+      if (playable.length === 0) {
+        ui.info('Pet Agents: there are no other saves to switch to yet.');
+        return;
+      }
+      const labels = playable.map(
+        (p) =>
+          `${p.pet.name} the ${p.pet.species} - level ${p.summary.level} - ${p.name}` +
+          (p.finished ? ' 🏁' : ''),
+      );
+      const pick = await ui.choose('Switch to which save?', labels);
+      entry = pick === undefined ? undefined : playable[labels.indexOf(pick)];
+    }
+    if (!entry) {
+      return;
+    }
+    if (entry.moved) {
+      ui.error(
+        `Pet Agents: ${entry.pet.name} moved to another computer. Bring it back with "Bring my pet here...".`,
+      );
+      return;
+    }
+    const file = profiles.load(entry.id);
+    if (!file) {
+      ui.error("Pet Agents: that save's file is missing or damaged. Nothing was changed.");
+      return;
+    }
+    const was = this.deps.companion();
+    const mode: Companion = isHelper(file.pet.species) ? 'helper' : 'pet';
+    if (mode !== was) {
+      await this.deps.saveSetting('companion', mode);
+    }
+    const back = async () => {
+      if (mode !== was) {
+        await this.deps.saveSetting('companion', was);
+      }
+    };
+    let keep = false;
+    if (profiles.hasProgress()) {
+      const name = this.deps.look().name;
+      const KEEP = `Keep ${name}'s save as a profile to visit`;
+      const DROP = `Leave ${name}'s save out of the house menu`;
+      const can = this.canKeep();
+      const pick = await ui.choose(
+        `Switch to ${file.pet.name}'s save?` + (can ? '' : ` ${this.notReady()}`),
+        can ? [KEEP, DROP] : [DROP],
+      );
+      if (!pick) {
+        await back();
+        return;
+      }
+      keep = pick === KEEP;
+    }
+    try {
+      if (keep) {
+        profiles.archive(this.finished());
+      }
+      profiles.resume(file);
+    } catch (err) {
+      this.fail('Switching saves', err);
+      await back();
+      return;
+    }
+    for (const key of LOOK_KEYS) {
+      if (mode === 'helper' && key === 'style') {
+        continue;
+      }
+      const v = file.pet[key];
+      await this.deps.saveSetting(lookSettingKey(key, mode), v === '' ? undefined : v);
+    }
+    this.deps.log.info('Switched to an earlier save');
+    ui.info(`Pet Agents: welcome back, ${file.pet.name}!`);
     this.deps.saveChanged();
   }
 

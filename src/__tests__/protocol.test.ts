@@ -38,6 +38,11 @@ describe('parseFromWebview', () => {
     ],
     [{ command: 'new-save', extra: 1 }, { command: 'new-save' }],
     [{ command: 'start-over' }, { command: 'start-over' }],
+    [{ command: 'switch-save' }, { command: 'switch-save' }],
+    [
+      { command: 'profile-play', id: '2026-10-19-rusty' },
+      { command: 'profile-play', id: '2026-10-19-rusty' },
+    ],
     [{ command: 'welcome-done' }, { command: 'welcome-done' }],
     [{ command: 'customize' }, { command: 'customize' }],
     [
@@ -93,6 +98,7 @@ describe('parseFromWebview', () => {
     undefined,
     'ready',
     { command: 'peon-copy', step: -1 },
+    { command: 'profile-play', id: '../etc' },
     { command: 'peon-copy', step: 1.5 },
     { command: 'peon-copy', step: '1' },
     42,

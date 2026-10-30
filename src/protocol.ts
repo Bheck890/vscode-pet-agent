@@ -60,6 +60,8 @@ export type FromWebview =
   | { command: 'collection'; complete: Completion }
   | { command: 'new-save' }
   | { command: 'start-over' }
+  | { command: 'switch-save' }
+  | { command: 'profile-play'; id: string }
   | { command: 'welcome-done' }
   | { command: 'customize' }
   | { command: 'peon-copy'; step: number }
@@ -159,6 +161,7 @@ export function parseFromWebview(msg: unknown): FromWebview | null {
     case 'refresh':
     case 'new-save':
     case 'start-over':
+    case 'switch-save':
     case 'welcome-done':
     case 'customize':
     case 'profile-import':
@@ -201,6 +204,8 @@ export function parseFromWebview(msg: unknown): FromWebview | null {
       return isBagId(m['bag']) && typeof m['toy'] === 'string' && /^[a-z]+$/.test(m['toy'])
         ? { command: 'found', bag: m['bag'], toy: m['toy'] }
         : null;
+    case 'profile-play':
+      return isSlotId(m['id']) ? { command: 'profile-play', id: m['id'] } : null;
     case 'visit-profile':
     case 'profile-rename':
       return isSlotId(m['id']) ? { command: m['command'], id: m['id'], guest } : null;

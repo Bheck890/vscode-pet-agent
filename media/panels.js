@@ -676,6 +676,8 @@
         api.invite();
       } else if (what && what.startsWith('home:')) {
         api.sendHome(what.slice('home:'.length));
+      } else if (v && what === 'play') {
+        api.post({ command: 'profile-play', id: v.id });
       } else if (v && what === 'rename') {
         api.post({ command: 'profile-rename', id: v.id, guest: !!v.guest });
       } else if (v && what === 'hide') {
@@ -694,6 +696,7 @@
         share: { command: 'share-copy', toyTotal: scene.toyTotal },
         export: { command: 'profile-export', id: null },
         new: { command: 'new-save' },
+        switch: { command: 'switch-save' },
         'move-out': { command: 'move-out' },
         'move-in': { command: 'move-in' },
       };
@@ -1051,7 +1054,8 @@
       houseVisit.hidden = !v && guests.length === 0;
       houseVisit.innerHTML =
         (v
-          ? `<button data-visit="invite" title="${escapeHtml(v.pet.name)} comes to play at your house">` +
+          ? playButton(v) +
+            `<button data-visit="invite" title="${escapeHtml(v.pet.name)} comes to play at your house">` +
             `🎈 Invite over</button>` +
             (v.guest
               ? ''
@@ -1127,6 +1131,14 @@
       houseProfiles.innerHTML = collectionHtml() + profilesHtml();
     }
 
+    /** Carry on with one of your own old saves; not a friend's, and not one that moved away. */
+    function playButton(p) {
+      return p.guest || p.moved
+        ? ''
+        : `<button data-visit="play" title="Carry on with ${escapeHtml(p.pet.name)} where you left off">` +
+            '▶️ Play this save</button>';
+    }
+
     /** A helper's 🏠 strip: its old saves and friends, with no house, rooms or furniture. */
     function renderHelperProfiles() {
       houseTab = 'profiles';
@@ -1139,7 +1151,8 @@
           : '';
       houseVisit.hidden = !p;
       houseVisit.innerHTML = p
-        ? (p.guest
+        ? playButton(p) +
+          (p.guest
             ? ''
             : `<button data-visit="share" title="Share this profile with a friend">📤 Share</button>`) +
           `<button data-visit="rename">✏️ Rename</button>` +

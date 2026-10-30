@@ -250,6 +250,12 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       case 'start-over':
         void flows.startOver();
         break;
+      case 'switch-save':
+        void flows.playSave();
+        break;
+      case 'profile-play':
+        void flows.playSave(message.id);
+        break;
       case 'welcome-done':
         this.deps.progress.welcomed();
         break;

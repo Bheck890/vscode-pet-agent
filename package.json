@@ -79,6 +79,10 @@
         "title": "Pet Agents: Start a New Save"
       },
       {
+        "command": "pet-agents.switchSave",
+        "title": "Pet Agents: Switch Save..."
+      },
+      {
         "command": "pet-agents.shareProgress",
         "title": "Pet Agents: Share Progress"
       },

@@ -274,8 +274,9 @@ Rooms have a job: in a bedroom your pet naps in its bed, in a kitchen it waits b
 - **Share it.** Copy a summary, save a 1200x630 share card, or open a pre-filled post on X or Bluesky (only when you click, and `pet-agents.shareButtons` hides those buttons). Only numbers, your pet's name and look and the bags are shared: never prompt text, file names or repo names. **Pet Agents: Share Progress** does the same any time.
 - **Pick your pet.** A new pet starts at level 1 with 0 XP on a welcome screen: choose the species, name, colours, pattern and accessory (or 🎲 Surprise me), with ⚙️ More options... for everything else, or **Skip**. A six-stop tutorial of the corner buttons follows (**Skip tutorial** any time; ⚙️ **🎓 Replay the tour** brings it back). Only prompts from after the pet arrives earn XP.
 - **🔄 Start over...** from the Profiles row in the 🏠 strip if the start went wrong: back to level 1 and the welcome screen, keeping the old save as a profile or leaving it out.
-- **Start a new save** from the finish screen, ⚙️ **💾 Saves and sharing**, or **Pet Agents: Start a New Save**. Everything that belongs to the save (level, bags, purchases, houses, care) is written to a profile file and a fresh save starts at level 1. Your prompt records, settings and holiday toys carry over, and every finished save adds a 🏅 to the level panel.
+- **Start a new save** from the finish screen, ⚙️ **💾 Saves and sharing**, or **Pet Agents: Start a New Save**, once the save reaches **level 100** with the 💯 collection (every toy and shop item from every bag; a helper just needs level 100). Before that, 🔄 Start over can begin again without keeping the save. Everything that belongs to the save (level, bags, purchases, houses, care) is written to a profile file and a fresh save starts at level 1. Your prompt records, settings and holiday toys carry over, and every finished save adds a 🏅 to the level panel.
 - **Complete the collection.** The 👤 Profiles tab in the 🏠 strip has progress bars for your bag items, shop food, shop animations, room stuff (furniture, themes and rooms) and pet styles, counting every bag you've opened. Find every regular toy and the save is ✅ complete; holiday toys never count, so nobody waits for a holiday. Buy everything in every shop too and it earns 💯. The badge shows on the finish card, in your share text and next to the save in the Profiles row.
+- **Switch saves any time.** Old saves aren't locked away: **▶️ Play this save** on an old save (while visiting it, or picked in a helper's Profiles), ⚙️ **💾 Saves and sharing > 🔁 Switch to another save...**, or **Pet Agents: Switch Save...** carries on with it exactly where you left off. The save you were playing is kept as a profile (or left out of the menu, if you'd rather); nothing is deleted either way. A save moved to another computer stays there.
 - **Visit your old pets** from the **Profiles** row in the 🏠 strip. Each earlier pet is alive in its own houses, with its own toys, hobbies and style: pet it, look round, or 🎈 invite it over to play at your house as a mini pet. Visits are read-only: nothing moves, no XP, no finds, and its care stats stay as they were. 🏠 (or an agent starting work) brings you home. Profiles can be renamed and hidden.
 - **Swap profiles with friends.** **📤 Share this profile...** (or **Pet Agents: Export Profile**) writes a `.petprofile.json` with no prompts, paths or repo names. A friend adds it with **➕ Add a friend's profile...** (or **Pet Agents: Import Profile**) and it appears under 👋 Friends. Send a newer copy and it replaces the old one.
 - **Move your pet to another computer.** **🚚 Move my pet to another computer...** (or **Pet Agents: Move Pet to Another Computer**) writes a `.petsave` file with your live save, your prompt records and, if you like, your old profiles and friends. Give it a password and the file is encrypted (scrypt and AES-256-GCM); without one, prompt previews stay behind. There is no password reset. Once the file is written and checked, the pet here becomes a "moved" profile you can still visit. On the other computer, **📦 Bring my pet here...** (or **Pet Agents: Bring Pet from Another Computer**) brings it in, look and all, and asks before replacing a save that has progress.
@@ -303,17 +304,18 @@ Tests, builds and background jobs are recognised from the shell command (`npm te
 
 ## Commands
 
-| Command                                       | Description                                                                   |
-| --------------------------------------------- | ----------------------------------------------------------------------------- |
-| `Pet Agents: Customize Pet`                   | Menu for species, colours, pattern, accessory, name and more                  |
-| `Pet Agents: Refresh Pet`                     | Rebuilds the pet view (also the ⟳ button in the panel header)                 |
-| `Pet Agents: Show Log`                        | Opens the Pet Agents output channel                                           |
-| `Pet Agents: Start a New Save`                | Stores this save as a profile you can visit and starts a fresh one at level 1 |
-| `Pet Agents: Share Progress`                  | Copies a summary, or opens a pre-filled post on X or Bluesky                  |
-| `Pet Agents: Export Profile`                  | Saves your pet's profile to a `.petprofile.json` to send to a friend          |
-| `Pet Agents: Import Profile`                  | Adds a friend's profile to 👋 Friends in the house menu                       |
-| `Pet Agents: Move Pet to Another Computer`    | Writes your live save to a `.petsave` file, with an optional password         |
-| `Pet Agents: Bring Pet from Another Computer` | Brings a pet in from a `.petsave` file                                        |
+| Command                                       | Description                                                                                                          |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `Pet Agents: Customize Pet`                   | Menu for species, colours, pattern, accessory, name and more                                                         |
+| `Pet Agents: Refresh Pet`                     | Rebuilds the pet view (also the ⟳ button in the panel header)                                                        |
+| `Pet Agents: Show Log`                        | Opens the Pet Agents output channel                                                                                  |
+| `Pet Agents: Start a New Save`                | From level 100 with the 💯 collection: stores this save as a profile you can visit and starts a fresh one at level 1 |
+| `Pet Agents: Switch Save...`                  | Carries on with one of your old saves; the current one is kept as a profile                                          |
+| `Pet Agents: Share Progress`                  | Copies a summary, or opens a pre-filled post on X or Bluesky                                                         |
+| `Pet Agents: Export Profile`                  | Saves your pet's profile to a `.petprofile.json` to send to a friend                                                 |
+| `Pet Agents: Import Profile`                  | Adds a friend's profile to 👋 Friends in the house menu                                                              |
+| `Pet Agents: Move Pet to Another Computer`    | Writes your live save to a `.petsave` file, with an optional password                                                |
+| `Pet Agents: Bring Pet from Another Computer` | Brings a pet in from a `.petsave` file                                                                               |
 
 If the panel ever says **"Pet Agents was updated"**, the extension was updated but the window is still running the old version: run **Developer: Reload Window**.
 

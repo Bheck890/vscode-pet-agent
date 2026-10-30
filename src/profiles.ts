@@ -604,6 +604,14 @@ export class Profiles {
    * stores merge, so if this slot was here before (a pet coming back) it
    * keeps the best of both.
    */
+  /**
+   * Makes an old save the one being played again, as it was left. Its data
+   * never left storage; installing the file fills in anything that did.
+   */
+  resume(save: ProfileFile): void {
+    this.install({ id: save.id, startedAt: save.createdAt }, save);
+  }
+
   install(slot: Slot, save: ProfileFile): void {
     this.deps.slots.start(slot);
     const { bag, house, care, progress } = this.deps.stores;

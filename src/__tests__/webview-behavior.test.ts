@@ -1774,6 +1774,9 @@ describe('bags, houses and saves in the view', () => {
       click(h.elements['house-profiles'], { profile: 'b', guest: '0' });
       expect(sent(h, 'visit-profile')).toEqual([]);
       expect(h.elements['house-note'].textContent).toMatch(/^Bolt the robot - level 35 - finished/);
+      expect(h.elements['house-visit'].innerHTML).toContain('▶️ Play this save');
+      click(h.elements['house-visit'], { visit: 'play' });
+      expect(sent(h, 'profile-play')).toEqual([{ command: 'profile-play', id: 'b' }]);
       click(h.elements['house-visit'], { visit: 'rename' });
       expect(sent(h, 'profile-rename')).toEqual([
         { command: 'profile-rename', id: 'b', guest: false },
@@ -1941,6 +1944,7 @@ describe('bags, houses and saves in the view', () => {
       );
       expect(h.elements['bag-toggle'].hidden).toBe(true);
       expect(h.elements['house-rooms'].innerHTML).toContain('🛖 Hut');
+      expect(h.elements['house-visit'].innerHTML).toContain('data-visit="play"');
       const before = h.vscodeApi.postMessage.mock.calls.length;
       // Care is off, furniture doesn't move, nothing is saved, nothing is found.
       click(h.elements['care-toggle']);

@@ -74,9 +74,35 @@ function setup(answers: Parameters<typeof ui>[0] = {}) {
 const tmpFile = (name: string) =>
   path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pet-move-')), name);
 
+/** Level 100 (495,000 XP) and the 💯 collection: what a save needs to become a new profile. */
+function ready(t: ReturnType<typeof setup>, complete = true) {
+  t.stores.progress.add('grind', { xp: 495000, kind: 'test', at: Date.now() }, new Date());
+  if (complete) {
+    t.stores.bag.setCompletion('all');
+  }
+}
+
 describe('new save', () => {
+  it('only opens at level 100 with the full collection', async () => {
+    const t = setup();
+    const slot = t.slots.current().id;
+    await t.flows.newSave();
+    expect(t.ui.info).toHaveBeenCalledWith(
+      expect.stringMatching(/level 100 .*this one is level 1/),
+    );
+    ready(t, false);
+    await t.flows.newSave();
+    expect(t.ui.info).toHaveBeenLastCalledWith(expect.stringMatching(/💯 collection/));
+    expect(t.ui.confirm).not.toHaveBeenCalled();
+    expect(t.slots.current().id).toBe(slot);
+    t.stores.bag.setCompletion('all');
+    await t.flows.newSave();
+    expect(t.slots.current().id).not.toBe(slot);
+  });
+
   it('asks first, and cancelling changes nothing', async () => {
     const t = setup({ confirm: false });
+    ready(t);
     t.stores.bag.save({ yarn: 1 });
     const slot = t.slots.current().id;
     await t.flows.newSave();
@@ -87,11 +113,84 @@ describe('new save', () => {
 
   it('archives the save and starts a fresh one', async () => {
     const t = setup();
+    ready(t);
     t.stores.bag.save({ yarn: 1 });
     await t.flows.newSave();
     expect(t.profiles.list()).toHaveLength(1);
     expect(t.stores.bag.get()).toEqual({});
     expect(t.saveChanged).toHaveBeenCalled();
+  });
+});
+
+describe('switching saves', () => {
+  /** A save with 5 XP archived by starting a new one; returns its id. */
+  async function archived(t: ReturnType<typeof setup>) {
+    ready(t);
+    t.progress.agentDone('old');
+    const id = t.slots.current().id;
+    await t.flows.newSave();
+    return id;
+  }
+
+  it('carries on with an old save where it left off, keeping the one being played', async () => {
+    const t = setup();
+    const old = await archived(t);
+    // The save being played made it to level 100 too, so it can become a profile.
+    ready(t);
+    const accidental = t.slots.current().id;
+    expect(t.profiles.list().map((p) => p.id)).toEqual([old]);
+    await t.flows.playSave(old);
+    expect(t.slots.current().id).toBe(old);
+    expect(t.stores.progress.total()).toBe(495005);
+    expect(t.profiles.list().map((p) => p.id)).toEqual([accidental]);
+    expect(t.saveSetting).toHaveBeenCalledWith('name', 'Rusty');
+    expect(t.saveChanged).toHaveBeenCalled();
+  });
+
+  it('can leave the save being played out of the menu; its data stays in storage', async () => {
+    const t = setup({ choose: "Leave Rusty's save out of the house menu" });
+    const old = await archived(t);
+    t.progress.agentDone('new');
+    const accidental = t.slots.current().id;
+    await t.flows.playSave(old);
+    expect(t.slots.current().id).toBe(old);
+    expect(t.profiles.list()).toEqual([]);
+    expect(t.storage.data[`petXp:${accidental}`]).toBeDefined();
+  });
+
+  it('picks from a list when no save is named, and says so when there is none', async () => {
+    const none = setup();
+    await none.flows.playSave();
+    expect(none.ui.info).toHaveBeenCalledWith(expect.stringMatching(/no other saves/));
+    const t = setup();
+    const old = await archived(t);
+    await t.flows.playSave();
+    expect(t.ui.choose).toHaveBeenCalledWith('Switch to which save?', [
+      expect.stringMatching(/^Rusty the fox - level 100 - /),
+    ]);
+    expect(t.slots.current().id).toBe(old);
+  });
+
+  it("won't resume a save that moved to another computer", async () => {
+    const t = setup();
+    t.progress.agentDone('old');
+    const moved = t.slots.current().id;
+    t.profiles.startNewSave(false, true);
+    const here = t.slots.current().id;
+    await t.flows.playSave(moved);
+    expect(t.ui.error).toHaveBeenCalledWith(expect.stringMatching(/moved to another computer/));
+    expect(t.slots.current().id).toBe(here);
+  });
+
+  it("switches to the helper for a helper's save, with the helper's own settings", async () => {
+    const t = setup();
+    t.setLook({ species: 'wizard', name: 'Alder', style: '' });
+    const old = await archived(t);
+    await t.flows.playSave(old);
+    expect(t.saveSetting).toHaveBeenCalledWith('companion', 'helper');
+    expect(t.saveSetting).toHaveBeenCalledWith('helper', 'wizard');
+    expect(t.saveSetting).toHaveBeenCalledWith('helperName', 'Alder');
+    expect(t.saveSetting).not.toHaveBeenCalledWith('style', expect.anything());
   });
 });
 
@@ -106,8 +205,37 @@ describe('starting over', () => {
     expect(t.saveChanged).toHaveBeenCalled();
   });
 
+  it('only offers to start over without keeping a save below level 100', async () => {
+    const t = setup();
+    t.progress.agentDone('a1');
+    await t.flows.startOver();
+    expect(t.ui.choose).toHaveBeenCalledWith(expect.stringMatching(/New saves open at level 100/), [
+      "Start over without keeping Rusty's save",
+    ]);
+    expect(t.profiles.list()).toHaveLength(0);
+    expect(t.stores.progress.total()).toBe(0);
+  });
+
+  it('lets a switched-back save be kept again, since it is a profile already', async () => {
+    const t = setup();
+    ready(t);
+    t.progress.agentDone('a1');
+    const old = t.slots.current().id;
+    await t.flows.newSave();
+    await t.flows.playSave(old);
+    // Back on the old save, below nothing new: keeping it just updates its profile.
+    t.stores.bag.setCompletion('');
+    t.progress.agentDone('a2');
+    await t.flows.startOver();
+    expect(t.ui.choose).toHaveBeenLastCalledWith(expect.any(String), [
+      "Keep Rusty's save as a profile to visit",
+      "Start over without keeping Rusty's save",
+    ]);
+  });
+
   it('keeps the old save as a profile, or leaves it out, as asked', async () => {
     const keep = setup();
+    ready(keep);
     keep.progress.agentDone('a1');
     await keep.flows.startOver();
     expect(keep.profiles.list()).toHaveLength(1);

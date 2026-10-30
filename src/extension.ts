@@ -164,6 +164,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('pet-agents.refresh', () => viewProvider.refresh()),
     vscode.commands.registerCommand('pet-agents.showLog', () => log.show()),
     vscode.commands.registerCommand('pet-agents.newSave', () => flows.newSave()),
+    vscode.commands.registerCommand('pet-agents.switchSave', () => flows.playSave()),
     vscode.commands.registerCommand('pet-agents.shareProgress', shareProgress),
     vscode.commands.registerCommand('pet-agents.exportProfile', () => flows.exportProfile(null)),
     vscode.commands.registerCommand('pet-agents.importProfile', () => flows.importProfile()),

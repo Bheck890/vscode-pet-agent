@@ -76,3 +76,5 @@ export function bagsUnlocked(level: number, levelsOn = true): string[] {
 
 /** The level that unlocks the last bag: reaching it finishes the save. */
 export const FINISH_LEVEL = Math.max(...BAG_LEVELS.map((b) => b.level));
+/** A save can become a profile (and a new one start) from this level, with the full collection. */
+export const NEW_SAVE_LEVEL = 100;

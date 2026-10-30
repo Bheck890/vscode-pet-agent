@@ -9,8 +9,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- New saves (and keeping a save as a new profile) open at level 100 with the 💯 collection; a helper just needs level 100. Until then, 🔄 Start over can begin again without keeping the save, and a save you switched back to can always be kept again, since it is a profile already. Moving a pet to another computer is unaffected.
+
 ### Added
 
+- ▶️ Switch saves any time: **Play this save** on an old save, ⚙️ **🔁 Switch to another save...** or `Pet Agents: Switch Save...` carries on with it where it left off. The save being played is kept as a profile (or left out of the menu, as you choose), and nothing is deleted. Helper saves switch to the helper, pet saves to the pet; saves moved to another computer can't be resumed here.
 - 🧙 Helpers: four original retro-desktop characters (a wizard, a boxy robot, a CRT monitor and a floppy disk) as an alternative to a pet (`pet-agents.companion`). They act out the agent like pets, with their own props and labels (a scroll for reading, a notepad for writing, a light bulb when done, the wizard's wand), and screen faces glow in their eye colour.
 - Helpers and pets are separate systems: a helper has no care, visitors, toys, bags, shop or house (its 🏠 is just Profiles), keeps its own save (level, XP, challenges, profiles) and its own look (`pet-agents.helper`, `helperName`, `helperColor`, `helperAccentColor`, `helperEyeColor`, `helperPattern`, `helperAccessory`, `helperAccessoryColor`), and never gets care or toy challenges. Switch on the welcome screen, in ⚙️ or from Customize Pet; switching loses nothing. Moving a helper to another computer brings it back as a helper.
 

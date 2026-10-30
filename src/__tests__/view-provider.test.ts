@@ -191,6 +191,7 @@ function setup(
     ui,
     look,
     saveSetting,
+    companion: () => 'pet',
     now,
     log,
     saveChanged: refresh,
@@ -386,6 +387,30 @@ describe('PeonViewProvider', () => {
     const { v } = setup();
     v.send({ command: 'care', action: 'teleport' });
     expect(v.posted).toHaveLength(0);
+  });
+
+  it("saves a helper's look to its own settings, and only a helper as its kind", () => {
+    const { v, saveSetting } = setup({ settings: { companion: 'helper' } });
+    v.send({ command: 'setting', key: 'color', value: '#ff0000' });
+    v.send({ command: 'setting', key: 'species', value: 'robot' });
+    v.send({ command: 'setting', key: 'species', value: 'cat' });
+    v.send({ command: 'setting', key: 'wander', value: false });
+    v.send({ command: 'setting', key: 'companion', value: 'pet' });
+    expect(saveSetting.mock.calls).toEqual([
+      ['helperColor', '#ff0000'],
+      ['helper', 'robot'],
+      ['wander', false],
+      ['companion', 'pet'],
+    ]);
+  });
+
+  it("doesn't look after a helper, and keeps a pet species out of a pet's helper key", () => {
+    const helper = setup({ settings: { companion: 'helper' } });
+    helper.v.send({ command: 'care', action: 'feed' });
+    expect(helper.v.last('care-update')).toBeUndefined();
+    const pet = setup();
+    pet.v.send({ command: 'setting', key: 'species', value: 'wizard' });
+    expect(pet.saveSetting).not.toHaveBeenCalled();
   });
 
   it('saves valid settings from the panel and drops anything else', () => {

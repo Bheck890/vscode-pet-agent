@@ -11,6 +11,7 @@ import type { ProgressService } from './progress-service';
 import type { Completion } from './bag-store';
 import { FinishSummary, GUEST_MAX_BYTES, LOOK_KEYS, PetLook, Profiles } from './profiles';
 import type { RecordsStore } from './records-store';
+import { Companion, isHelper, lookSettingKey } from './pet-config';
 import type { Slots } from './slot';
 
 /** The prompts and dialogs the flows need, so tests can answer them. */
@@ -36,6 +37,8 @@ export interface FlowDeps {
   ui: PetUi;
   look: () => PetLook;
   saveSetting: (key: string, value: unknown) => Thenable<void>;
+  /** Whether a pet or a helper is playing; each has its own save. */
+  companion: () => Companion;
   now: () => Date;
   log: { info(m: string): void; warn(m: string): void };
   /** The save changed under the view (a new save, a pet moved in): rebuild it. */
@@ -370,6 +373,17 @@ export class SaveFlows {
       return;
     }
     const { move } = read;
+    // A helper moves into the helper's save, a pet into the pet's.
+    const was = this.deps.companion();
+    const mode: Companion = isHelper(move.save.pet.species) ? 'helper' : 'pet';
+    if (mode !== was) {
+      await this.deps.saveSetting('companion', mode);
+    }
+    const back = async () => {
+      if (mode !== was) {
+        await this.deps.saveSetting('companion', was);
+      }
+    };
     // The same pet coming back: whichever copy is newer wins.
     const local = profiles.load(move.slot.id);
     const save = local && local.endedAt > move.save.endedAt ? local : move.save;
@@ -380,6 +394,7 @@ export class SaveFlows {
         `Bring ${save.pet.name} here`,
       );
       if (!ok) {
+        await back();
         return;
       }
     }
@@ -392,11 +407,16 @@ export class SaveFlows {
       profiles.adopt(move.profiles, move.guests);
     } catch (err) {
       this.fail('Bringing the pet here', err);
+      await back();
       return;
     }
     for (const key of LOOK_KEYS) {
+      // Helpers have no bag styles.
+      if (mode === 'helper' && key === 'style') {
+        continue;
+      }
       const v = save.pet[key];
-      await this.deps.saveSetting(key, v === '' ? undefined : v);
+      await this.deps.saveSetting(lookSettingKey(key, mode), v === '' ? undefined : v);
     }
     this.deps.log.info('Pet moved in from a file');
     ui.info(`Pet Agents: welcome home, ${save.pet.name}!`);

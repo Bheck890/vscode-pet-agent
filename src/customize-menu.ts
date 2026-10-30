@@ -4,12 +4,28 @@ import {
   COLOR_PRESETS,
   DEFAULT_NAMES,
   EYE_PRESETS,
+  HELPERS,
   PATTERNS,
   SPECIES,
+  lookSettingKey,
 } from './pet-config';
-import { getConfig, saveSetting } from './settings';
+import { getConfig, saveSetting as saveRaw } from './settings';
 
-const SPECIES_ICONS: Record<string, string> = { cat: '🐱', dog: '🐶', bird: '🐦', fox: '🦊' };
+const SPECIES_ICONS: Record<string, string> = {
+  cat: '🐱',
+  dog: '🐶',
+  bird: '🐦',
+  fox: '🦊',
+  wizard: '🧙',
+  robot: '🤖',
+  monitor: '🖥️',
+  floppy: '💾',
+};
+
+/** Look changes go to the pet's settings or the helper's, whichever is playing. */
+function saveSetting(key: string, value: unknown): Thenable<void> {
+  return saveRaw(lookSettingKey(key, getConfig().companion), value);
+}
 const ACCESSORY_ICONS: Record<string, string> = {
   none: '🚫',
   bow: '🎀',
@@ -101,9 +117,21 @@ const COLOR_LABELS: Record<string, string> = {
 export async function customizePet(): Promise<void> {
   for (;;) {
     const c = getConfig();
+    const helper = c.companion === 'helper';
     const menu = await vscode.window.showQuickPick(
       [
-        { id: 'species', label: `${SPECIES_ICONS[c.species]} Species`, description: c.species },
+        {
+          id: 'companion',
+          label: helper ? '🐾 Switch to your pet' : '🧙 Switch to a helper',
+          description: helper
+            ? 'pets are looked after and have toys and a house'
+            : 'helpers just help: no care, bags or house',
+        },
+        {
+          id: 'species',
+          label: `${SPECIES_ICONS[c.species]} ${helper ? 'Helper' : 'Species'}`,
+          description: c.species,
+        },
         { id: 'color', label: '🎨 Fur colour', description: c.color || 'default' },
         {
           id: 'accentColor',
@@ -153,8 +181,17 @@ export async function customizePet(): Promise<void> {
     }
 
     switch (menu.id) {
+      case 'companion':
+        // The other one has its own save and look; the view switches over to it.
+        await saveRaw('companion', helper ? 'pet' : 'helper');
+        break;
       case 'species': {
-        const s = await pickFrom('Species', SPECIES, SPECIES_ICONS, c.species);
+        const s = await pickFrom(
+          helper ? 'Helper' : 'Species',
+          helper ? HELPERS : SPECIES,
+          SPECIES_ICONS,
+          c.species,
+        );
         if (s) {
           const customName = c.name !== DEFAULT_NAMES[c.species];
           await saveSetting('species', s);

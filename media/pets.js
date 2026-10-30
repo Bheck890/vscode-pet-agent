@@ -6,6 +6,7 @@
 // half is mirrored, which keeps every front-facing pet symmetric. Palette keys:
 //   o outline  b body  l light (belly/muzzle)  d dark accent
 //   p pink  k black  w white  y beak/feet
+// Helpers add their own fixed keys: s skin, g screen/shutter, r lamp.
 (function (root) {
   'use strict';
 
@@ -25,6 +26,10 @@
    *   twitch: { x0: number, y0: number, x1: number, y1: number, dx: number, dy: number },
    *   tail?: Appendage,
    *   wings?: Appendage,
+   *   helper?: boolean,
+   *   eyeColor?: string,
+   *   faceInk?: string,
+   *   looks?: Record<string, Record<string, unknown>>,
    * }} Species
    */
 
@@ -310,6 +315,227 @@
         ],
       },
     },
+
+    // Helpers: retro desktop assistants instead of pets. They act out the agent
+    // like pets do, but have no care, bags or house (see `companion` in pet-config.ts).
+    // `looks` swaps in their own prop and label for some states.
+    wizard: {
+      helper: true,
+      defaultColor: '#6b4fc8',
+      eyeColor: '#3a2a1a',
+      fixed: { s: '#f2c9a0', w: '#f4f4f8', y: '#ffd23f', k: '#1a1a24', p: '#d9727a' },
+      eyeX: 9,
+      eyeY: 13,
+      mouthY: 18,
+      headTop: 10,
+      pawY: 29,
+      neckY: 19,
+      twitch: { x0: 13, y0: 1, x1: 18, y1: 5, dx: -1, dy: 0 },
+      looks: {
+        reading: { prop: 'scroll', label: 'reading up on it' },
+        writing: { prop: 'notepad', label: 'taking notes' },
+        done: { prop: 'bulb', label: 'all done, bright idea!' },
+        thinking: { prop: 'wand', label: 'conjuring a plan' },
+        running: { prop: 'wand', label: 'casting commands' },
+      },
+      half: [
+        '................',
+        '...............o',
+        '..............ob',
+        '..............ob',
+        '.............obb',
+        '.............oby',
+        '............obbb',
+        '...........obbbb',
+        '...........obbbb',
+        '..........obbyby',
+        '..oooooooodddddd',
+        '..obbbbbbbbbbbbb',
+        '..oooooossssssss',
+        '.......ossssssss',
+        '.......ossssssss',
+        '.......ossssssss',
+        '.......ossssssss',
+        '.......owwwwwwww',
+        '.......owwwwwwww',
+        '.....oobwwwwwwww',
+        '....obbbbwwwwwww',
+        '...obbbbbbwwwwww',
+        '...obbbbbbbwwwww',
+        '..osbbbbbbbbwwww',
+        '..ossbbbbbbbbwww',
+        '..obbbbbbbbbbbww',
+        '..obbbbbbbbbbbbw',
+        '.obbbbbbbbbbbbbb',
+        '.obbbbbbbbbbbbbb',
+        '.odddddddddddddd',
+        '.ooooooooooooooo',
+        '................',
+      ],
+    },
+
+    robot: {
+      helper: true,
+      defaultColor: '#d8cbb0',
+      eyeColor: '#7fffd4',
+      faceInk: 'e',
+      fixed: { g: '#1f3d3b', r: '#e63946', y: '#ffd23f', k: '#0c1414', w: '#ffffff', p: '#7fffd4' },
+      eyeX: 9,
+      eyeY: 9,
+      mouthY: 13,
+      headTop: 6,
+      pawY: 28,
+      neckY: 17,
+      twitch: { x0: 13, y0: 1, x1: 18, y1: 5, dx: -1, dy: 0 },
+      looks: {
+        reading: { prop: 'scroll', label: 'reading up on it' },
+        writing: { prop: 'notepad', label: 'taking notes' },
+        done: { prop: 'bulb', label: 'all done, bright idea!' },
+        running: { prop: 'wrench', label: 'tightening bolts' },
+        testing: { label: 'running diagnostics' },
+      },
+      half: [
+        '................',
+        '..............oo',
+        '.............orr',
+        '.............orr',
+        '..............oo',
+        '...............o',
+        '.....ooooooooooo',
+        '.....obbbbbbbbbb',
+        '.....obggggggggg',
+        '.....obggggggggg',
+        '.....obggggggggg',
+        '.....obggggggggg',
+        '.....obggggggggg',
+        '.....obggggggggg',
+        '.....obggggggggg',
+        '.....obbbbbbbbbb',
+        '.....ooooooooooo',
+        '............oddd',
+        '...oo.oooooooooo',
+        '..odo.obbbbbbbbb',
+        '..odooobllllllll',
+        '..odo.obllrlllyl',
+        '..odo.obllllllll',
+        '..odo.obllllllll',
+        '..ooo.obbbbbbbbb',
+        '......obbbbbbbbb',
+        '......oooooooooo',
+        '.........odo....',
+        '........oddddo..',
+        '........oooooo..',
+        '................',
+        '................',
+      ],
+    },
+
+    monitor: {
+      helper: true,
+      defaultColor: '#d9d2bf',
+      eyeColor: '#9dff7a',
+      faceInk: 'e',
+      fixed: { g: '#17301f', r: '#3fd16b', k: '#081208', w: '#ffffff', p: '#9dff7a' },
+      eyeX: 8,
+      eyeY: 9,
+      mouthY: 14,
+      headTop: 4,
+      pawY: 28,
+      neckY: 20,
+      twitch: { x0: 8, y0: 25, x1: 12, y1: 29, dx: -1, dy: 0 },
+      looks: {
+        reading: { prop: 'scroll', label: 'reading up on it' },
+        writing: { prop: 'keyboard', label: 'typing away' },
+        done: { prop: 'bulb', label: 'all done, bright idea!' },
+        browsing: { label: 'surfing the web' },
+      },
+      half: [
+        '................',
+        '................',
+        '................',
+        '..oooooooooooooo',
+        '..obbbbbbbbbbbbb',
+        '..obbooooooooooo',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbogggggggggg',
+        '..obbooooooooooo',
+        '..obbbbbbbbbbbbb',
+        '..obrbbbbbbbbbbb',
+        '..oooooooooooooo',
+        '..........oddddd',
+        '......oooooooooo',
+        '......oddddddddd',
+        '......oooooooooo',
+        '.........obo....',
+        '.........obo....',
+        '.........obo....',
+        '........oddddo..',
+        '........oooooo..',
+        '................',
+        '................',
+      ],
+    },
+
+    floppy: {
+      helper: true,
+      defaultColor: '#2f3b7a',
+      fixed: { l: '#eef0f4', g: '#c0c4cc', k: '#14141c', w: '#ffffff', p: '#ff8fa3' },
+      eyeX: 8,
+      eyeY: 14,
+      mouthY: 18,
+      headTop: 4,
+      pawY: 28,
+      neckY: 21,
+      twitch: { x0: 9, y0: 5, x1: 22, y1: 10, dx: -1, dy: 0 },
+      looks: {
+        reading: { prop: 'scroll', label: 'reading up on it' },
+        writing: { prop: 'notepad', label: 'saving your work' },
+        done: { prop: 'bulb', label: 'all done, bright idea!' },
+      },
+      half: [
+        '................',
+        '................',
+        '................',
+        '...ooooooooooooo',
+        '...obbbbbbbbbbbb',
+        '...obbbboggggggg',
+        '...obbbboggggggg',
+        '...obbbbogggokkg',
+        '...obbbbogggokkg',
+        '...obbbboggggggg',
+        '...obbbboooooooo',
+        '...obbbbbbbbbbbb',
+        '...obbllllllllll',
+        '...obbllllllllll',
+        '...obbllllllllll',
+        '...obbllllllllll',
+        '...obbllllllllll',
+        'oo.obbllllllllll',
+        'odoobbllllllllll',
+        'oo.obbllllllllll',
+        '...obblddddddddd',
+        '...obbllllllllll',
+        '...obblddddddddd',
+        '...obbllllllllll',
+        '...obbbbbbbbbbbb',
+        '...obbbbbbbbbbbb',
+        '...ooooooooooooo',
+        '.......odo......',
+        '......oddo......',
+        '......oooo......',
+        '................',
+        '................',
+      ],
+    },
   };
 
   /**
@@ -411,6 +637,20 @@
         'oggggggggggggggo',
         'ogkgkgkgkgkgkggo',
         'oooooooooooooooo',
+      ],
+    },
+    wand: {
+      palette: { o: '#2b1d14', w: '#8b5a2b', y: '#ffd23f', h: '#ffffff' },
+      grid: [
+        'h...h...',
+        '..oyo...',
+        '.oyyyo..',
+        '..oyo..h',
+        '..ow....',
+        '.ow.....',
+        '.ow.....',
+        'ow......',
+        'o.......',
       ],
     },
     magnifier: {
@@ -1641,7 +1881,7 @@
     if (o.accent && hexToRgb(o.accent)) {
       pal.l = o.accent;
     }
-    pal.e = o.eye && hexToRgb(o.eye) ? o.eye : mix(pal.k, '#7a7a96', 0.45);
+    pal.e = o.eye && hexToRgb(o.eye) ? o.eye : sp.eyeColor || mix(pal.k, '#7a7a96', 0.45);
     return pal;
   }
 
@@ -1720,18 +1960,20 @@
     const px = blank(SIZE, SIZE);
     stamp(px, keys, 0, 0, pal, false);
 
+    // A face on a dark screen draws its lines in a glowing ink instead of the outline colour.
+    const face = sp.faceInk ? Object.assign({}, pal, { o: pal[sp.faceInk] }) : pal;
     const eyesName = expr.eyes || 'open';
     if (eyesName === 'open') {
-      stamp(px, openEye(false, expr.look || 0), sp.eyeX, sp.eyeY, pal, false);
-      stamp(px, openEye(true, expr.look || 0), SIZE - sp.eyeX - 3, sp.eyeY, pal, false);
+      stamp(px, openEye(false, expr.look || 0), sp.eyeX, sp.eyeY, face, false);
+      stamp(px, openEye(true, expr.look || 0), SIZE - sp.eyeX - 3, sp.eyeY, face, false);
     } else {
       const eyes = EYES[eyesName] || EYES.wide;
-      stamp(px, eyes, sp.eyeX, sp.eyeY, pal, false);
-      stamp(px, eyes, SIZE - sp.eyeX - 3, sp.eyeY, pal, true);
+      stamp(px, eyes, sp.eyeX, sp.eyeY, face, false);
+      stamp(px, eyes, SIZE - sp.eyeX - 3, sp.eyeY, face, true);
     }
 
     const mouth = MOUTHS[expr.mouth || 'neutral'] || MOUTHS.neutral;
-    stamp(px, mouth, 14, sp.mouthY, pal, false);
+    stamp(px, mouth, 14, sp.mouthY, face, false);
 
     const acc = expr.accessory ? ACCESSORIES[expr.accessory] : null;
     if (acc && !(expr.hide || []).includes(acc.slot)) {

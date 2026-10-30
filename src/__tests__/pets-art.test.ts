@@ -5,7 +5,19 @@ import * as petConfig from '../pet-config';
 
 interface PetArtApi {
   SIZE: number;
-  SPECIES: Record<string, { half: string[]; fixed: Record<string, string> }>;
+  SPECIES: Record<
+    string,
+    {
+      half: string[];
+      fixed: Record<string, string>;
+      helper?: boolean;
+      eyeColor?: string;
+      faceInk?: string;
+      eyeX: number;
+      eyeY: number;
+      looks?: Record<string, { prop?: string; label?: string }>;
+    }
+  >;
   PROPS: Record<string, { grid: string[]; palette: Record<string, string> }>;
   PATTERNS: string[];
   ACCESSORIES: Record<string, { slot: string; color: string }>;
@@ -43,16 +55,53 @@ describe('pet art', () => {
     expect(source).toMatch(/^[\x20-\x7e\r\n]*$/);
   });
 
-  it.each(['cat', 'dog', 'bird', 'fox'])('%s has a well-formed 32x32 body', (species) => {
-    const sp = Art.SPECIES[species];
-    expect(sp.half).toHaveLength(Art.SIZE);
-    for (const row of sp.half) {
-      expect(row.length).toBeLessThanOrEqual(16);
+  it.each([...petConfig.SPECIES, ...petConfig.HELPERS])(
+    '%s has a well-formed 32x32 body',
+    (species) => {
+      const sp = Art.SPECIES[species];
+      expect(sp.half).toHaveLength(Art.SIZE);
+      for (const row of sp.half) {
+        expect(row.length).toBeLessThanOrEqual(16);
+      }
+      const px = Art.compose(species, Art.palette(species, '#336699'), {});
+      expect(px).toHaveLength(32);
+      expect(px.every((r) => r.length === 32)).toBe(true);
+      expect(px.flat().filter(Boolean).length).toBeGreaterThan(300);
+    },
+  );
+
+  it('draws the same pets and helpers the settings offer, flagged as such', () => {
+    expect(Art.speciesIds.filter((s) => !Art.SPECIES[s].helper).sort()).toEqual(
+      [...petConfig.SPECIES].sort(),
+    );
+    expect(Art.speciesIds.filter((s) => Art.SPECIES[s].helper)).toEqual([...petConfig.HELPERS]);
+    for (const id of Art.speciesIds) {
+      expect([id, petConfig.DEFAULT_NAMES[id as petConfig.Species]]).toEqual([
+        id,
+        expect.any(String),
+      ]);
     }
-    const px = Art.compose(species, Art.palette(species, '#336699'), {});
-    expect(px).toHaveLength(32);
-    expect(px.every((r) => r.length === 32)).toBe(true);
-    expect(px.flat().filter(Boolean).length).toBeGreaterThan(300);
+  });
+
+  it('gives helpers their own looks, using props that exist', () => {
+    for (const id of petConfig.HELPERS) {
+      const looks = Art.SPECIES[id].looks ?? {};
+      expect(Object.keys(looks).length).toBeGreaterThan(0);
+      for (const look of Object.values(looks)) {
+        expect([id, look.prop === undefined || look.prop in Art.PROPS]).toEqual([id, true]);
+      }
+    }
+  });
+
+  it('draws a screen face in its glowing ink, not the outline colour', () => {
+    const sp = Art.SPECIES.robot;
+    expect(sp.faceInk).toBe('e');
+    const pal = Art.palette('robot', '#d8cbb0');
+    expect(pal.e).toBe(sp.eyeColor);
+    const px = Art.compose('robot', pal, { eyes: 'happy' });
+    // The happy eye's top pixel is a face line: drawn in the eye colour on the screen.
+    expect(px[sp.eyeY][sp.eyeX + 1]).toBe(sp.eyeColor);
+    expect(Art.palette('robot', '#d8cbb0', '', 0, { eye: '#ff0000' }).e).toBe('#ff0000');
   });
 
   it('has a colour for every palette key used by every species', () => {

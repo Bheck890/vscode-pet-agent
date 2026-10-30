@@ -151,7 +151,13 @@
         render();
         panel.hidden = false;
         if (finished) {
-          api.celebrate('🏆 You finished Pet Agents! Every bag is open', '#ffd23f');
+          const helper = (api.config() || {}).companion === 'helper';
+          api.celebrate(
+            helper
+              ? '🏆 You finished Pet Agents!'
+              : '🏆 You finished Pet Agents! Every bag is open',
+            '#ffd23f',
+          );
         }
       },
       isOpen: () => !panel.hidden,

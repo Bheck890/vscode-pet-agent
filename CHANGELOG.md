@@ -9,6 +9,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- 🧙 Helpers: four original retro-desktop characters (a wizard, a boxy robot, a CRT monitor and a floppy disk) as an alternative to a pet (`pet-agents.companion`). They act out the agent like pets, with their own props and labels (a scroll for reading, a notepad for writing, a light bulb when done, the wizard's wand), and screen faces glow in their eye colour.
+- Helpers and pets are separate systems: a helper has no care, visitors, toys, bags, shop or house (its 🏠 is just Profiles), keeps its own save (level, XP, challenges, profiles) and its own look (`pet-agents.helper`, `helperName`, `helperColor`, `helperAccentColor`, `helperEyeColor`, `helperPattern`, `helperAccessory`, `helperAccessoryColor`), and never gets care or toy challenges. Switch on the welcome screen, in ⚙️ or from Customize Pet; switching loses nothing. Moving a helper to another computer brings it back as a helper.
+
 ## [0.5.0] - 2026-10-28
 
 ### Added

@@ -42,7 +42,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // The save being played: its stores read and write under the current slot.
   const now = () => new Date();
-  const slots = new Slots(context.globalState, now, () => getConfig().name);
+  const slots = new Slots(
+    context.globalState,
+    now,
+    () => getConfig().name,
+    () => getConfig().companion,
+  );
   const save = scoped(context.globalState, () => slots.current().id);
   const stores = {
     bag: new BagStore(save),
@@ -54,7 +59,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // Records and XP: transcript events -> finished turns -> facts. Records are about you, not the save.
   const recordsStore = new RecordsStore(context.globalState);
   const records = new RecordsService(recordsStore, context.globalState, now);
-  const progress = new ProgressService(stores.progress, now, () => slots.current());
+  const progress = new ProgressService(
+    stores.progress,
+    now,
+    () => slots.current(),
+    () => getConfig().companion === 'helper',
+  );
   context.subscriptions.push(...connectGames(claude, records, progress));
   // Started only now, so the first scan's lines reach the records too.
   claude.start();
@@ -88,6 +98,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ui: vscodeUi,
     look,
     saveSetting,
+    companion: () => getConfig().companion,
     now,
     log,
     saveChanged: () => viewProvider.refresh(),
@@ -161,7 +172,10 @@ export function activate(context: vscode.ExtensionContext): void {
     log,
     new vscode.Disposable(() => clearInterval(syncTimer)),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('pet-agents')) {
+      // Switching between pet and helper changes the save being played, so the view starts over.
+      if (e.affectsConfiguration('pet-agents.companion')) {
+        viewProvider.refresh();
+      } else if (e.affectsConfiguration('pet-agents')) {
         viewProvider.reinit();
       }
     }),

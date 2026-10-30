@@ -1,5 +1,11 @@
 import { funnyName } from '../pet-names';
-import { DEFAULT_NAMES, panelSetting, readPetConfig, sizeFromSetting } from '../pet-config';
+import {
+  DEFAULT_NAMES,
+  lookSettingKey,
+  panelSetting,
+  readPetConfig,
+  sizeFromSetting,
+} from '../pet-config';
 
 describe('sizeFromSetting', () => {
   it('maps small/medium/large and falls back to 200', () => {
@@ -12,6 +18,7 @@ describe('sizeFromSetting', () => {
 });
 
 const DEFAULTS = {
+  companion: 'pet',
   species: 'fox',
   color: '',
   accentColor: '',
@@ -92,6 +99,7 @@ describe('readPetConfig', () => {
       size: 'large',
     };
     expect(readPetConfig((k) => values[k])).toEqual({
+      companion: 'pet',
       species: 'bird',
       color: 'hotpink',
       accentColor: '#ffeeaa',
@@ -121,6 +129,51 @@ describe('readPetConfig', () => {
       visitors: false,
       size: 250,
     });
+  });
+});
+
+describe('helpers', () => {
+  it('reads the helper its own look, with no toys, visitors or bag style', () => {
+    const values: Record<string, unknown> = {
+      companion: 'helper',
+      species: 'cat',
+      name: 'Mochi',
+      color: 'red',
+      toys: true,
+      visitors: true,
+      style: 'chefHat',
+      helper: 'robot',
+      helperColor: '#d8cbb0',
+      helperAccessory: 'crown',
+    };
+    const cfg = readPetConfig((k) => values[k]);
+    expect(cfg).toMatchObject({
+      companion: 'helper',
+      species: 'robot',
+      name: DEFAULT_NAMES.robot,
+      color: '#d8cbb0',
+      accessory: 'crown',
+      toys: false,
+      visitors: false,
+      style: '',
+    });
+  });
+
+  it('keeps pets and helpers apart: a helper id is no pet, and a pet is no helper', () => {
+    expect(readPetConfig((k) => ({ species: 'wizard' })[k]).species).toBe('fox');
+    expect(readPetConfig((k) => ({ companion: 'helper', helper: 'cat' })[k]).species).toBe(
+      'wizard',
+    );
+  });
+
+  it('stores each look key under the pet or the helper', () => {
+    expect(lookSettingKey('color', 'pet')).toBe('color');
+    expect(lookSettingKey('color', 'helper')).toBe('helperColor');
+    expect(lookSettingKey('species', 'helper')).toBe('helper');
+    expect(lookSettingKey('wander', 'helper')).toBe('wander');
+    expect(panelSetting('companion', 'helper')).toEqual(['companion', 'helper']);
+    expect(panelSetting('companion', 'cat')).toBeNull();
+    expect(panelSetting('species', 'floppy')).toEqual(['species', 'floppy']);
   });
 });
 

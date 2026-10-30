@@ -111,6 +111,19 @@
     "configuration": {
       "title": "Pet Agents",
       "properties": {
+        "pet-agents.companion": {
+          "type": "string",
+          "enum": [
+            "pet",
+            "helper"
+          ],
+          "enumDescriptions": [
+            "A pet you look after, with toys, bags and a house",
+            "A retro desktop helper: it acts out your agent, with no care, bags or house"
+          ],
+          "default": "pet",
+          "description": "Show your pet or your helper. Each keeps its own save (level, XP, challenges, profiles) and its own look, so switching back loses nothing."
+        },
         "pet-agents.species": {
           "type": "string",
           "enum": [
@@ -120,7 +133,7 @@
             "fox"
           ],
           "default": "fox",
-          "description": "Which animal your pet is."
+          "description": "Which animal your pet is. Helpers are picked with pet-agents.helper."
         },
         "pet-agents.color": {
           "type": "string",
@@ -180,6 +193,73 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Accessory colour. Any CSS colour (`#ff8800`, `hotpink`...). Leave empty for the default."
+        },
+        "pet-agents.helper": {
+          "type": "string",
+          "enum": [
+            "wizard",
+            "robot",
+            "monitor",
+            "floppy"
+          ],
+          "default": "wizard",
+          "description": "Which helper shows when pet-agents.companion is helper: a wizard, a retro robot, a CRT monitor or a floppy disk."
+        },
+        "pet-agents.helperName": {
+          "type": "string",
+          "default": "",
+          "description": "Your helper's name. Leave empty for the helper's default."
+        },
+        "pet-agents.helperColor": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The helper's main colour (the wizard's robe, the robot's and monitor's casing, the floppy's plastic). Any CSS colour. Leave empty for the default."
+        },
+        "pet-agents.helperAccentColor": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The helper's light colour (the robot's chest panel, the floppy's label). Any CSS colour. Leave empty for the default."
+        },
+        "pet-agents.helperEyeColor": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The helper's eye colour; screen faces glow in it. Any CSS colour. Leave empty for the default."
+        },
+        "pet-agents.helperPattern": {
+          "type": "string",
+          "enum": [
+            "none",
+            "spots",
+            "stripes",
+            "socks",
+            "mask",
+            "patch"
+          ],
+          "default": "none",
+          "description": "A pattern on the helper."
+        },
+        "pet-agents.helperAccessory": {
+          "type": "string",
+          "enum": [
+            "none",
+            "bow",
+            "flower",
+            "crown",
+            "beanie",
+            "headphones",
+            "glasses",
+            "sunglasses",
+            "bandana",
+            "scarf",
+            "collar"
+          ],
+          "default": "none",
+          "description": "Something the helper wears."
+        },
+        "pet-agents.helperAccessoryColor": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Colour of the helper's accessory. Any CSS colour. Leave empty for the accessory's default."
         },
         "pet-agents.name": {
           "type": "string",

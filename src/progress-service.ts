@@ -52,6 +52,8 @@ export class ProgressService {
     private readonly store: ProgressStore,
     private readonly now: () => Date,
     private readonly slot: () => Slot,
+    /** Helpers can't be looked after or find toys, so their challenges leave those out. */
+    private readonly helper: () => boolean = () => false,
   ) {}
 
   onChange(listener: Listener): { dispose(): void } {
@@ -163,7 +165,7 @@ export class ProgressService {
     const now = this.now();
     const week = weekId(now);
     const facts = Object.values(this.store.facts());
-    for (const c of weeklyChallenges(week)) {
+    for (const c of weeklyChallenges(week, this.helper())) {
       const key = `challenge:${week}:${c.id}`;
       if (challengeProgress(c, facts, weekStart(now)) >= c.target && !this.store.has(key)) {
         this.store.add(key, { xp: XP.challenge, kind: 'challenge', at: now.getTime() }, now);
@@ -213,7 +215,7 @@ export class ProgressService {
       ...levelOf(this.store.total()),
       week,
       weekXp: facts.filter((f) => f.at >= from).reduce((a, f) => a + f.xp, 0),
-      challenges: weeklyChallenges(week).map((c) => {
+      challenges: weeklyChallenges(week, this.helper()).map((c) => {
         const progress = challengeProgress(c, facts, from);
         return {
           id: c.id,

@@ -1,7 +1,14 @@
 import * as vscode from 'vscode';
 import { BAG_LEVELS, bagsUnlocked } from './bags';
 import type { PeonGuide } from './peon-guide';
-import { COLOR_PRESETS, DEFAULT_NAMES, EYE_PRESETS, PetConfig } from './pet-config';
+import {
+  COLOR_PRESETS,
+  DEFAULT_NAMES,
+  EYE_PRESETS,
+  PetConfig,
+  isHelper,
+  lookSettingKey,
+} from './pet-config';
 import { StateWatcher } from './state-watcher';
 import { ClaudeWatcher } from './claude-watcher';
 import { CareStore } from './pet-care';
@@ -167,7 +174,10 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
         this.sendInit(webview);
         break;
       case 'care': {
-        // The webview only sends this when the agent is not working.
+        // Helpers aren't looked after; the webview only sends care when the agent is not working.
+        if (this.deps.getConfig().companion === 'helper') {
+          break;
+        }
         const result = care.act(message.action);
         post(webview, { command: 'care-update', ...result });
         if (result.ok) {
@@ -207,9 +217,15 @@ export class PeonViewProvider implements vscode.WebviewViewProvider {
       case 'gather-logs':
         this.gatherLogs(webviewView, message.snapshot);
         break;
-      case 'setting':
-        void saveSetting(message.key, message.value);
+      case 'setting': {
+        // A look change goes to the pet's settings or the helper's, and must be one of its kind.
+        const { companion } = this.deps.getConfig();
+        if (message.key === 'species' && isHelper(message.value) !== (companion === 'helper')) {
+          break;
+        }
+        void saveSetting(lookSettingKey(message.key, companion), message.value);
         break;
+      }
       case 'save-state': {
         if (!this.current(webview, message.slot)) {
           break;

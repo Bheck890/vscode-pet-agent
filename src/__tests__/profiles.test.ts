@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseProfile, sharable } from '../profiles';
-import { slotId } from '../slot';
+import { Slots, slotId } from '../slot';
 import { scoped } from '../storage';
 import { makeSave, memory } from './save-helpers';
 
@@ -47,6 +47,39 @@ describe('slots', () => {
     ]);
     progress.record('busiest', new Date(2026, 9, 19, 10).getTime());
     expect(stores.progress.total()).toBe(5);
+  });
+
+  it('gives the helper its own save, apart from the pet, with an id of its own', () => {
+    const storage = memory();
+    let companion: 'pet' | 'helper' = 'pet';
+    const slots = new Slots(
+      storage,
+      () => new Date(2026, 9, 19, 12),
+      () => 'Rusty',
+      () => companion,
+    );
+    const pet = slots.current();
+    companion = 'helper';
+    const helper = slots.current();
+    expect(helper.id).not.toBe(pet.id);
+    expect(helper.id).toBe('2026-10-19-rusty-2');
+    expect(slots.ids().sort()).toEqual([pet.id, helper.id].sort());
+    companion = 'pet';
+    expect(slots.current()).toEqual(pet);
+  });
+
+  it('starts a helper from now, even over data from before there were saves', () => {
+    const storage = memory();
+    storage.data['petXp'] = { 'turn:a': { xp: 10, kind: 'turn', at: 5 } };
+    const at = new Date(2026, 9, 19, 12);
+    const helper = new Slots(
+      storage,
+      () => at,
+      () => 'Alder',
+      () => 'helper',
+    ).current();
+    expect(helper.startedAt).toBe(at.getTime());
+    expect(storage.data[`petXp:${helper.id}`]).toBeUndefined();
   });
 
   it('makes readable ids that never clash', () => {

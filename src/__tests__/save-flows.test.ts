@@ -62,6 +62,7 @@ function setup(answers: Parameters<typeof ui>[0] = {}) {
     ui: u,
     look: () => s.profiles.current(false).pet,
     saveSetting,
+    companion: () => 'pet',
     now: () => new Date(2026, 9, 19, 12),
     log,
     saveChanged,

@@ -88,6 +88,14 @@ describe('catch-up', () => {
 });
 
 describe('weekly challenges', () => {
+  it("never gives a helper care or toy challenges it can't do", () => {
+    for (const w of ['2026-10-19', '2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16']) {
+      const kinds = weeklyChallenges(w, true).map((c) => c.kind);
+      expect(kinds).toHaveLength(3);
+      expect(kinds.filter((k) => k.startsWith('care') || k === 'find')).toEqual([]);
+    }
+  });
+
   it('picks three different ones, the same all week, changing week to week', () => {
     const a = weeklyChallenges('2026-10-19');
     expect(new Set(a.map((c) => c.id)).size).toBe(3);

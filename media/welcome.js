@@ -8,7 +8,16 @@
 (function (root) {
   'use strict';
 
-  const SPECIES_EMOJI = { cat: '🐱', dog: '🐶', bird: '🐦', fox: '🦊' };
+  const SPECIES_EMOJI = {
+    cat: '🐱',
+    dog: '🐶',
+    bird: '🐦',
+    fox: '🦊',
+    wizard: '🧙',
+    robot: '🤖',
+    monitor: '🖥️',
+    floppy: '💾',
+  };
   const PATTERN_EMOJI = {
     none: '⬜',
     spots: '🐆',
@@ -32,7 +41,10 @@
   };
   const LOOK_KEYS = ['species', 'name', 'color', 'eyeColor', 'pattern', 'accessory'];
 
-  /** The tour: each stop lights up its corner button (none for the first). */
+  /**
+   * The tour: each stop lights up its corner button (none for the first).
+   * Helpers skip the pet-only stops and get their own words where they differ.
+   */
   const TOUR = [
     {
       target: '',
@@ -43,6 +55,7 @@
     },
     {
       target: 'care-toggle',
+      petOnly: true,
       title: '🐾 Look after it',
       text: () =>
         'Feed it, give it a treat, play fetch or give it a bath while your agent is idle. ' +
@@ -50,6 +63,7 @@
     },
     {
       target: 'bag-toggle',
+      petOnly: true,
       title: '🎒 Toys',
       text: () =>
         'Toys turn up as you work. Take them out to play, and trade spares in the shop ' +
@@ -58,23 +72,27 @@
     {
       target: 'trophy-toggle',
       title: '🏆 Levels',
-      text: () =>
+      text: (_name, helper) =>
         'You start at level 1 with 0 XP. Finished prompts, passing tests and builds earn XP, ' +
-        'weekly challenges and prompt records earn more, and levelling up opens new bags.',
+        'and weekly challenges and prompt records earn more' +
+        (helper ? '.' : ', and levelling up opens new bags.'),
     },
     {
       target: 'house-toggle',
       title: '🏠 Home',
-      text: () =>
-        'Furnish its houses room by room. The 👤 Profiles tab keeps your old saves, ' +
-        'and 🔄 Start over gives you a fresh pet.',
+      text: (_name, helper) =>
+        helper
+          ? 'Helpers have no house: 🏠 lists your old saves and friends, and 🔄 Start over ' +
+            'gives you a fresh helper.'
+          : 'Furnish its houses room by room. The 👤 Profiles tab keeps your old saves, ' +
+            'and 🔄 Start over gives you a fresh pet.',
     },
     {
       target: 'settings-toggle',
       title: '⚙️ Settings',
-      text: () =>
+      text: (_name, helper) =>
         'Switch any feature off, set up peon-ping for other agents (Cursor, Codex...), ' +
-        'and replay this tour.',
+        `switch to your ${helper ? 'pet' : 'helper'}, and replay this tour.`,
     },
   ];
 
@@ -104,6 +122,10 @@
     let stop = -1;
 
     const defaultName = () => presets.names[look.species] || 'Pet';
+    const helper = () => (api.config() || {}).companion === 'helper';
+    /** The species to pick from: pets, or helpers, never both. */
+    const kinds = () => Art.speciesIds.filter((s) => !!Art.SPECIES[s].helper === helper());
+    const tour = () => TOUR.filter((s) => !(helper() && s.petOnly));
 
     function set(key, value) {
       look[key] = value;
@@ -139,7 +161,7 @@
     }
 
     function glow(on) {
-      const id = stop >= 0 ? TOUR[stop].target : '';
+      const id = stop >= 0 ? tour()[stop].target : '';
       const el = id && document.getElementById(id);
       if (el) {
         el.classList.toggle('tour', on);
@@ -162,12 +184,13 @@
     }
 
     function renderTour() {
-      const s = TOUR[stop];
-      const last = stop === TOUR.length - 1;
+      const stops = tour();
+      const s = stops[stop];
+      const last = stop === stops.length - 1;
       panel.innerHTML =
         `<div class="panel-head"><span>${s.title}</span>` +
-        `<span class="dim">${stop + 1} / ${TOUR.length}</span></div>` +
-        `<div class="tour-text">${escapeHtml(s.text(look.name || defaultName()))}</div>` +
+        `<span class="dim">${stop + 1} / ${stops.length}</span></div>` +
+        `<div class="tour-text">${escapeHtml(s.text(look.name || defaultName(), helper()))}</div>` +
         '<div class="food-choices welcome-actions">' +
         '<button data-welcome-action="skip-tour">Skip tutorial</button>' +
         (stop > 0 ? '<button data-welcome-action="back">◀ Back</button>' : '') +
@@ -186,14 +209,22 @@
       const img = api.spriteUrl({ ...api.config(), ...look });
       panel.innerHTML =
         '<div class="panel-head"><span>👋 Welcome to Pet Agents!</span></div>' +
-        '<div class="panel-note">Your pet acts out what your AI agent is doing, and grows as ' +
-        'you work together. Pick your pet: it starts at level 1.</div>' +
+        '<div class="food-choices">' +
+        `<button data-welcome-action="mode-pet"${helper() ? '' : ' class="active"'}` +
+        ' title="A pet to look after, with toys, bags and a house">🐾 Pet</button>' +
+        `<button data-welcome-action="mode-helper"${helper() ? ' class="active"' : ''}` +
+        ' title="A retro helper: no care, bags or house">🧙 Helper</button></div>' +
+        (helper()
+          ? '<div class="panel-note">Your helper acts out what your AI agent is doing. Helpers ' +
+            'just help: no feeding, toys or house. Pick yours: it starts at level 1.</div>'
+          : '<div class="panel-note">Your pet acts out what your AI agent is doing, and grows as ' +
+            'you work together. Pick your pet: it starts at level 1.</div>') +
         `<div class="welcome-pet">${img ? `<img src="${img}" alt="" />` : ''}` +
         `<b>${escapeHtml(name)}</b> the ${escapeHtml(look.species)}</div>` +
         '<div class="group">Species</div>' +
         choices(
           'species',
-          Art.speciesIds.map((s) => [s, `${SPECIES_EMOJI[s] || '🐾'} ${title(s)}`]),
+          kinds().map((s) => [s, `${SPECIES_EMOJI[s] || '🐾'} ${title(s)}`]),
         ) +
         '<div class="group">Name</div>' +
         `<input id="welcome-name" maxlength="40" placeholder="${escapeHtml(defaultName())}"` +
@@ -245,6 +276,15 @@
       }
       const action = /** @type {HTMLElement | null} */ (target.closest('[data-welcome-action]'));
       switch (action && action.dataset.welcomeAction) {
+        case 'mode-pet':
+        case 'mode-helper': {
+          // The other one has its own save: the view switches to it and welcomes it there.
+          const mode = action && action.dataset.welcomeAction === 'mode-helper' ? 'helper' : 'pet';
+          if (mode !== (api.config() || {}).companion) {
+            api.post({ command: 'setting', key: 'companion', value: mode });
+          }
+          break;
+        }
         case 'random':
           set('color', pick(presets.colors).color);
           set('eyeColor', pick(presets.eyes).color);
@@ -260,7 +300,7 @@
           go(0);
           break;
         case 'next':
-          go(Math.min(TOUR.length - 1, stop + 1));
+          go(Math.min(tour().length - 1, stop + 1));
           break;
         case 'back':
           go(Math.max(0, stop - 1));
@@ -299,8 +339,8 @@
         };
         const config = api.config() || {};
         look = Object.fromEntries(LOOK_KEYS.map((k) => [k, String(config[k] || '')]));
-        if (!Art.SPECIES[look.species]) {
-          look.species = Art.speciesIds[0];
+        if (!kinds().includes(look.species)) {
+          look.species = kinds()[0];
         }
         if (look.name === presets.names[look.species]) {
           look.name = '';

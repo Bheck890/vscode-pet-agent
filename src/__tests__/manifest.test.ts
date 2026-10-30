@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ACCESSORIES, PATTERNS, SPECIES, readPetConfig } from '../pet-config';
+import { ACCESSORIES, HELPERS, PATTERNS, SPECIES, readPetConfig } from '../pet-config';
 import { mediaFiles } from '../media-files';
 
 const root = process.cwd();
@@ -125,18 +125,21 @@ describe('contributions', () => {
     ];
     expect(sections.length).toBeGreaterThan(0);
     for (const m of sections) {
-      expect(`${m[1]}.`).toBe(PREFIX);
+      expect(`${m[1]}.`.startsWith(PREFIX)).toBe(true);
     }
   });
 });
 
 describe('settings', () => {
   it('reads every declared setting, and declares every setting it reads', () => {
+    // The helper reads its own look settings, so ask as both.
     const asked = new Set<string>();
-    readPetConfig((key) => {
-      asked.add(key);
-      return undefined;
-    });
+    for (const companion of ['pet', 'helper']) {
+      readPetConfig((key) => {
+        asked.add(key);
+        return key === 'companion' ? companion : undefined;
+      });
+    }
     expect([...asked].sort()).toEqual([...settingKeys].sort());
   });
 
@@ -150,6 +153,10 @@ describe('settings', () => {
     expect(props['pet-agents.species'].enum).toEqual([...SPECIES]);
     expect(props['pet-agents.pattern'].enum).toEqual([...PATTERNS]);
     expect(props['pet-agents.accessory'].enum).toEqual([...ACCESSORIES]);
+    expect(props['pet-agents.helper'].enum).toEqual([...HELPERS]);
+    expect(props['pet-agents.helperPattern'].enum).toEqual([...PATTERNS]);
+    expect(props['pet-agents.helperAccessory'].enum).toEqual([...ACCESSORIES]);
+    expect(props['pet-agents.companion'].enum).toEqual(['pet', 'helper']);
     expect(props['pet-agents.size'].enum).toEqual(['small', 'medium', 'large']);
     expect(props['pet-agents.artStyle'].enum).toEqual(['smooth', 'pixel']);
     expect(props['pet-agents.variety'].enum).toEqual(['random', 'classic']);

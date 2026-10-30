@@ -1,5 +1,10 @@
 export const SPECIES = ['cat', 'dog', 'bird', 'fox'] as const;
-export type Species = (typeof SPECIES)[number];
+/** Retro desktop assistants: they act out the agent like pets, with no care, bags or house. */
+export const HELPERS = ['wizard', 'robot', 'monitor', 'floppy'] as const;
+export type Species = (typeof SPECIES)[number] | (typeof HELPERS)[number];
+
+/** Pets and helpers are two separate systems, each with its own save and look. */
+export type Companion = 'pet' | 'helper';
 
 /** Must match PATTERNS in media/pets.js. */
 export const PATTERNS = ['none', 'spots', 'stripes', 'socks', 'mask', 'patch'] as const;
@@ -85,7 +90,32 @@ export const DEFAULT_NAMES: Record<Species, string> = {
   dog: 'Biscuit',
   bird: 'Pip',
   fox: 'Rusty',
+  wizard: 'Alder',
+  robot: 'Bolt',
+  monitor: 'Pixel',
+  floppy: 'Floppy',
 };
+
+/** The look settings a helper keeps apart from the pet's: `color` is `helperColor`, and so on. */
+const HELPER_LOOK_KEYS: Record<string, string> = {
+  species: 'helper',
+  name: 'helperName',
+  color: 'helperColor',
+  accentColor: 'helperAccentColor',
+  eyeColor: 'helperEyeColor',
+  pattern: 'helperPattern',
+  accessory: 'helperAccessory',
+  accessoryColor: 'helperAccessoryColor',
+};
+
+/** The setting a look key is stored under for this companion. */
+export function lookSettingKey(key: string, companion: Companion): string {
+  return companion === 'helper' ? (HELPER_LOOK_KEYS[key] ?? key) : key;
+}
+
+export function isHelper(v: unknown): v is (typeof HELPERS)[number] {
+  return typeof v === 'string' && (HELPERS as readonly string[]).includes(v);
+}
 
 /** Colour presets offered by the "Customize Pet" command. Any CSS colour also works. */
 export const COLOR_PRESETS: Array<{ label: string; color: string }> = [
@@ -117,6 +147,8 @@ export const EYE_PRESETS: Array<{ label: string; color: string }> = [
 
 /** Everything the webview needs to draw the pet. Colours are any CSS colour or '' for default. */
 export interface PetConfig {
+  /** Which system is playing; the look below is that one's. */
+  companion: Companion;
   species: Species;
   color: string;
   accentColor: string;
@@ -222,6 +254,9 @@ export function panelSetting(key: unknown, on: unknown): [string, unknown] | nul
   if (typeof key === 'string' && LOOK_SETTINGS.includes(key)) {
     return lookSetting(key, on);
   }
+  if (key === 'companion') {
+    return on === 'pet' || on === 'helper' ? [key, on] : null;
+  }
   if (key === 'disabledActions') {
     const ids = actionIds(on);
     return ids ? [key, ids] : null;
@@ -235,8 +270,9 @@ export function panelSetting(key: unknown, on: unknown): [string, unknown] | nul
   return [key, key === 'variety' ? (on ? 'random' : 'classic') : on];
 }
 
+/** A pet or a helper. */
 export function isSpecies(v: unknown): v is Species {
-  return typeof v === 'string' && (SPECIES as readonly string[]).includes(v);
+  return isHelper(v) || (typeof v === 'string' && (SPECIES as readonly string[]).includes(v));
 }
 
 /** Converts the `pet-agents.size` setting string to a pixel value. */
@@ -261,23 +297,35 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     const v = get(key);
     return typeof v === 'string' ? v.trim() : '';
   };
-  const rawSpecies = get('species');
-  const species: Species = isSpecies(rawSpecies) ? rawSpecies : 'fox';
+  const companion: Companion = get('companion') === 'helper' ? 'helper' : 'pet';
+  const look = (key: string) => lookSettingKey(key, companion);
+  const rawSpecies = get(look('species'));
+  const species: Species =
+    companion === 'helper'
+      ? isHelper(rawSpecies)
+        ? rawSpecies
+        : 'wizard'
+      : isSpecies(rawSpecies) && !isHelper(rawSpecies)
+        ? rawSpecies
+        : 'fox';
   const size = get('size');
+  const helper = companion === 'helper';
   return {
+    companion,
     species,
-    color: text('color'),
-    accentColor: text('accentColor'),
-    eyeColor: text('eyeColor'),
-    pattern: oneOf(get('pattern'), PATTERNS),
-    accessory: oneOf(get('accessory'), ACCESSORIES),
-    accessoryColor: text('accessoryColor'),
-    name: text('name') || DEFAULT_NAMES[species],
+    color: text(look('color')),
+    accentColor: text(look('accentColor')),
+    eyeColor: text(look('eyeColor')),
+    pattern: oneOf(get(look('pattern')), PATTERNS),
+    accessory: oneOf(get(look('accessory')), ACCESSORIES),
+    accessoryColor: text(look('accessoryColor')),
+    name: text(look('name')) || DEFAULT_NAMES[species],
     stateColors: get('stateColors') !== false,
     wander: get('wander') !== false,
     artStyle: get('artStyle') === 'pixel' ? 'pixel' : 'smooth',
     variety: get('variety') === 'classic' ? 'classic' : 'random',
-    toys: get('toys') !== false,
+    // Helpers have no toys, bags, care or visitors.
+    toys: !helper && get('toys') !== false,
     machines: get('machines') !== false,
     backgroundPets: get('backgroundPets') !== false,
     otherRepoPets: get('otherRepoPets') !== false,
@@ -289,9 +337,9 @@ export function readPetConfig(get: (key: string) => unknown): PetConfig {
     levels: get('levels') !== false,
     enemies: get('enemies') !== false,
     house: get('house') !== false,
-    style: oneOf(get('style'), STYLES),
+    style: helper ? '' : oneOf(get('style'), STYLES),
     shareButtons: get('shareButtons') !== false,
-    visitors: get('visitors') !== false,
+    visitors: !helper && get('visitors') !== false,
     size: sizeFromSetting(typeof size === 'string' ? size : 'medium'),
   };
 }

@@ -46,7 +46,19 @@
     const bagDef = (id) => BAGS.find((b) => b.id === id) || BAGS[0];
     const owns = (id) => (api.saved().unlocks || []).includes(id);
     const foodOwned = (f) => !f.emoji || owns(unlockId(f.bag, 'food', f.id));
-    const SPECIES_EMOJI = { cat: '🐱', dog: '🐶', bird: '🐦', fox: '🦊' };
+    const SPECIES_EMOJI = {
+      cat: '🐱',
+      dog: '🐶',
+      bird: '🐦',
+      fox: '🦊',
+      wizard: '🧙',
+      robot: '🤖',
+      monitor: '🖥️',
+      floppy: '💾',
+    };
+    /** A helper has no care, bags or house; its 🏠 strip is just Profiles. */
+    const helperMode = () => (api.config() || {}).companion === 'helper';
+    const isHelperLook = (look) => !!(root.PetArt.SPECIES[look.species] || {}).helper;
     let noteUntil = 0;
 
     const careToggle = /** @type {HTMLButtonElement} */ (document.getElementById('care-toggle'));
@@ -128,6 +140,13 @@
     /** Earlier saves and friends' profiles, from the extension. */
     let profiles = [];
     let showHidden = false;
+    /** In helper mode, the old save picked in the Profiles row (there is no house to visit). */
+    let picked = null;
+    const pickedEntry = () =>
+      picked
+        ? profiles.find((p) => p.id === picked.id && !!p.guest === picked.guest) || null
+        : null;
+    const companionSwitch = byId('companion-switch');
     /** The latest level and records from the extension, or null before the first. */
     let progress = null;
     let records = null;
@@ -467,14 +486,37 @@
         .join('');
     }
 
+    /** Settings a helper has no use for: it finds no toys and gets no visitors. */
+    const PET_ONLY_SWITCHES = ['toys', 'visitors'];
+
     function syncSwitches() {
+      const helper = helperMode();
       for (const input of switches) {
         const key = input.dataset.setting || '';
         input.checked =
           key === 'variety' ? api.config().variety !== 'classic' : api.config()[key] !== false;
+        const label = input.closest ? input.closest('label') : null;
+        if (label) {
+          label.hidden = helper && PET_ONLY_SWITCHES.includes(key);
+        }
       }
+      companionSwitch.innerHTML =
+        '<span class="group">Showing:</span>' +
+        `<button data-companion="pet"${helper ? '' : ' class="active"'}` +
+        ' title="A pet to look after, with toys, bags and a house">🐾 Pet</button>' +
+        `<button data-companion="helper"${helper ? ' class="active"' : ''}` +
+        ' title="A retro helper: no care, bags or house. It keeps its own save and look">' +
+        '🧙 Helper</button>';
       renderActions();
     }
+
+    companionSwitch.addEventListener('click', (e) => {
+      const el = /** @type {HTMLElement} */ (e.target).closest('[data-companion]');
+      const value = el && /** @type {HTMLElement} */ (el).dataset.companion;
+      if (value && value !== (api.config() || {}).companion) {
+        api.post({ command: 'setting', key: 'companion', value });
+      }
+    });
 
     bagToggle.addEventListener('click', () => togglePanel(bagPanel));
     bagTabs.addEventListener('click', (e) => {
@@ -551,6 +593,10 @@
     trophyToggle.addEventListener('click', () => togglePanel(trophyPanel));
     // The house stays open with its furniture bar hidden; 🏠 again leaves it.
     houseToggle.addEventListener('click', () => {
+      if (helperMode()) {
+        togglePanel(housePanel);
+        return;
+      }
       // Visiting an old save, 🏠 brings you home to your own house.
       if (api.visiting()) {
         api.endVisit();
@@ -606,10 +652,15 @@
       const { profile, guest, profiles: what } = /** @type {HTMLElement} */ (el).dataset;
       if (what === 'home') {
         api.endVisit();
+        picked = null;
       } else if (what === 'import') {
         api.post({ command: 'profile-import' });
       } else if (what === 'start-over') {
         api.post({ command: 'start-over' });
+      } else if (profile && helperMode()) {
+        const g = guest === '1';
+        const same = picked && picked.id === profile && picked.guest === g;
+        picked = same ? null : { id: profile, guest: g };
       } else if (what === 'hidden') {
         showHidden = !showHidden;
       } else if (profile) {
@@ -620,7 +671,7 @@
     houseVisit.addEventListener('click', (e) => {
       const el = /** @type {HTMLElement} */ (e.target).closest('[data-visit]');
       const what = el && /** @type {HTMLElement} */ (el).dataset.visit;
-      const v = api.visiting();
+      const v = api.visiting() || (helperMode() ? pickedEntry() : null);
       if (what === 'invite') {
         api.invite();
       } else if (what && what.startsWith('home:')) {
@@ -630,6 +681,7 @@
       } else if (v && what === 'hide') {
         api.post({ command: 'profile-hide', id: v.id, guest: !!v.guest, hidden: !v.hidden });
         api.endVisit();
+        picked = null;
       } else if (v && what === 'share') {
         api.post({ command: 'profile-export', id: v.id });
       }
@@ -817,8 +869,11 @@
       }
       const span = Math.max(1, progress.next - progress.floor);
       const pct = Math.round(((progress.xp - progress.floor) / span) * 100);
-      const next = root.PetHouse.FURNITURE.find((f) => !f.bag && f.level > progress.level);
-      const nextBag = BAGS.find((b) => api.bagLevel(b.id) > progress.level);
+      // Helpers have no furniture or bags to look forward to.
+      const next = helperMode()
+        ? null
+        : root.PetHouse.FURNITURE.find((f) => !f.bag && f.level > progress.level);
+      const nextBag = helperMode() ? null : BAGS.find((b) => api.bagLevel(b.id) > progress.level);
       const medals = profiles.filter((p) => !p.guest && p.finished).length;
       const challenges = progress.challenges
         .map(
@@ -909,6 +964,9 @@
 
     /** The collection's progress bars, at the top of the Profiles tab. */
     function collectionHtml() {
+      if (helperMode()) {
+        return '';
+      }
       const c = completion();
       const v = api.visiting();
       const badge = c.complete === 'all' ? '💯 ' : c.complete === 'items' ? '✅ ' : '';
@@ -930,8 +988,11 @@
     }
 
     function profilesHtml() {
-      const v = api.visiting();
-      const list = profiles.filter((p) => showHidden || !p.hidden);
+      const v = api.visiting() || (helperMode() ? pickedEntry() : null);
+      // Pets and helpers are separate: each lists only its own old saves (friends are friends).
+      const list = profiles.filter(
+        (p) => (showHidden || !p.hidden) && (p.guest || isHelperLook(p.pet) === helperMode()),
+      );
       const button = (p) => {
         const img = api.spriteUrl(p.pet);
         const pic = img ? `<img src="${img}" alt="" />` : SPECIES_EMOJI[p.pet.species] || '🐾';
@@ -973,6 +1034,11 @@
       if (housePanel.hidden) {
         return;
       }
+      if (helperMode()) {
+        renderHelperProfiles();
+        return;
+      }
+      houseRooms.hidden = false;
       const cat = api.house.catalogue();
       const v = api.visiting();
       houseNote.textContent = v
@@ -1061,6 +1127,32 @@
       houseProfiles.innerHTML = collectionHtml() + profilesHtml();
     }
 
+    /** A helper's 🏠 strip: its old saves and friends, with no house, rooms or furniture. */
+    function renderHelperProfiles() {
+      houseTab = 'profiles';
+      const p = pickedEntry();
+      houseNote.textContent = p
+        ? `${p.pet.name} the ${p.pet.species} - level ${p.summary.level} - ` +
+          `${p.moved ? 'moved' : p.finished ? 'finished' : 'ended'} ${monthYear(p.endedAt)}`
+        : progress && (api.config() || {}).levels !== false
+          ? `Level ${progress.level}`
+          : '';
+      houseVisit.hidden = !p;
+      houseVisit.innerHTML = p
+        ? (p.guest
+            ? ''
+            : `<button data-visit="share" title="Share this profile with a friend">📤 Share</button>`) +
+          `<button data-visit="rename">✏️ Rename</button>` +
+          `<button data-visit="hide">${p.hidden ? '👀 Show' : '🙈 Hide'}</button>`
+        : '';
+      houseRooms.hidden = true;
+      houseTabs.innerHTML = '';
+      for (const [id, , el] of HOUSE_TABS) {
+        el.hidden = id !== 'profiles';
+      }
+      houseProfiles.innerHTML = profilesHtml();
+    }
+
     /** Leaves the house, and any old save being visited. */
     function leaveHouse() {
       if (api.visiting()) {
@@ -1074,9 +1166,10 @@
     /** Corner buttons right to left; ones for switched-off features hide and the rest close up. */
     function layoutCorners() {
       const cfg = api.config() || {};
+      const helper = helperMode();
       const shown = [
-        [careToggle, true],
-        [bagToggle, !api.visiting()],
+        [careToggle, !helper],
+        [bagToggle, !api.visiting() && !helper],
         [settingsToggle, true],
         [trophyToggle, cfg.levels !== false || cfg.records !== false],
         [houseToggle, cfg.house !== false],
@@ -1096,6 +1189,9 @@
       }
       if (bagToggle.hidden && !bagPanel.hidden) {
         togglePanel(bagPanel);
+      }
+      if (careToggle.hidden && !carePanel.hidden) {
+        togglePanel(carePanel);
       }
     }
 

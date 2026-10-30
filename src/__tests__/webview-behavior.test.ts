@@ -140,6 +140,7 @@ function runWebviewScript({ libs = true, allowErrors = false } = {}) {
     'welcome-panel',
     'peon-guide',
     'replay-tour',
+    'companion-switch',
   ]) {
     elements[id] = fakeEl();
   }
@@ -1741,6 +1742,90 @@ describe('bags, houses and saves in the view', () => {
     expect(sent(h, 'peon-copy')).toEqual([{ command: 'peon-copy', step: 1 }]);
     h.send({ command: 'peon', installed: true, steps: [], notes: [] });
     expect(h.elements['peon-guide'].innerHTML).toContain('✅ peon-ping is installed');
+  });
+
+  describe('helpers', () => {
+    const HELPER = { companion: 'helper', species: 'wizard', name: 'Alder', toys: false };
+    const entry = (id: string, species: string, name: string) => ({
+      ...PROFILE,
+      id,
+      pet: { ...PROFILE.pet, species, name },
+    });
+
+    it('has no care or toy bag, and its 🏠 is just Profiles with only helper saves', () => {
+      const h = start({}, HELPER);
+      expect(h.elements['care-toggle'].hidden).toBe(true);
+      expect(h.elements['bag-toggle'].hidden).toBe(true);
+      expect(h.elements['house-toggle'].hidden).toBe(false);
+      h.send({
+        command: 'profiles',
+        profiles: [entry('a', 'dog', 'Biscuit'), entry('b', 'robot', 'Bolt')],
+      });
+      click(h.elements['house-toggle']);
+      expect(h.elements['house-panel'].hidden).toBe(false);
+      expect(h.elements['house-rooms'].hidden).toBe(true);
+      expect(h.elements['house-tabs'].innerHTML).toBe('');
+      const row = h.elements['house-profiles'].innerHTML;
+      expect(row).toContain('data-profile="b"');
+      expect(row).not.toContain('data-profile="a"');
+      expect(row).not.toContain('collection');
+      expect(row).toContain('🔄 Start over...');
+      // Picking an old save shows it, with no house to visit.
+      click(h.elements['house-profiles'], { profile: 'b', guest: '0' });
+      expect(sent(h, 'visit-profile')).toEqual([]);
+      expect(h.elements['house-note'].textContent).toMatch(/^Bolt the robot - level 35 - finished/);
+      click(h.elements['house-visit'], { visit: 'rename' });
+      expect(sent(h, 'profile-rename')).toEqual([
+        { command: 'profile-rename', id: 'b', guest: false },
+      ]);
+    });
+
+    it('switches between pet and helper from the settings panel', () => {
+      const h = start({}, HELPER);
+      expect(h.elements['companion-switch'].innerHTML).toContain(
+        'data-companion="helper" class="active"',
+      );
+      click(h.elements['companion-switch'], { companion: 'pet' });
+      expect(sent(h, 'setting')).toEqual([{ command: 'setting', key: 'companion', value: 'pet' }]);
+    });
+
+    it('welcomes a helper with helpers only, and a tour without care or toys', () => {
+      const h = start({}, HELPER);
+      const panel = h.elements['welcome-panel'];
+      h.send({ command: 'welcome', colors: [], eyes: [], names: { wizard: 'Alder' } });
+      expect(panel.innerHTML).toContain('data-value="robot"');
+      expect(panel.innerHTML).not.toContain('data-value="fox"');
+      expect(panel.innerHTML).toContain('data-welcome-action="mode-helper" class="active"');
+      click(panel, { welcomeAction: 'mode-pet' });
+      expect(sent(h, 'setting')).toEqual([{ command: 'setting', key: 'companion', value: 'pet' }]);
+      click(panel, { welcomeAction: 'skip' });
+      expect(panel.innerHTML).toContain('1 / 4');
+      for (let i = 0; i < 2; i++) {
+        click(panel, { welcomeAction: 'next' });
+      }
+      expect(panel.innerHTML).toContain('Helpers have no house');
+    });
+
+    it('acts out the agent with its own look, and no care or toy count', () => {
+      jest.useFakeTimers();
+      try {
+        const h = start({}, HELPER);
+        h.send({
+          command: 'claude-update',
+          main: { sessionId: 's', state: 'reading', detail: 'Read a.ts', seq: 1, project: null },
+          subagents: [],
+          sessions: [],
+        });
+        // It wakes up first, then reads.
+        h.runFrames(2500);
+        h.hover(50, 80);
+        expect(h.tooltip.innerHTML).toContain('reading up on it');
+        expect(h.tooltip.innerHTML).not.toContain('toys found');
+        expect(h.tooltip.innerHTML).not.toContain('🍖');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   it('offers to start over from the Profiles row, but not while visiting', () => {

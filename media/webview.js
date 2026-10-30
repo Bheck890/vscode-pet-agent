@@ -388,7 +388,9 @@
         rand: p.syncKey ? Variants.seeded(`${p.syncKey}:${state}`) : Math.random,
       });
       p.lastVariant[state] = v ? v.id : '';
-      p.variant = { state, def: v ? Object.assign({}, STATES[state], v) : STATES[state] };
+      // A helper's own prop and label for the state win over a variant's.
+      const own = (Art.SPECIES[(p.look || config).species].looks || {})[state];
+      p.variant = { state, def: Object.assign({}, STATES[state], v, own) };
     }
     return p.variant.def;
   }
@@ -558,7 +560,8 @@
   }
 
   function lowestStat() {
-    if (!care) {
+    // Helpers aren't looked after, so they never get hungry or grubby.
+    if (!care || (config && config.companion === 'helper')) {
       return null;
     }
     const [stat, value] = Object.entries(care)
@@ -1805,6 +1808,8 @@
         return { x: 22, y: 6 + Math.round(Math.sin(tt * 3)) };
       case 'trophy':
         return { x: 11, y: sp.headTop - 12 + Math.round(Math.abs(Math.sin(tt * 4)) * -2) };
+      case 'wand':
+        return { x: 23, y: 13 + Math.round(Math.sin(tt * 4)) };
       default:
         return { x: 0, y: 0 };
     }
@@ -2543,18 +2548,22 @@
       const def = lookOf(main, displayState(main), now());
       const helpers = [...minis.values()].filter((m) => !m.leavingAt && !m.background).length;
       const jobs = scene.machineCount();
+      // A helper isn't looked after and finds no toys.
+      const pet = config.companion !== 'helper';
       return (
         `<b>${escapeHtml(main.name)}</b> is ${escapeHtml(def.label)}` +
         (main.detail ? `<br>${escapeHtml(main.detail)}` : '') +
         (project ? `<br><span class="dim">in ${escapeHtml(project)}</span>` : '') +
-        (care
+        (care && pet
           ? `<br>🍖 ${Math.round(care.fullness)} &nbsp;💖 ${Math.round(care.fun)} &nbsp;🫧 ${Math.round(care.clean)}`
           : '') +
         (helpers
           ? `<br><span class="dim">${helpers} helper${helpers > 1 ? 's' : ''} working</span>`
           : '') +
         (jobs ? `<br><span class="dim">${jobs} job${jobs > 1 ? 's' : ''} running</span>` : '') +
-        `<br><span class="dim">🎒 ${scene.collected().found}/${scene.collected().total} toys found</span>` +
+        (pet
+          ? `<br><span class="dim">🎒 ${scene.collected().found}/${scene.collected().total} toys found</span>`
+          : '') +
         (events.label() ? `<br>${escapeHtml(events.label())}` : '')
       );
     }

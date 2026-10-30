@@ -115,9 +115,12 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
+/** Challenges a helper can't do: it isn't looked after and finds no toys. */
+const PET_ONLY = (c: Challenge) => c.kind.startsWith('care') || c.kind === 'find';
+
 /** This week's three challenges, picked from the week id. */
-export function weeklyChallenges(week: string): Challenge[] {
-  const pool = [...CHALLENGES];
+export function weeklyChallenges(week: string, helper = false): Challenge[] {
+  const pool = CHALLENGES.filter((c) => !helper || !PET_ONLY(c));
   const picked: Challenge[] = [];
   let h = hash(week);
   while (picked.length < 3) {

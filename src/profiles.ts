@@ -493,7 +493,7 @@ export class Profiles {
 
   private freshSlot(oldId: string, found: Record<string, number>): void {
     const now = this.deps.now();
-    const taken = new Set([oldId, ...this.entries().map((e) => e.id)]);
+    const taken = new Set([oldId, ...this.entries().map((e) => e.id), ...this.deps.slots.ids()]);
     this.deps.slots.start({
       id: slotId(this.deps.look().name, now, (id) => taken.has(id)),
       startedAt: now.getTime(),

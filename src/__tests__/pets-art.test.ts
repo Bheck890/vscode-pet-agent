@@ -3,6 +3,13 @@ import * as path from 'path';
 import * as vm from 'vm';
 import * as petConfig from '../pet-config';
 
+/** An accessory, costume or style: drawn in a slot from a grid placed by the species' anchors. */
+interface Placeable {
+  slot: string;
+  color: string;
+  build(sp: unknown): { grid: string[]; x: number; y: number };
+}
+
 interface PetArtApi {
   SIZE: number;
   SPECIES: Record<
@@ -20,9 +27,9 @@ interface PetArtApi {
   >;
   PROPS: Record<string, { grid: string[]; palette: Record<string, string> }>;
   PATTERNS: string[];
-  ACCESSORIES: Record<string, { slot: string; color: string }>;
-  COSTUMES: Record<string, { slot: string; color: string; build(sp: unknown): { grid: string[] } }>;
-  STYLES: Record<string, { slot: string; color: string; build(sp: unknown): { grid: string[] } }>;
+  ACCESSORIES: Record<string, Placeable>;
+  COSTUMES: Record<string, Placeable>;
+  STYLES: Record<string, Placeable>;
   speciesIds: string[];
   palette(
     species: string,
@@ -33,6 +40,8 @@ interface PetArtApi {
   ): Record<string, string>;
   compose(species: string, pal: Record<string, string>, expr: object): (string | null)[][];
   rotateHue(hex: string, deg: number): string;
+  mix(a: string, b: string, t: number): string;
+  place(thing: Placeable, sp: unknown): { grid: string[]; x: number; y: number };
 }
 
 type Expr = Record<string, unknown>;
@@ -243,6 +252,91 @@ describe('pet art', () => {
         const keys = new Set(style.build(Art.SPECIES[sp]).grid.join(''));
         const unknown = [...keys].filter((k) => !'.aAkwyYrcGP'.includes(k));
         expect([id, sp, unknown]).toEqual([id, sp, []]);
+      }
+    }
+  });
+});
+
+/**
+ * Every customisation must show on every pet and helper, not just the fox:
+ * each accessory, pattern, pet style and holiday costume changes the sprite,
+ * lands on the canvas, and isn't painted over.
+ */
+describe('customisations show on every species', () => {
+  const ALL = [...petConfig.SPECIES, ...petConfig.HELPERS];
+  const MARK = '#ff00ff';
+  const base = (sp: string) => render(sp, {});
+  // The accessory colour, and the darker edge drawn from it (sunglass lenses use that).
+  const MARKS = [MARK, Art.mix(MARK, '#000000', 0.45)];
+  const marked = (px: (string | null)[][]) => px.flat().filter((c) => MARKS.includes(c!)).length;
+  /** Share of a placed grid's pixels that land on the 32x32 canvas, where compose puts it. */
+  const onCanvas = (thing: Placeable, sp: string) => {
+    const placed = Art.place(thing, Art.SPECIES[sp]);
+    let on = 0;
+    let all = 0;
+    placed.grid.forEach((row, y) =>
+      [...row].forEach((k, x) => {
+        if (k === '.') {
+          return;
+        }
+        all++;
+        const X = placed.x + x;
+        const Y = placed.y + y;
+        if (X >= 0 && X < Art.SIZE && Y >= 0 && Y < Art.SIZE) {
+          on++;
+        }
+      }),
+    );
+    return all === 0 ? 0 : on / all;
+  };
+
+  describe.each(ALL)('%s', (sp) => {
+    it.each(Object.keys(Art.ACCESSORIES))('wears the %s, in its own colour', (acc) => {
+      expect(diff(base(sp), render(sp, { accessory: acc }))).toBeGreaterThanOrEqual(10);
+      expect(onCanvas(Art.ACCESSORIES[acc], sp)).toBeGreaterThanOrEqual(0.9);
+      // A unique colour shows the accessory's own pixels made it onto the sprite.
+      expect(marked(render(sp, { accessory: acc, accessoryColor: MARK }))).toBeGreaterThanOrEqual(
+        4,
+      );
+    });
+
+    it.each(Art.PATTERNS.filter((p) => p !== 'none'))('shows the %s pattern', (pattern) => {
+      expect(diff(base(sp), render(sp, { pattern }))).toBeGreaterThanOrEqual(5);
+    });
+
+    it('shows every pet style and holiday costume on the canvas', () => {
+      for (const [kind, things] of [
+        ['style', Art.STYLES],
+        ['costume', Art.COSTUMES],
+      ] as const) {
+        for (const id of Object.keys(things)) {
+          const changed = diff(base(sp), render(sp, { [kind]: id }));
+          expect([kind, id, changed >= 8]).toEqual([kind, id, true]);
+          expect([kind, id, onCanvas(things[id], sp) >= 0.9]).toEqual([kind, id, true]);
+        }
+      }
+    });
+
+    it('lets your accessory win its slot over a costume, and shares the others', () => {
+      const hat = Object.keys(Art.ACCESSORIES).find((a) => Art.ACCESSORIES[a].slot === 'head')!;
+      const neck = Object.keys(Art.ACCESSORIES).find((a) => Art.ACCESSORIES[a].slot === 'neck')!;
+      const headCostume = Object.keys(Art.COSTUMES).find((c) => Art.COSTUMES[c].slot === 'head')!;
+      const hatOnly = render(sp, { accessory: hat });
+      expect(render(sp, { accessory: hat, costume: headCostume })).toEqual(hatOnly);
+      const both = render(sp, { accessory: neck, accessoryColor: MARK, costume: headCostume });
+      expect(marked(both)).toBeGreaterThanOrEqual(4);
+      expect(diff(render(sp, { accessory: neck, accessoryColor: MARK }), both)).toBeGreaterThan(0);
+    });
+  });
+
+  it('keeps glasses visible on a screen face without a colour picked', () => {
+    for (const sp of ['robot', 'monitor']) {
+      const ink = Art.palette(sp, '#d8cbb0').e;
+      for (const acc of ['glasses', 'sunglasses']) {
+        const px = render(sp, { accessory: acc });
+        const pal = Art.palette(sp, '#336699');
+        expect([sp, acc, px.flat().filter((c) => c === pal.e).length > 0]).toEqual([sp, acc, true]);
+        expect(ink).toBe(Art.SPECIES[sp].eyeColor);
       }
     }
   });

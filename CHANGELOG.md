@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Every customisation shows on every pet and helper, not just the fox: tall hats, holiday costumes and pet styles (witch hat, bunny ears, top hat, antlers, chef hat, space helmet...) were cut off the top on the dog, the bird and the helpers, and now sit a little lower to fit. The crown takes your accessory colour, the bird gets white socks, masks and eye patches show on the helpers' faces, the monitor's spots land on its casing, and glasses stay visible on a screen face. A test checks every accessory, pattern, style and costume on every species.
+
 ### Changed
 
 - New saves (and keeping a save as a new profile) open at level 100 with the 💯 collection; a helper just needs level 100. Until then, 🔄 Start over can begin again without keeping the save, and a save you switched back to can always be kept again, since it is a profile already. Moving a pet to another computer is unaffected.

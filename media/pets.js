@@ -29,6 +29,8 @@
    *   helper?: boolean,
    *   eyeColor?: string,
    *   faceInk?: string,
+   *   faceKeys?: string,
+   *   spots?: number[][],
    *   looks?: Record<string, Record<string, unknown>>,
    * }} Species
    */
@@ -323,6 +325,7 @@
       helper: true,
       defaultColor: '#6b4fc8',
       eyeColor: '#3a2a1a',
+      faceKeys: 's',
       fixed: { s: '#f2c9a0', w: '#f4f4f8', y: '#ffd23f', k: '#1a1a24', p: '#d9727a' },
       eyeX: 9,
       eyeY: 13,
@@ -379,6 +382,7 @@
       defaultColor: '#d8cbb0',
       eyeColor: '#7fffd4',
       faceInk: 'e',
+      faceKeys: 'g',
       fixed: { g: '#1f3d3b', r: '#e63946', y: '#ffd23f', k: '#0c1414', w: '#ffffff', p: '#7fffd4' },
       eyeX: 9,
       eyeY: 9,
@@ -435,6 +439,16 @@
       defaultColor: '#d9d2bf',
       eyeColor: '#9dff7a',
       faceInk: 'e',
+      faceKeys: 'g',
+      // Its body is a thin casing round the screen, so its spots go there.
+      spots: [
+        [3, 7],
+        [27, 10],
+        [3, 13],
+        [27, 15],
+        [9, 18],
+        [20, 18],
+      ],
       fixed: { g: '#17301f', r: '#3fd16b', k: '#081208', w: '#ffffff', p: '#9dff7a' },
       eyeX: 8,
       eyeY: 9,
@@ -488,6 +502,7 @@
     floppy: {
       helper: true,
       defaultColor: '#2f3b7a',
+      faceKeys: 'l',
       fixed: { l: '#eef0f4', g: '#c0c4cc', k: '#14141c', w: '#ffffff', p: '#ff8fa3' },
       eyeX: 8,
       eyeY: 14,
@@ -953,16 +968,18 @@
         keys[y][x] = to;
       }
     };
-    const box = (x0, y0, w, h) => {
+    // A face that isn't body-coloured (skin, a screen, a label) takes masks and patches too.
+    const face = 'b' + (sp.faceKeys || '');
+    const box = (x0, y0, w, h, from = 'b') => {
       for (let y = y0; y < y0 + h; y++) {
         for (let x = x0; x < x0 + w; x++) {
-          set(x, y, 'b', 'd');
+          set(x, y, from, 'd');
         }
       }
     };
     switch (pattern) {
       case 'spots':
-        for (const [x, y] of SPOTS) {
+        for (const [x, y] of sp.spots || SPOTS) {
           box(x, y, 2, 2);
           set(x - 1, y, 'b', 'd');
           set(x + 1, y + 2, 'b', 'd');
@@ -979,18 +996,19 @@
         }
         break;
       case 'socks':
+        // Feet that aren't body-coloured (a bird's) turn white too.
         for (let y = sp.pawY - 1; y < SIZE; y++) {
           for (let x = 0; x < SIZE; x++) {
-            set(x, y, 'bd', 'w');
+            set(x, y, 'bdy', 'w');
           }
         }
         break;
       case 'mask':
-        box(sp.eyeX - 2, sp.eyeY - 1, 7, 5);
-        box(SIZE - sp.eyeX - 5, sp.eyeY - 1, 7, 5);
+        box(sp.eyeX - 2, sp.eyeY - 1, 7, 5, face);
+        box(SIZE - sp.eyeX - 5, sp.eyeY - 1, 7, 5, face);
         break;
       case 'patch':
-        box(sp.eyeX - 2, sp.eyeY - 2, 7, 7);
+        box(sp.eyeX - 2, sp.eyeY - 2, 7, 7, face);
         break;
     }
   }
@@ -1107,7 +1125,7 @@
       slot: 'head',
       color: '#ffd23f',
       build: (sp) => ({
-        grid: ['y...yy...y', 'yy.yyyy.yy', 'yyyyyyyyyy', 'yryyccyyry', 'YYYYYYYYYY'],
+        grid: ['a...aa...a', 'aa.aaaa.aa', 'aaaaaaaaaa', 'araaccaara', 'AAAAAAAAAA'],
         x: 11,
         y: sp.headTop - 4,
       }),
@@ -1921,6 +1939,18 @@
   }
 
   /**
+   * Where an accessory, costume or style goes on a species. A tall hat on a
+   * pet whose head is near the top (a dog, a bird, a monitor) would be cut
+   * off, so it slides down just far enough to fit: worn low, not chopped.
+   * @param {{ build: (sp: Species) => { grid: string[], x: number, y: number } }} thing
+   * @param {Species} sp
+   */
+  function place(thing, sp) {
+    const placed = thing.build(sp);
+    return Object.assign({}, placed, { y: Math.max(0, placed.y) });
+  }
+
+  /**
    * Composes a pet into a 32x32 array of hex colours (or null for transparent).
    * @param {string} species
    * @param {Record<string,string>} pal
@@ -1977,9 +2007,14 @@
 
     const acc = expr.accessory ? ACCESSORIES[expr.accessory] : null;
     if (acc && !(expr.hide || []).includes(acc.slot)) {
-      const a = hexToRgb(expr.accessoryColor || '') ? expr.accessoryColor : acc.color;
+      // Dark frames vanish on a screen face, so glasses there default to its glowing ink.
+      const a = hexToRgb(expr.accessoryColor || '')
+        ? expr.accessoryColor
+        : acc.slot === 'face' && sp.faceInk
+          ? pal[sp.faceInk]
+          : acc.color;
       const accPal = Object.assign({ a, A: mix(a, '#000000', 0.45) }, ACC_FIXED);
-      const placed = acc.build(sp);
+      const placed = place(acc, sp);
       stamp(px, placed.grid, placed.x, placed.y, accPal, false);
     }
 
@@ -1996,7 +2031,7 @@
         taken.add(extra.slot);
         const a = extra.color;
         const pal2 = Object.assign({ a, A: mix(a, '#000000', 0.45) }, ACC_FIXED);
-        const placed = extra.build(sp);
+        const placed = place(extra, sp);
         stamp(px, placed.grid, placed.x, placed.y, pal2, false);
       }
     }
@@ -2057,6 +2092,7 @@
     speciesIds: Object.keys(SPECIES),
     palette,
     compose,
+    place,
     composeProp,
     smooth,
     mix,
